@@ -6,13 +6,6 @@ import { Crosshair, Loader2, MapPin, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { estimateScanCostUsd } from "@/lib/grid"
 import type { DeviceType, GeocodeHit, GridSize, ScanConfig } from "@/lib/types"
@@ -98,41 +91,29 @@ export function ScanForm({
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Grid">
-          <Select
+          <NativeSelect
             value={String(config.gridSize)}
-            onValueChange={(value) => {
-              if (value) onChange({ gridSize: Number(value) as GridSize })
-            }}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="3">3 × 3 · 9 pins</SelectItem>
-              <SelectItem value="5">5 × 5 · 25 pins</SelectItem>
-              <SelectItem value="7">7 × 7 · 49 pins</SelectItem>
-              <SelectItem value="9">9 × 9 · 81 pins</SelectItem>
-            </SelectContent>
-          </Select>
+            onChange={(value) => onChange({ gridSize: Number(value) as GridSize })}
+            options={[
+              { value: "3", label: "3 × 3 · 9 pins" },
+              { value: "5", label: "5 × 5 · 25 pins" },
+              { value: "7", label: "7 × 7 · 49 pins" },
+              { value: "9", label: "9 × 9 · 81 pins" },
+            ]}
+          />
         </Field>
         <Field label="Language">
-          <Select
+          <NativeSelect
             value={config.languageCode}
-            onValueChange={(value) => {
-              if (value) onChange({ languageCode: value })
-            }}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="en">English</SelectItem>
-              <SelectItem value="es">Spanish</SelectItem>
-              <SelectItem value="fr">French</SelectItem>
-              <SelectItem value="de">German</SelectItem>
-              <SelectItem value="pt">Portuguese</SelectItem>
-            </SelectContent>
-          </Select>
+            onChange={(value) => onChange({ languageCode: value })}
+            options={[
+              { value: "en", label: "English" },
+              { value: "es", label: "Spanish" },
+              { value: "fr", label: "French" },
+              { value: "de", label: "German" },
+              { value: "pt", label: "Portuguese" },
+            ]}
+          />
         </Field>
       </div>
 
@@ -154,39 +135,24 @@ export function ScanForm({
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Maps zoom">
-          <Select
+          <NativeSelect
             value={String(config.zoom)}
-            onValueChange={(value) => {
-              if (value) onChange({ zoom: Number(value) })
-            }}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[13, 14, 15, 16, 17, 18].map((zoom) => (
-                <SelectItem key={zoom} value={String(zoom)}>
-                  {zoom}z
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={(value) => onChange({ zoom: Number(value) })}
+            options={[13, 14, 15, 16, 17, 18].map((zoom) => ({
+              value: String(zoom),
+              label: `${zoom}z`,
+            }))}
+          />
         </Field>
         <Field label="Device">
-          <Select
+          <NativeSelect
             value={config.device}
-            onValueChange={(value) => {
-              if (value) onChange({ device: value as DeviceType })
-            }}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="desktop">Desktop</SelectItem>
-              <SelectItem value="mobile">Mobile</SelectItem>
-            </SelectContent>
-          </Select>
+            onChange={(value) => onChange({ device: value as DeviceType })}
+            options={[
+              { value: "desktop", label: "Desktop" },
+              { value: "mobile", label: "Mobile" },
+            ]}
+          />
         </Field>
       </div>
 
@@ -225,6 +191,30 @@ export function ScanForm({
         </Button>
       )}
     </form>
+  )
+}
+
+function NativeSelect({
+  value,
+  onChange,
+  options,
+}: {
+  value: string
+  onChange: (value: string) => void
+  options: Array<{ value: string; label: string }>
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   )
 }
 
