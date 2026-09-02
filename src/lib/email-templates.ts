@@ -67,6 +67,32 @@ export function infoEmail(name: string, headline: string, body: string) {
   }
 }
 
+export function accountCreatedEmail(name: string, email: string) {
+  const loginUrl = `${appUrl()}/login`
+  return {
+    subject: "Your GridPin account is ready",
+    html: wrap(
+      "Account created",
+      `<p>Hi ${escapeHtml(name)},</p>
+       <p>An administrator created a GridPin workspace for <strong>${escapeHtml(email)}</strong>.</p>
+       <p>Sign in with the email and password they gave you to open your dashboard, campaigns, and grid tracker.</p>
+       <p><a href="${loginUrl}" style="display:inline-block;background:#2f6b5a;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Sign in</a></p>`
+    ),
+  }
+}
+
+export function notificationEmail(name: string, headline: string, body: string) {
+  return {
+    subject: headline,
+    html: wrap(
+      headline,
+      `<p>Hi ${escapeHtml(name)},</p>
+       <p>${escapeHtml(body)}</p>
+       <p><a href="${appUrl()}/dashboard" style="color:#2f6b5a;">Open your dashboard</a></p>`
+    ),
+  }
+}
+
 export function marketingEmail(name: string, headline: string, body: string) {
   return {
     subject: headline,

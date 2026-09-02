@@ -1,17 +1,57 @@
-import { readDb } from "./db"
-import { readSession } from "./session"
-import type { User } from "./types"
+import { redirect } from "next/navigation"
 
-export async function requireUser(): Promise<User | null> {
-  const session = await readSession()
-  if (!session) return null
-  const user = readDb().users.find((item) => item.id === session.uid)
-  if (!user || user.status !== "active") return null
-  return user
+import { findOrCreateWorkspace, readDb, updateDb } from "@/lib/db"
+import { getImpersonatedUserId, readSession } from "@/lib/session"
+import type { User, UserWorkspace } from "@/lib/types"
+
+export type Authed = { user: User; workspace: UserWorkspace }
+
+async function userWithWorkspace(user: User): Promise<Authed> {
+  const db = await readDb()
+  if (db.workspaces[user.id]) {
+    return { user, workspace: db.workspaces[user.id] }
+  }
+  const workspace = await updateDb((next) => findOrCreateWorkspace(next, user.id))
+  return { user, workspace }
 }
 
-export async function requireAdmin(): Promise<User | null> {
-  const user = await requireUser()
-  if (!user || user.role !== "admin") return null
-  return user
+/** The signed-in admin — ignores impersonation. */
+export async function requireAdmin(): Promise<Authed | null> {
+  const session = await readSession()
+  if (!session) return null
+  const db = await readDb()
+  const user = db.users.find((item) => item.id === session.uid)
+  if (!user || user.role !== "admin" || user.status !== "active") return null
+  return userWithWorkspace(user)
+}
+
+/** The user the console should act as (may be impersonated). */
+export async function requireUser(): Promise<Authed | null> {
+  const session = await readSession()
+  if (!session) return null
+  const db = await readDb()
+  const real = db.users.find((item) => item.id === session.uid)
+  if (!real || real.status !== "active") return null
+
+  const asId = await getImpersonatedUserId()
+  if (asId && real.role === "admin") {
+    const target = db.users.find((item) => item.id === asId)
+    if (target && target.status !== "suspended") {
+      return userWithWorkspace(target)
+    }
+  }
+
+  return userWithWorkspace(real)
+}
+
+export async function requireUserOrRedirect(): Promise<Authed> {
+  const auth = await requireUser()
+  if (!auth) redirect("/login")
+  return auth
+}
+
+export async function requireAdminOrRedirect(): Promise<Authed> {
+  const auth = await requireAdmin()
+  if (!auth) redirect("/dashboard")
+  return auth
 }

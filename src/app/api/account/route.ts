@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
-import { requireUser } from "@/lib/auth-guard"
-import { updateDb } from "@/lib/db"
+import { requireAdmin, requireUser } from "@/lib/auth-guard"
+import { findOrCreateAgency, updateDb } from "@/lib/db"
 import { billingEmail } from "@/lib/email-templates"
 import { sendMail } from "@/lib/mail"
 import { PLANS } from "@/lib/plans"
@@ -9,8 +9,11 @@ import { publicUser, writeSession } from "@/lib/session"
 import type { PlanId } from "@/lib/types"
 
 export async function PUT(request: Request) {
-  const user = await requireUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const acting = await requireUser()
+  if (!acting) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const admin = await requireAdmin()
+  const impersonating = Boolean(admin && admin.user.id !== acting.user.id)
+
   let body: { name?: string; company?: string; marketingOptIn?: boolean; plan?: PlanId; dfsLogin?: string; dfsPassword?: string }
   try {
     body = (await request.json()) as typeof body
@@ -18,12 +21,15 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const previousPlan = user.plan
+  const previousPlan = acting.user.plan
   const next = await updateDb((db) => {
-    const found = db.users.find((item) => item.id === user.id)
+    const found = db.users.find((item) => item.id === acting.user.id)
     if (!found) return null
     if (typeof body.name === "string" && body.name.trim()) found.name = body.name.trim()
-    if (typeof body.company === "string") found.company = body.company.trim()
+    if (typeof body.company === "string") {
+      found.company = body.company.trim()
+      if (found.company) found.agencyId = findOrCreateAgency(db, found.company).id
+    }
     if (typeof body.marketingOptIn === "boolean") found.marketingOptIn = body.marketingOptIn
     if (typeof body.dfsLogin === "string") found.dfsLogin = body.dfsLogin.trim()
     if (typeof body.dfsPassword === "string" && body.dfsPassword.length > 0) {
@@ -41,7 +47,7 @@ export async function PUT(request: Request) {
   })
 
   if (!next) return NextResponse.json({ error: "User not found" }, { status: 404 })
-  await writeSession(next)
+  if (!impersonating) await writeSession(next)
 
   if (body.plan && PLANS[body.plan] && body.plan !== previousPlan) {
     const template = billingEmail(next.name, next.plan)

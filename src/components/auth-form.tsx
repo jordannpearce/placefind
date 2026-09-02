@@ -35,9 +35,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         })
-        const data = (await response.json()) as { error?: string }
+        const data = (await response.json()) as { error?: string; role?: string }
         if (!response.ok) throw new Error(data.error || "Could not sign in")
-        router.push("/dashboard")
+        router.push(data.role === "admin" ? "/admin" : "/dashboard")
         router.refresh()
         return
       }

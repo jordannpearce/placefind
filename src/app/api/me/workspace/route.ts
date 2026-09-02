@@ -1,31 +1,26 @@
 import { NextResponse } from "next/server"
 
 import { requireUser } from "@/lib/auth-guard"
-import { readDb, updateDb } from "@/lib/db"
+import { updateDb } from "@/lib/db"
 import { defaultCampaigns } from "@/lib/storage"
 
 export async function GET() {
-  const user = await requireUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const workspace = readDb().workspaces[user.id] ?? {
-    campaigns: defaultCampaigns(),
-    settings: { login: "", password: "" },
-    activeCampaignId: "",
-    scans: {},
-  }
+  const auth = await requireUser()
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const workspace = auth.workspace
   return NextResponse.json({
     campaigns: workspace.campaigns,
     settings: workspace.settings,
     activeCampaignId: workspace.activeCampaignId,
     scans: workspace.scans,
-    plan: user.plan,
-    dfsLogin: user.dfsLogin,
+    plan: auth.user.plan,
+    dfsLogin: auth.user.dfsLogin,
   })
 }
 
 export async function PUT(request: Request) {
-  const user = await requireUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const auth = await requireUser()
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   let body: {
     campaigns?: unknown
     settings?: { login?: string; password?: string }
@@ -39,7 +34,7 @@ export async function PUT(request: Request) {
   }
 
   await updateDb((db) => {
-    const current = db.workspaces[user.id] ?? {
+    const current = db.workspaces[auth.user.id] ?? {
       campaigns: defaultCampaigns(),
       settings: { login: "", password: "" },
       activeCampaignId: "",
@@ -56,7 +51,7 @@ export async function PUT(request: Request) {
     if (body.scans && typeof body.scans === "object") {
       current.scans = body.scans as typeof current.scans
     }
-    db.workspaces[user.id] = current
+    db.workspaces[auth.user.id] = current
   })
   return NextResponse.json({ ok: true })
 }

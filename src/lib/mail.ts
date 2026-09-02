@@ -1,8 +1,29 @@
 import { Resend } from "resend"
 
-import { updateDb } from "./db"
+import { readDb, updateDb } from "./db"
 import type { EmailKind, MailRecord } from "./types"
 import { randomToken } from "./password"
+
+export function maskSecret(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+  if (trimmed.length <= 4) return "••••"
+  return `••••${trimmed.slice(-4)}`
+}
+
+export async function resolveResendConfig() {
+  const db = await readDb()
+  const apiKey = db.settings.resendApiKey.trim() || process.env.RESEND_API_KEY?.trim() || ""
+  const from =
+    db.settings.resendFrom.trim() ||
+    process.env.RESEND_FROM?.trim() ||
+    "GridPin <beth.t@example.com>"
+  return {
+    apiKey,
+    from,
+    source: db.settings.resendApiKey.trim() ? ("admin" as const) : apiKey ? ("env" as const) : ("none" as const),
+  }
+}
 
 export async function sendMail(input: {
   to: string
@@ -12,12 +33,11 @@ export async function sendMail(input: {
   userId?: string | null
 }): Promise<MailRecord> {
   const id = `mail_${Date.now()}_${randomToken().slice(0, 8)}`
-  const apiKey = process.env.RESEND_API_KEY?.trim()
+  const { apiKey, from } = await resolveResendConfig()
   let provider: MailRecord["provider"] = "preview"
 
   if (apiKey) {
     const resend = new Resend(apiKey)
-    const from = process.env.RESEND_FROM?.trim() || "GridPin <beth.t@example.com>"
     const result = await resend.emails.send({
       from,
       to: input.to,

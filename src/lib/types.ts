@@ -161,7 +161,24 @@ export type KeywordStatRow = {
 export type UserRole = "user" | "admin"
 export type UserStatus = "pending" | "active" | "suspended"
 export type PlanId = "starter" | "agency" | "enterprise"
-export type EmailKind = "activation" | "billing" | "info" | "marketing"
+export type EmailKind =
+  | "activation"
+  | "account_created"
+  | "billing"
+  | "info"
+  | "marketing"
+  | "notification"
+
+export type Agency = {
+  id: string
+  name: string
+  createdAt: string
+}
+
+export type AppSettings = {
+  resendApiKey: string
+  resendFrom: string
+}
 
 export type User = {
   id: string
@@ -173,6 +190,7 @@ export type User = {
   plan: PlanId
   marketingOptIn: boolean
   company: string
+  agencyId: string
   createdAt: string
   lastLoginAt: string | null
   dfsLogin: string

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-import { updateDb } from "@/lib/db"
+import { findOrCreateAgency, updateDb } from "@/lib/db"
 import { activationEmail } from "@/lib/email-templates"
 import { sendMail, previewUrl } from "@/lib/mail"
 import { hashPassword, hashToken, randomToken } from "@/lib/password"
@@ -24,6 +24,7 @@ export async function POST(request: Request) {
   const token = randomToken()
   const user = await updateDb((db) => {
     if (db.users.some((item) => item.email === email)) return null
+    const agency = findOrCreateAgency(db, body.company?.trim() || name)
     const created = {
       id: `user_${Date.now()}`,
       name,
@@ -33,7 +34,8 @@ export async function POST(request: Request) {
       status: "pending" as const,
       plan: "starter" as const,
       marketingOptIn: Boolean(body.marketingOptIn),
-      company: body.company?.trim() || "",
+      company: body.company?.trim() || agency.name,
+      agencyId: agency.id,
       createdAt: new Date().toISOString(),
       lastLoginAt: null,
       dfsLogin: "",

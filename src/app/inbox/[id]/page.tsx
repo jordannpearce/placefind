@@ -8,15 +8,16 @@ type Params = { params: Promise<{ id: string }> }
 
 export default async function InboxPage({ params }: Params) {
   const { id } = await params
-  const record = readDb().emails.find((item) => item.id === id)
+  const db = await readDb()
+  const record = db.emails.find((item) => item.id === id)
   if (!record) notFound()
 
-  const user = await requireUser()
+  const acting = await requireUser()
   const admin = await requireAdmin()
   const allowed =
     record.provider === "preview" ||
     Boolean(admin) ||
-    Boolean(user && (user.id === record.userId || user.email === record.to))
+    Boolean(acting && (acting.user.id === record.userId || acting.user.email === record.to))
   if (!allowed) notFound()
 
   return (

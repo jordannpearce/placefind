@@ -19,13 +19,21 @@ Open [http://127.0.0.1:43127](http://127.0.0.1:43127).
 | Role | Email | Password |
 | --- | --- | --- |
 | Demo user | demo@gridpin.app | demo1234 |
-| Admin | admin@gridpin.app | GridPin!admin |
+| Admin | tmrapp1995@gmail.com | (the password you set when the project was created) |
 
-Accounts and campaigns are stored in `.data/gridpin.json` (gitignored). Delete that file to reseed.
+Without `DATABASE_URL`, accounts live in `.data/gridpin.json` (gitignored). Delete that file to reseed.
+
+With `DATABASE_URL` (Railway Postgres), the same seed runs on the first empty database.
 
 ### Resend emails
 
-Set `RESEND_API_KEY` and `RESEND_FROM` to send activation, billing, info, and marketing mail. If those are empty, GridPin writes the HTML to the outbox. Sign-up shows **Open the activation email**, and admins can browse every message under **Admin → Emails**.
+Paste a Resend API key and from-address in **Admin → Emails**, or set `RESEND_API_KEY` and `RESEND_FROM`. If those are empty, GridPin writes the HTML to the outbox. Sign-up shows **Open the activation email**, and admins can browse every message under **Admin → Emails**.
+
+From Admin you can:
+
+- Add users and agencies by hand
+- Open a user’s workspace as if you were them
+- Check which accounts receive marketing, product updates, and notifications
 
 ### Live DataForSEO scans
 
@@ -45,7 +53,7 @@ Each pin is one live Maps task (~$0.002). A 7×7 scan is 49 tasks per keyword.
 - Dashboard of campaigns per brand and location
 - Tracker with multiple keywords, grid size, radius, and schedules
 - Account billing plans (emails, no Stripe checkout yet)
-- Admin: users, plans, status, broadcast info/marketing mail
+- Admin: users, agencies, impersonation, Resend, targeted mail
 
 ## How a grid scan works
 

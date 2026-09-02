@@ -2,20 +2,13 @@ import Link from "next/link"
 
 import { buttonVariants } from "@/components/ui/button"
 import { requireUser } from "@/lib/auth-guard"
-import { readDb } from "@/lib/db"
-import { formatWhen, isCampaignDue, defaultCampaigns } from "@/lib/storage"
+import { formatWhen, isCampaignDue } from "@/lib/storage"
 import { PLANS } from "@/lib/plans"
 
 export default async function DashboardPage() {
-  const user = await requireUser()
-  if (!user) return null
-  const db = readDb()
-  const workspace = db.workspaces[user.id] ?? {
-    campaigns: defaultCampaigns(),
-    settings: { login: "", password: "" },
-    activeCampaignId: "",
-    scans: {},
-  }
+  const auth = await requireUser()
+  if (!auth) return null
+  const { user, workspace } = auth
   const plan = PLANS[user.plan]
   const due = workspace.campaigns.filter((campaign) => isCampaignDue(campaign))
 

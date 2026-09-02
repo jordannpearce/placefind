@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 import { updateDb } from "@/lib/db"
 import { verifyPassword } from "@/lib/password"
-import { writeSession } from "@/lib/session"
+import { clearImpersonation, writeSession } from "@/lib/session"
 
 export async function POST(request: Request) {
   let body: { email?: string; password?: string }
@@ -32,6 +32,7 @@ export async function POST(request: Request) {
     const found = db.users.find((item) => item.id === user.id)
     if (found) found.lastLoginAt = new Date().toISOString()
   })
+  await clearImpersonation()
   await writeSession(user)
   return NextResponse.json({ ok: true, role: user.role })
 }

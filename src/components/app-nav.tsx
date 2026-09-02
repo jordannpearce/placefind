@@ -14,10 +14,12 @@ const LINKS = [
 
 export function AppNav({
   name,
-  role,
+  isAdmin,
+  impersonating,
 }: {
   name: string
-  role: "user" | "admin"
+  isAdmin: boolean
+  impersonating: { name: string; email: string } | null
 }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -28,8 +30,27 @@ export function AppNav({
     router.refresh()
   }
 
+  async function stopViewing() {
+    await fetch("/api/admin/impersonate", { method: "DELETE" })
+    router.push("/admin")
+    router.refresh()
+  }
+
   return (
     <header className="border-b bg-background">
+      {impersonating ? (
+        <div className="bg-amber-100 px-4 py-2 text-sm text-amber-950">
+          <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-2">
+            <p>
+              Viewing as <span className="font-medium">{impersonating.name}</span>{" "}
+              <span className="text-amber-900/80">({impersonating.email})</span>
+            </p>
+            <Button type="button" size="xs" variant="outline" onClick={stopViewing}>
+              Back to admin
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between gap-3 px-4">
         <div className="flex items-center gap-4">
           <Link href="/dashboard" className="font-heading text-xl tracking-tight">
@@ -50,7 +71,7 @@ export function AppNav({
                 {link.label}
               </Link>
             ))}
-            {role === "admin" ? (
+            {isAdmin ? (
               <Link
                 href="/admin"
                 className={cn(
