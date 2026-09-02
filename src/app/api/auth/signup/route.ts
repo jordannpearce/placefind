@@ -4,7 +4,7 @@ import { findOrCreateAgency, updateDb } from "@/lib/db"
 import { activationEmail } from "@/lib/email-templates"
 import { sendMail, previewUrl } from "@/lib/mail"
 import { hashPassword, hashToken, randomToken } from "@/lib/password"
-import { defaultCampaigns } from "@/lib/storage"
+import { defaultCampaign } from "@/lib/storage"
 
 export async function POST(request: Request) {
   let body: { name?: string; email?: string; password?: string; company?: string; marketingOptIn?: boolean }
@@ -33,6 +33,7 @@ export async function POST(request: Request) {
       role: "user" as const,
       status: "pending" as const,
       plan: "starter" as const,
+      extraCampaigns: 0,
       marketingOptIn: Boolean(body.marketingOptIn),
       company: body.company?.trim() || agency.name,
       agencyId: agency.id,
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
       dfsPassword: "",
     }
     db.users.push(created)
-    const campaigns = defaultCampaigns()
+    const campaigns = [defaultCampaign()]
     db.workspaces[created.id] = {
       campaigns,
       settings: { login: "", password: "" },

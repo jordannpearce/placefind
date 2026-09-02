@@ -35,6 +35,8 @@ type ScanFormProps = {
   liveConfigured: boolean
   placingCenter: boolean
   onTogglePlaceCenter: () => void
+  campaignLimit: number
+  campaignLimitError: string | null
 }
 
 export function ScanForm({
@@ -54,6 +56,8 @@ export function ScanForm({
   liveConfigured,
   placingCenter,
   onTogglePlaceCenter,
+  campaignLimit,
+  campaignLimitError,
 }: ScanFormProps) {
   const [hits, setHits] = useState<BusinessCandidate[]>([])
   const [searching, setSearching] = useState(false)
@@ -88,7 +92,10 @@ export function ScanForm({
         onSubmit(keywordCount > 1 ? "all" : "active")
       }}
     >
-      <Field label={`Campaigns · ${campaigns.length}`} hint="One campaign per brand and location. Add as many as you track.">
+      <Field
+        label={`Campaigns · ${campaigns.length}/${campaignLimit}`}
+        hint="One campaign per brand and location. Your plan sets how many you can run."
+      >
         <div className="flex gap-2">
           <NativeSelect
             value={activeCampaignId}
@@ -98,7 +105,14 @@ export function ScanForm({
               label: `${campaign.name}${isCampaignDue(campaign) ? " · due" : ""} · ${campaign.keywords.length} kw`,
             }))}
           />
-          <Button type="button" variant="outline" size="icon" onClick={onCreateCampaign} aria-label="New campaign">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onCreateCampaign}
+            disabled={campaigns.length >= campaignLimit}
+            aria-label="New campaign"
+          >
             <Plus />
           </Button>
           <Button
@@ -127,6 +141,16 @@ export function ScanForm({
         {due ? (
           <p className="mt-1 rounded-lg bg-amber-100 px-2 py-1 text-[11px] text-amber-950">
             This campaign is due for a scheduled ranking check.
+          </p>
+        ) : null}
+        {campaigns.length >= campaignLimit ? (
+          <p className="mt-1 rounded-lg bg-destructive/10 px-2 py-1 text-[11px] text-destructive">
+            {campaignLimitError ||
+              `This plan allows ${campaignLimit} campaign${campaignLimit === 1 ? "" : "s"}. Remove one or upgrade to add another.`}
+          </p>
+        ) : campaignLimitError ? (
+          <p className="mt-1 rounded-lg bg-destructive/10 px-2 py-1 text-[11px] text-destructive">
+            {campaignLimitError}
           </p>
         ) : null}
       </Field>

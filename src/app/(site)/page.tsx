@@ -39,7 +39,7 @@ export default function HomePage() {
           {[
             {
               title: "Campaigns per location",
-              body: "One campaign is a brand plus a Maps listing. Add as many locations as the plan allows, each with its own grid and schedule.",
+              body: "One campaign is a brand plus a Maps listing. Entry is one location. Growth runs five to ten. Agency covers fifty.",
             },
             {
               title: "Multiple keywords",

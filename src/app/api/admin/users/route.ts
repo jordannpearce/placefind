@@ -2,11 +2,12 @@ import { NextResponse } from "next/server"
 
 import { requireAdmin } from "@/lib/auth-guard"
 import { findOrCreateAgency, findOrCreateWorkspace, readDb, updateDb } from "@/lib/db"
-import { accountCreatedEmail, activationEmail, appUrl } from "@/lib/email-templates"
+import { accountCreatedEmail, activationEmail, appUrl, billingEmail } from "@/lib/email-templates"
 import { previewUrl, sendMail } from "@/lib/mail"
 import { hashPassword, hashToken, randomToken } from "@/lib/password"
+import { clampExtraCampaigns, isPlanId, PLANS } from "@/lib/plans"
 import { publicUser } from "@/lib/session"
-import { defaultCampaigns } from "@/lib/storage"
+import { defaultCampaign } from "@/lib/storage"
 import type { PlanId, UserRole, UserStatus } from "@/lib/types"
 
 function serializeUsers(
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
     company?: string
     agencyName?: string
     plan?: PlanId
+    extraCampaigns?: number
     role?: UserRole
     status?: UserStatus
     marketingOptIn?: boolean
@@ -73,7 +75,8 @@ export async function POST(request: Request) {
       passwordHash: hashPassword(password),
       role: body.role === "admin" ? ("admin" as const) : ("user" as const),
       status,
-      plan: body.plan === "agency" || body.plan === "enterprise" ? body.plan : ("starter" as const),
+      plan: isPlanId(body.plan) && PLANS[body.plan] ? body.plan : ("starter" as const),
+      extraCampaigns: 0,
       marketingOptIn: Boolean(body.marketingOptIn),
       company: body.company?.trim() || agency.name,
       agencyId: agency.id,
@@ -82,11 +85,12 @@ export async function POST(request: Request) {
       dfsLogin: "",
       dfsPassword: "",
     }
+    created.extraCampaigns = clampExtraCampaigns(created.plan, body.extraCampaigns)
     db.users.push(created)
     findOrCreateWorkspace(db, created.id)
     const workspace = db.workspaces[created.id]
     if (workspace && workspace.campaigns.length === 0) {
-      workspace.campaigns = defaultCampaigns()
+      workspace.campaigns = [defaultCampaign()]
       workspace.activeCampaignId = workspace.campaigns[0]?.id ?? ""
     }
     if (status === "pending") {
@@ -146,6 +150,7 @@ export async function PATCH(request: Request) {
     userId?: string
     status?: UserStatus
     plan?: PlanId
+    extraCampaigns?: number
     role?: UserRole
     agencyId?: string
     agencyName?: string
@@ -158,11 +163,19 @@ export async function PATCH(request: Request) {
   }
   if (!body.userId) return NextResponse.json({ error: "userId is required" }, { status: 400 })
 
+  const previous = { plan: "", extraCampaigns: 0 }
   const user = await updateDb((db) => {
     const found = db.users.find((item) => item.id === body.userId)
     if (!found) return null
+    previous.plan = found.plan
+    previous.extraCampaigns = found.extraCampaigns
     if (body.status) found.status = body.status
-    if (body.plan) found.plan = body.plan
+    if (body.plan && isPlanId(body.plan) && PLANS[body.plan]) found.plan = body.plan
+    if (body.extraCampaigns !== undefined) {
+      found.extraCampaigns = clampExtraCampaigns(found.plan, body.extraCampaigns)
+    } else {
+      found.extraCampaigns = clampExtraCampaigns(found.plan, found.extraCampaigns)
+    }
     if (body.role) found.role = body.role
     if (typeof body.marketingOptIn === "boolean") found.marketingOptIn = body.marketingOptIn
     if (body.agencyId) {
@@ -179,6 +192,16 @@ export async function PATCH(request: Request) {
     return found
   })
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
+  if (user.plan !== previous.plan || user.extraCampaigns !== previous.extraCampaigns) {
+    const template = billingEmail(user.name, user.plan, user.extraCampaigns)
+    await sendMail({
+      to: user.email,
+      subject: template.subject,
+      html: template.html,
+      kind: "billing",
+      userId: user.id,
+    })
+  }
   const db = await readDb()
   return NextResponse.json({ user: serializeUsers(db).find((item) => item.id === user.id) })
 }

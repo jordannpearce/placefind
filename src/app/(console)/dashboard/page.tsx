@@ -3,13 +3,14 @@ import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
 import { requireUser } from "@/lib/auth-guard"
 import { formatWhen, isCampaignDue } from "@/lib/storage"
-import { PLANS } from "@/lib/plans"
+import { campaignLimit, PLANS } from "@/lib/plans"
 
 export default async function DashboardPage() {
   const auth = await requireUser()
   if (!auth) return null
   const { user, workspace } = auth
   const plan = PLANS[user.plan]
+  const limit = campaignLimit(user.plan, user.extraCampaigns)
   const due = workspace.campaigns.filter((campaign) => isCampaignDue(campaign))
 
   return (
@@ -21,8 +22,11 @@ export default async function DashboardPage() {
           </p>
           <h1 className="font-heading text-4xl tracking-tight">Hello, {user.name.split(" ")[0]}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {user.company || user.email} · {plan.name} plan · {workspace.campaigns.length}/{plan.campaigns}{" "}
+            {user.company || user.email} · {plan.name} plan · {workspace.campaigns.length}/{limit}{" "}
             campaigns
+            {user.plan === "agency" && user.extraCampaigns > 0
+              ? ` · ${user.extraCampaigns} extra slot${user.extraCampaigns === 1 ? "" : "s"}`
+              : ""}
           </p>
         </div>
         <Link href="/track" className={buttonVariants({ size: "lg" })}>

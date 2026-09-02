@@ -9,7 +9,9 @@ export default function PricingPage() {
       <h1 className="font-heading text-4xl tracking-tight md:text-5xl">Pricing</h1>
       <p className="mt-3 max-w-2xl text-muted-foreground">
         Every plan includes campaign tracking, keyword grids, scheduled scans, and your own
-        DataForSEO key. Activation, billing, and product emails go out through Resend.
+        DataForSEO key. Entry is one brand and one location. Growth adds extra campaign slots at $5
+        each. Agency is fifty campaigns with no add-on. Activation, billing, and product emails go
+        out through Resend.
       </p>
       <div className="mt-10 grid gap-5 md:grid-cols-3">
         {PLAN_ORDER.map((id) => {

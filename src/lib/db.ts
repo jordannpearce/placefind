@@ -3,12 +3,14 @@ import { join } from "path"
 import { Pool, type QueryResultRow } from "pg"
 
 import { hashPassword, verifyPassword } from "./password"
-import { defaultCampaigns } from "./storage"
+import { clampExtraCampaigns, isPlanId } from "./plans"
+import { defaultCampaign, defaultCampaigns } from "./storage"
 import type {
   Agency,
   AppSettings,
   AuthToken,
   MailRecord,
+  PlanId,
   User,
   UserWorkspace,
 } from "./types"
@@ -61,6 +63,7 @@ function emptyDb(): Database {
 }
 
 function normalizeUser(raw: Partial<User> & { email: string }): User {
+  const plan: PlanId = isPlanId(raw.plan) ? raw.plan : "starter"
   return {
     id: raw.id || `user_${Date.now()}`,
     name: raw.name || "User",
@@ -68,7 +71,8 @@ function normalizeUser(raw: Partial<User> & { email: string }): User {
     passwordHash: raw.passwordHash || "",
     role: raw.role === "admin" ? "admin" : "user",
     status: raw.status === "pending" || raw.status === "suspended" ? raw.status : "active",
-    plan: raw.plan === "agency" || raw.plan === "enterprise" ? raw.plan : "starter",
+    plan,
+    extraCampaigns: clampExtraCampaigns(plan, raw.extraCampaigns),
     marketingOptIn: Boolean(raw.marketingOptIn),
     company: raw.company || "",
     agencyId: raw.agencyId || "",
@@ -81,7 +85,7 @@ function normalizeUser(raw: Partial<User> & { email: string }): User {
 
 export function findOrCreateWorkspace(db: Database, userId: string) {
   if (!db.workspaces[userId]) {
-    const campaigns = defaultCampaigns()
+    const campaigns = [defaultCampaign()]
     db.workspaces[userId] = {
       campaigns,
       settings: { login: "", password: "" },
@@ -117,6 +121,7 @@ function seedDb(db: Database): Database {
     role: "admin",
     status: "active",
     plan: "enterprise",
+    extraCampaigns: 0,
     marketingOptIn: false,
     company: "GridPin",
     agencyId: gridpin.id,
@@ -132,7 +137,8 @@ function seedDb(db: Database): Database {
     passwordHash: hashPassword("demo1234"),
     role: "user",
     status: "active",
-    plan: "agency",
+    plan: "enterprise",
+    extraCampaigns: 0,
     marketingOptIn: true,
     company: "Taylor Agency",
     agencyId: taylor.id,
@@ -177,6 +183,7 @@ function ensureAdmin(db: Database) {
     role: "admin",
     status: "active",
     plan: "enterprise",
+    extraCampaigns: 0,
     marketingOptIn: false,
     company: "GridPin",
     agencyId: agency.id,
@@ -210,6 +217,11 @@ function hydrate(raw: Partial<Database>): Database {
   for (const user of db.users) {
     if (!user.agencyId) user.agencyId = findOrCreateAgency(db, user.company || user.name).id
   }
+  const demo = db.users.find((user) => user.id === "user_demo" || user.email === "demo@gridpin.app")
+  if (demo) {
+    demo.plan = "enterprise"
+    demo.extraCampaigns = 0
+  }
   ensureAdmin(db)
   return db
 }
@@ -238,6 +250,7 @@ async function ensureSchema() {
           role TEXT NOT NULL,
           status TEXT NOT NULL,
           plan TEXT NOT NULL,
+          extra_campaigns INTEGER NOT NULL DEFAULT 0,
           marketing_opt_in BOOLEAN NOT NULL DEFAULT FALSE,
           company TEXT NOT NULL DEFAULT '',
           agency_id TEXT NOT NULL DEFAULT '',
@@ -275,6 +288,7 @@ async function ensureSchema() {
           value TEXT NOT NULL
         );
       `)
+      await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS extra_campaigns INTEGER NOT NULL DEFAULT 0`)
     })()
   }
   await schemaReady
@@ -291,6 +305,7 @@ async function loadFromPostgres(): Promise<Database> {
       role: User["role"]
       status: User["status"]
       plan: User["plan"]
+      extra_campaigns: number
       marketing_opt_in: boolean
       company: string
       agency_id: string
@@ -332,6 +347,7 @@ async function loadFromPostgres(): Promise<Database> {
         role: row.role,
         status: row.status,
         plan: row.plan,
+        extraCampaigns: row.extra_campaigns,
         marketingOptIn: row.marketing_opt_in,
         company: row.company,
         agencyId: row.agency_id,
@@ -403,9 +419,9 @@ async function saveToPostgres(db: Database) {
     for (const user of db.users) {
       await client.query(
         `INSERT INTO users (
-          id, name, email, password_hash, role, status, plan, marketing_opt_in, company, agency_id,
+          id, name, email, password_hash, role, status, plan, extra_campaigns, marketing_opt_in, company, agency_id,
           created_at, last_login_at, dfs_login, dfs_password
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
         [
           user.id,
           user.name,
@@ -414,6 +430,7 @@ async function saveToPostgres(db: Database) {
           user.role,
           user.status,
           user.plan,
+          user.extraCampaigns,
           user.marketingOptIn,
           user.company,
           user.agencyId,

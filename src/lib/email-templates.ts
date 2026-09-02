@@ -1,4 +1,5 @@
-import { PLANS } from "./plans"
+import { campaignLimit, monthlyTotal, PLANS } from "./plans"
+import type { PlanId } from "./types"
 
 export function appUrl() {
   return process.env.APP_URL || "http://127.0.0.1:43127"
@@ -41,15 +42,24 @@ export function activationEmail(name: string, verifyUrl: string) {
   }
 }
 
-export function billingEmail(name: string, planId: keyof typeof PLANS) {
+export function billingEmail(name: string, planId: PlanId, extraCampaigns = 0) {
   const plan = PLANS[planId]
+  const extras = planId === "agency" ? extraCampaigns : 0
+  const limit = campaignLimit(planId, extras)
+  const total = monthlyTotal(planId, extras)
+  const extrasLine =
+    planId === "agency"
+      ? extras > 0
+        ? `<p>That includes ${plan.campaigns} campaigns plus <strong>${extras} extra slot${extras === 1 ? "" : "s"}</strong> at $${plan.extraSlotPrice} each (effective limit ${limit}, hard cap ${plan.maxCampaigns}).</p>`
+        : `<p>That includes ${plan.campaigns} campaigns. Extra slots are $${plan.extraSlotPrice} each, up to ${plan.maxCampaigns} campaigns.</p>`
+      : `<p>This covers ${limit} campaigns, ${plan.keywords} keywords each, and grids up to ${plan.grid}×${plan.grid}.</p>`
   return {
     subject: `Your GridPin ${plan.name} plan`,
     html: wrap(
       "Billing update",
       `<p>Hi ${escapeHtml(name)},</p>
-       <p>Your workspace is now on the <strong>${plan.name}</strong> plan at <strong>$${plan.price}/month</strong>.</p>
-       <p>This covers ${plan.campaigns} campaigns, ${plan.keywords} keywords each, and grids up to ${plan.grid}×${plan.grid}.</p>
+       <p>Your workspace is now on the <strong>${plan.name}</strong> plan at <strong>$${total}/month</strong>${extras > 0 ? ` ($${plan.price} plus $${extras * plan.extraSlotPrice} in extra slots)` : ""}.</p>
+       ${extrasLine}
        <p>We will invoice this amount monthly. Reply to this email if your billing contact changes.</p>`
     ),
   }

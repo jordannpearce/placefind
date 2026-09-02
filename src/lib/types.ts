@@ -188,6 +188,7 @@ export type User = {
   role: UserRole
   status: UserStatus
   plan: PlanId
+  extraCampaigns: number
   marketingOptIn: boolean
   company: string
   agencyId: string

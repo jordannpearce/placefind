@@ -6,6 +6,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { MAX_EXTRA_CAMPAIGNS, PLANS, PLAN_ORDER } from "@/lib/plans"
 import type { Agency, PlanId, PublicUser, UserRole, UserStatus } from "@/lib/types"
 
 export type AdminUserRow = PublicUser & { campaignCount: number; agencyName: string }
@@ -29,6 +30,7 @@ export function AdminUsers({
     company: "",
     agencyName: "",
     plan: "starter" as PlanId,
+    extraCampaigns: 0,
     role: "user" as UserRole,
     status: "active" as UserStatus,
     marketingOptIn: false,
@@ -37,7 +39,14 @@ export function AdminUsers({
 
   async function patch(
     userId: string,
-    body: { status?: UserStatus; plan?: PlanId; role?: UserRole; agencyId?: string; marketingOptIn?: boolean }
+    body: {
+      status?: UserStatus
+      plan?: PlanId
+      extraCampaigns?: number
+      role?: UserRole
+      agencyId?: string
+      marketingOptIn?: boolean
+    }
   ) {
     setError(null)
     const response = await fetch("/api/admin/users", {
@@ -76,6 +85,7 @@ export function AdminUsers({
         company: "",
         agencyName: "",
         plan: "starter",
+        extraCampaigns: 0,
         role: "user",
         status: "active",
         marketingOptIn: false,
@@ -167,11 +177,20 @@ export function AdminUsers({
               <select
                 className="h-8 w-full rounded-lg border bg-transparent px-2 text-sm"
                 value={form.plan}
-                onChange={(event) => setForm((current) => ({ ...current, plan: event.target.value as PlanId }))}
+                onChange={(event) => {
+                  const plan = event.target.value as PlanId
+                  setForm((current) => ({
+                    ...current,
+                    plan,
+                    extraCampaigns: plan === "agency" ? current.extraCampaigns : 0,
+                  }))
+                }}
               >
-                <option value="starter">Starter</option>
-                <option value="agency">Agency</option>
-                <option value="enterprise">Enterprise</option>
+                {PLAN_ORDER.map((id) => (
+                  <option key={id} value={id}>
+                    {PLANS[id].name}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Role">
@@ -210,6 +229,25 @@ export function AdminUsers({
             />
             Opt in to marketing
           </label>
+          {form.plan === "agency" ? (
+            <label className="flex items-center gap-2">
+              Extra slots
+              <input
+                type="number"
+                min={0}
+                max={MAX_EXTRA_CAMPAIGNS}
+                className="h-8 w-16 rounded-lg border bg-transparent px-2"
+                value={form.extraCampaigns}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    extraCampaigns: Number(event.target.value),
+                  }))
+                }
+              />
+              <span className="text-muted-foreground">$5 each, 0–{MAX_EXTRA_CAMPAIGNS}</span>
+            </label>
+          ) : null}
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -234,6 +272,7 @@ export function AdminUsers({
               <th className="px-3 py-2 font-medium">Account</th>
               <th className="px-3 py-2 font-medium">Agency</th>
               <th className="px-3 py-2 font-medium">Plan</th>
+              <th className="px-3 py-2 font-medium">Extras</th>
               <th className="px-3 py-2 font-medium">Status</th>
               <th className="px-3 py-2 font-medium">Mail</th>
               <th className="px-3 py-2 font-medium">Campaigns</th>
@@ -268,12 +307,33 @@ export function AdminUsers({
                   <select
                     className="h-8 rounded-lg border bg-transparent px-2"
                     value={user.plan}
-                    onChange={(event) => patch(user.id, { plan: event.target.value as PlanId })}
+                    onChange={(event) =>
+                      patch(user.id, {
+                        plan: event.target.value as PlanId,
+                        extraCampaigns: event.target.value === "agency" ? user.extraCampaigns : 0,
+                      })
+                    }
                   >
-                    <option value="starter">Starter</option>
-                    <option value="agency">Agency</option>
-                    <option value="enterprise">Enterprise</option>
+                    {PLAN_ORDER.map((id) => (
+                      <option key={id} value={id}>
+                        {PLANS[id].name}
+                      </option>
+                    ))}
                   </select>
+                </td>
+                <td className="px-3 py-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={MAX_EXTRA_CAMPAIGNS}
+                    disabled={user.plan !== "agency"}
+                    className="h-8 w-16 rounded-lg border bg-transparent px-2 disabled:opacity-40"
+                    value={user.plan === "agency" ? user.extraCampaigns : 0}
+                    onChange={(event) =>
+                      patch(user.id, { extraCampaigns: Number(event.target.value) })
+                    }
+                    aria-label={`Extra campaign slots for ${user.name}`}
+                  />
                 </td>
                 <td className="px-3 py-2">
                   <select

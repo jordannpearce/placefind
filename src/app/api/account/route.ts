@@ -4,7 +4,7 @@ import { requireAdmin, requireUser } from "@/lib/auth-guard"
 import { findOrCreateAgency, updateDb } from "@/lib/db"
 import { billingEmail } from "@/lib/email-templates"
 import { sendMail } from "@/lib/mail"
-import { PLANS } from "@/lib/plans"
+import { clampExtraCampaigns, isPlanId, PLANS } from "@/lib/plans"
 import { publicUser, writeSession } from "@/lib/session"
 import type { PlanId } from "@/lib/types"
 
@@ -14,7 +14,15 @@ export async function PUT(request: Request) {
   const admin = await requireAdmin()
   const impersonating = Boolean(admin && admin.user.id !== acting.user.id)
 
-  let body: { name?: string; company?: string; marketingOptIn?: boolean; plan?: PlanId; dfsLogin?: string; dfsPassword?: string }
+  let body: {
+    name?: string
+    company?: string
+    marketingOptIn?: boolean
+    plan?: PlanId
+    extraCampaigns?: number
+    dfsLogin?: string
+    dfsPassword?: string
+  }
   try {
     body = (await request.json()) as typeof body
   } catch {
@@ -22,6 +30,7 @@ export async function PUT(request: Request) {
   }
 
   const previousPlan = acting.user.plan
+  const previousExtras = acting.user.extraCampaigns
   const next = await updateDb((db) => {
     const found = db.users.find((item) => item.id === acting.user.id)
     if (!found) return null
@@ -35,7 +44,11 @@ export async function PUT(request: Request) {
     if (typeof body.dfsPassword === "string" && body.dfsPassword.length > 0) {
       found.dfsPassword = body.dfsPassword
     }
-    if (body.plan && PLANS[body.plan]) found.plan = body.plan
+    if (body.plan && isPlanId(body.plan) && PLANS[body.plan]) found.plan = body.plan
+    found.extraCampaigns = clampExtraCampaigns(
+      found.plan,
+      body.extraCampaigns !== undefined ? body.extraCampaigns : found.extraCampaigns
+    )
     const workspace = db.workspaces[found.id]
     if (workspace) {
       workspace.settings = {
@@ -49,8 +62,9 @@ export async function PUT(request: Request) {
   if (!next) return NextResponse.json({ error: "User not found" }, { status: 404 })
   if (!impersonating) await writeSession(next)
 
-  if (body.plan && PLANS[body.plan] && body.plan !== previousPlan) {
-    const template = billingEmail(next.name, next.plan)
+  const billingChanged = next.plan !== previousPlan || next.extraCampaigns !== previousExtras
+  if (billingChanged) {
+    const template = billingEmail(next.name, next.plan, next.extraCampaigns)
     await sendMail({
       to: next.email,
       subject: template.subject,

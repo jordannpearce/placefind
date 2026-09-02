@@ -37,6 +37,7 @@ import {
   toStateAbbr,
   uniqueCampaignName,
 } from "@/lib/storage"
+import { campaignLimit as planCampaignLimit, campaignLimitMessage } from "@/lib/plans"
 import type {
   ApiSettings,
   BusinessCandidate,
@@ -44,6 +45,7 @@ import type {
   GeocodeHit,
   KeywordResults,
   KeywordStatRow,
+  PlanId,
   ScanConfig,
   ScanPointResponse,
 } from "@/lib/types"
@@ -100,6 +102,12 @@ export function TrackerApp() {
   const [setupOpen, setSetupOpen] = useState(false)
   const [resultsOpen, setResultsOpen] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
+  const [campaignLimitError, setCampaignLimitError] = useState<string | null>(null)
+  const [planLimits, setPlanLimits] = useState({
+    plan: "enterprise" as PlanId,
+    extraCampaigns: 0,
+    campaignLimit: 50,
+  })
   const abortRef = useRef(false)
 
   const points = useMemo(
@@ -158,6 +166,9 @@ export function TrackerApp() {
           activeCampaignId?: string
           scans?: KeywordResults
           dfsLogin?: string
+          plan?: PlanId
+          extraCampaigns?: number
+          campaignLimit?: number
         } | null) => {
           if (cancelled || !data) {
             setHydratedFromServer(true)
@@ -185,6 +196,14 @@ export function TrackerApp() {
             }
           }
           if (data.scans) setScansByKeyword(data.scans)
+          if (data.plan) {
+            const extras = data.extraCampaigns ?? 0
+            setPlanLimits({
+              plan: data.plan,
+              extraCampaigns: extras,
+              campaignLimit: data.campaignLimit ?? planCampaignLimit(data.plan, extras),
+            })
+          }
           setHydratedFromServer(true)
         }
       )
@@ -196,6 +215,7 @@ export function TrackerApp() {
 
   useEffect(() => {
     if (!hydratedFromServer) return
+    let cancelled = false
     fetch("/api/me/workspace", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -205,7 +225,23 @@ export function TrackerApp() {
         activeCampaignId,
         scans: scansByKeyword,
       }),
-    }).catch(() => undefined)
+    })
+      .then(async (response) => {
+        if (response.ok || cancelled) return
+        const data = (await response.json()) as { error?: string }
+        if (data.error) setCampaignLimitError(data.error)
+        const refresh = await fetch("/api/me/workspace")
+        if (!refresh.ok || cancelled) return
+        const next = (await refresh.json()) as { campaigns?: Campaign[] }
+        if (next.campaigns) {
+          setCampaigns(next.campaigns)
+          saveCampaigns(next.campaigns)
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
   }, [activeCampaignId, campaigns, hydratedFromServer, scansByKeyword, settings])
 
   const persistScans = useCallback(
@@ -414,6 +450,11 @@ export function TrackerApp() {
   }
 
   const createCampaign = () => {
+    if (campaigns.length >= planLimits.campaignLimit) {
+      setCampaignLimitError(campaignLimitMessage(planLimits.plan, planLimits.extraCampaigns))
+      return
+    }
+    setCampaignLimitError(null)
     persistScans(activeCampaignId, scansByKeyword)
     const id = `camp_${Date.now()}`
     const campaign: Campaign = {
@@ -509,6 +550,8 @@ export function TrackerApp() {
       liveConfigured={liveConfigured}
       placingCenter={placingCenter}
       onTogglePlaceCenter={() => setPlacingCenter((value) => !value)}
+      campaignLimit={planLimits.campaignLimit}
+      campaignLimitError={campaignLimitError}
     />
   )
 

@@ -5,7 +5,14 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { PLANS, PLAN_ORDER } from "@/lib/plans"
+import {
+  campaignLimit,
+  EXTRA_SLOT_PRICE,
+  MAX_EXTRA_CAMPAIGNS,
+  monthlyTotal,
+  PLANS,
+  PLAN_ORDER,
+} from "@/lib/plans"
 import type { PlanId, PublicUser } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -16,9 +23,14 @@ export function AccountForm({ user }: { user: PublicUser }) {
   const [dfsPassword, setDfsPassword] = useState("")
   const [marketingOptIn, setMarketingOptIn] = useState(user.marketingOptIn)
   const [plan, setPlan] = useState<PlanId>(user.plan)
+  const [extraCampaigns, setExtraCampaigns] = useState(user.extraCampaigns)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+
+  const extras = plan === "agency" ? extraCampaigns : 0
+  const limit = campaignLimit(plan, extras)
+  const total = monthlyTotal(plan, extras)
 
   async function save(event: React.FormEvent) {
     event.preventDefault()
@@ -36,14 +48,16 @@ export function AccountForm({ user }: { user: PublicUser }) {
           dfsPassword: dfsPassword || undefined,
           marketingOptIn,
           plan,
+          extraCampaigns: extras,
         }),
       })
       const data = (await response.json()) as { error?: string }
       if (!response.ok) throw new Error(data.error || "Could not save")
       setDfsPassword("")
+      const billingChanged = plan !== user.plan || extras !== user.extraCampaigns
       setMessage(
-        plan !== user.plan
-          ? "Saved. A billing email was sent for the plan change."
+        billingChanged
+          ? "Saved. A billing email was sent for the plan or extra-slot change."
           : "Account saved."
       )
     } catch (err) {
@@ -69,7 +83,8 @@ export function AccountForm({ user }: { user: PublicUser }) {
       <section className="space-y-3 rounded-2xl border bg-card p-5">
         <h2 className="font-heading text-2xl">Plan</h2>
         <p className="text-sm text-muted-foreground">
-          Changing plans sends a billing email through Resend (or the local inbox).
+          Changing plans or extra campaign slots sends a billing email through Resend (or the local
+          inbox).
         </p>
         <div className="grid gap-2 md:grid-cols-3">
           {PLAN_ORDER.map((id) => {
@@ -79,7 +94,10 @@ export function AccountForm({ user }: { user: PublicUser }) {
               <button
                 key={id}
                 type="button"
-                onClick={() => setPlan(id)}
+                onClick={() => {
+                  setPlan(id)
+                  if (id !== "agency") setExtraCampaigns(0)
+                }}
                 className={cn(
                   "rounded-xl border p-3 text-left",
                   selected ? "border-foreground bg-muted/70" : "bg-background"
@@ -87,11 +105,58 @@ export function AccountForm({ user }: { user: PublicUser }) {
               >
                 <p className="text-sm font-medium">{item.name}</p>
                 <p className="font-heading text-2xl">${item.price}</p>
-                <p className="text-[11px] text-muted-foreground">{item.campaigns} campaigns</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {item.campaigns === item.maxCampaigns
+                    ? `${item.campaigns} campaign${item.campaigns === 1 ? "" : "s"}`
+                    : `${item.campaigns} included, up to ${item.maxCampaigns}`}
+                </p>
               </button>
             )
           })}
         </div>
+
+        {plan === "agency" ? (
+          <div className="rounded-xl border bg-background p-4">
+            <p className="text-sm font-medium">Extra campaign slots</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Growth includes 5 campaigns. Each extra slot is ${EXTRA_SLOT_PRICE}/month, up to{" "}
+              {MAX_EXTRA_CAMPAIGNS} extras (10 campaigns hard cap).
+            </p>
+            <div className="mt-3 flex items-center gap-3">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                aria-label="Remove extra campaign slot"
+                disabled={extraCampaigns <= 0}
+                onClick={() => setExtraCampaigns((current) => Math.max(0, current - 1))}
+              >
+                −
+              </Button>
+              <p className="min-w-10 text-center font-heading text-2xl">{extraCampaigns}</p>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                aria-label="Add extra campaign slot"
+                disabled={extraCampaigns >= MAX_EXTRA_CAMPAIGNS}
+                onClick={() =>
+                  setExtraCampaigns((current) => Math.min(MAX_EXTRA_CAMPAIGNS, current + 1))
+                }
+              >
+                +
+              </Button>
+              <p className="text-sm text-muted-foreground">
+                Effective limit {limit} · ${total}/month
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {PLANS[plan].name} covers {limit} campaign{limit === 1 ? "" : "s"} at ${total}/month.
+            Extra $5 slots are only on Growth.
+          </p>
+        )}
       </section>
 
       <section className="space-y-3 rounded-2xl border bg-card p-5">
