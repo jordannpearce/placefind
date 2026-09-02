@@ -265,7 +265,7 @@ export function TrackerApp() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_340px]">
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_380px]">
         <aside className="hidden min-h-0 overflow-y-auto border-r p-4 lg:block">
           {form}
         </aside>
@@ -279,6 +279,7 @@ export function TrackerApp() {
               selectedId={selectedId}
               spacingMiles={config.spacingMiles}
               placingCenter={placingCenter}
+              targetBusiness={config.targetBusiness}
               onSelect={setSelectedId}
               onPickCenter={pickCenter}
             />
@@ -378,18 +379,22 @@ export function TrackerApp() {
 
 function Legend() {
   const items = [
-    { color: "#16a34a", label: "1–3" },
-    { color: "#65a30d", label: "4–6" },
-    { color: "#ca8a04", label: "7–10" },
-    { color: "#ea580c", label: "11–15" },
-    { color: "#dc2626", label: "16+" },
+    { color: "#166534", label: "1" },
+    { color: "#22c55e", label: "2" },
+    { color: "#86efac", label: "3" },
+    { color: "#facc15", label: "4" },
+    { color: "#f59e0b", label: "7" },
+    { color: "#ea580c", label: "10" },
+    { color: "#ef4444", label: "15" },
+    { color: "#b91c1c", label: "20" },
     { color: "#94a3b8", label: "—" },
   ]
   return (
     <div className="pointer-events-auto hidden items-center gap-1.5 rounded-2xl bg-background/90 px-2.5 py-2 text-[11px] shadow-sm ring-1 ring-foreground/10 backdrop-blur sm:flex">
+      <span className="pr-1 text-muted-foreground">Rank</span>
       {items.map((item) => (
         <span key={item.label} className="inline-flex items-center gap-1">
-          <span className="size-2.5 rounded-sm" style={{ background: item.color }} />
+          <span className="size-2.5 rounded-full" style={{ background: item.color }} />
           {item.label}
         </span>
       ))}

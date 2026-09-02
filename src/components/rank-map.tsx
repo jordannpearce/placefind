@@ -3,15 +3,17 @@
 import { useEffect, useMemo } from "react"
 import {
   MapContainer,
+  Marker,
+  Popup,
   Rectangle,
   TileLayer,
-  Tooltip,
   useMap,
   useMapEvents,
 } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 
+import { ListingCard } from "@/components/business-name"
 import { cellBounds } from "@/lib/grid"
 import { rankLabel, rankTone } from "@/lib/rank"
 import type { GridPoint, PointResult } from "@/lib/types"
@@ -24,6 +26,7 @@ type RankMapProps = {
   selectedId: string | null
   spacingMiles: number
   placingCenter: boolean
+  targetBusiness: string
   onSelect: (id: string) => void
   onPickCenter: (lat: number, lng: number) => void
 }
@@ -66,6 +69,48 @@ function MapClick({
   return null
 }
 
+function pinIcon(fill: string, text: string, label: string, selected: boolean) {
+  const size = selected ? 26 : 20
+  return L.divIcon({
+    className: "rank-pin",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+    html: `<span class="rank-pin-inner${selected ? " is-selected" : ""}" style="background:${fill};color:${text};width:${size}px;height:${size}px">${label}</span>`,
+  })
+}
+
+function PinPopup({
+  result,
+  targetBusiness,
+}: {
+  result: PointResult
+  targetBusiness: string
+}) {
+  const listings = result.listings
+  return (
+    <div className="w-[260px]">
+      <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+        {result.locationCoordinate} · {listings.length} listing
+        {listings.length === 1 ? "" : "s"}
+      </p>
+      {listings.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No businesses returned at this point.</p>
+      ) : (
+        <ol className="max-h-56 space-y-1.5 overflow-auto pr-1">
+          {listings.map((listing) => (
+            <li
+              key={`${listing.placeId ?? listing.title}-${listing.rankAbsolute}-${listing.isPaid}`}
+            >
+              <ListingCard listing={listing} targetBusiness={targetBusiness} compact />
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
+
 export default function RankMap({
   points,
   results,
@@ -73,6 +118,7 @@ export default function RankMap({
   selectedId,
   spacingMiles,
   placingCenter,
+  targetBusiness,
   onSelect,
   onPickCenter,
 }: RankMapProps) {
@@ -101,41 +147,48 @@ export default function RankMap({
       <FitToGrid points={points} />
       <MapClick enabled={placingCenter} onPickCenter={onPickCenter} />
       {points.map((point) => {
+        const selected = selectedId === point.id
+
+        return (
+          <Rectangle
+            key={`${point.id}-cell`}
+            bounds={cellBounds(point.lat, point.lng, spacingMiles)}
+            pathOptions={{
+              color: selected ? "#0f172a" : "#94a3b8",
+              weight: selected ? 1.25 : 0.6,
+              fillColor: "#94a3b8",
+              fillOpacity: 0.04,
+            }}
+            eventHandlers={{
+              click: () => onSelect(point.id),
+            }}
+          />
+        )
+      })}
+      {points.map((point) => {
         const result = results[point.id]
         const loading = loadingIds.has(point.id)
         const selected = selectedId === point.id
         const tone = rankTone(result?.rank, result?.error)
         const fill = loading ? "#94a3b8" : result ? tone.fill : "#cbd5e1"
-        const label = loading ? "…" : result ? rankLabel(result.rank, result.error) : ""
+        const label = loading ? "…" : result ? rankLabel(result.rank, result.error) : "·"
 
         return (
-          <Rectangle
+          <Marker
             key={point.id}
-            bounds={cellBounds(point.lat, point.lng, spacingMiles)}
-            pathOptions={{
-              color: selected ? "#0f172a" : "#ffffff",
-              weight: selected ? 3 : 1.5,
-              fillColor: fill,
-              fillOpacity: result || loading ? 0.78 : 0.38,
-            }}
+            position={[point.lat, point.lng]}
+            icon={pinIcon(fill, result && !loading ? tone.text : "#0f172a", label, selected)}
             eventHandlers={{
               click: () => onSelect(point.id),
             }}
+            zIndexOffset={selected ? 500 : 0}
           >
-            <Tooltip
-              permanent
-              direction="center"
-              className="rank-cell-label"
-              opacity={1}
-            >
-              <span
-                style={{ color: result && !loading ? tone.text : "#0f172a" }}
-                className="block min-w-4 text-center text-[13px] font-bold leading-none"
-              >
-                {label}
-              </span>
-            </Tooltip>
-          </Rectangle>
+            {result ? (
+              <Popup autoPan>
+                <PinPopup result={result} targetBusiness={targetBusiness} />
+              </Popup>
+            ) : null}
+          </Marker>
         )
       })}
     </MapContainer>

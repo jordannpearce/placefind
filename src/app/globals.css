@@ -144,14 +144,33 @@
   background: rgb(255 255 255 / 70%);
 }
 
-.rank-cell-label.leaflet-tooltip {
+.rank-pin {
   background: transparent;
   border: none;
-  box-shadow: none;
-  padding: 0;
-  margin: 0;
 }
 
-.rank-cell-label.leaflet-tooltip::before {
-  display: none;
+.rank-pin-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 35%);
+}
+
+.rank-pin-inner.is-selected {
+  font-size: 11px;
+  box-shadow: 0 0 0 2px #0f172a, 0 1px 3px rgb(15 23 42 / 35%);
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  padding: 4px 2px;
+}
+
+.leaflet-popup-content {
+  margin: 10px 12px;
 }

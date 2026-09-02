@@ -1,14 +1,12 @@
 "use client"
 
-import { Star } from "lucide-react"
-
+import { ListingCard } from "@/components/business-name"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { rankTone } from "@/lib/rank"
 import type { PointResult, ScanStats } from "@/lib/types"
-import { cn } from "@/lib/utils"
 
 type ResultsPanelProps = {
   stats: ScanStats | null
@@ -55,7 +53,7 @@ export function ResultsPanel({
             <PinDetail result={selected} targetBusiness={targetBusiness} />
           ) : (
             <p className="pt-4 text-sm text-muted-foreground">
-              Click a square on the map to inspect that coordinate.
+              Click a pin on the map to inspect every business ranking at that coordinate.
             </p>
           )}
         </TabsContent>
@@ -68,25 +66,32 @@ export function ResultsPanel({
                 </p>
               ) : (
                 stats.competitors.map((competitor, index) => (
-                  <div
-                    key={competitor.placeId ?? competitor.title}
-                    className="rounded-xl border bg-card px-3 py-2.5"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-[11px] font-medium text-muted-foreground">
-                          #{index + 1}
-                        </p>
-                        <p className="text-sm font-medium">{competitor.title}</p>
-                      </div>
-                      <Badge variant="secondary">{competitor.appearances} pins</Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Avg rank {competitor.averageRank} · {competitor.top3Share}% top 3
-                      {competitor.rating != null
-                        ? ` · ${competitor.rating.toFixed(1)}★ (${competitor.reviews ?? 0})`
-                        : ""}
+                  <div key={competitor.placeId ?? competitor.title} className="space-y-1">
+                    <p className="text-[11px] font-medium text-muted-foreground">
+                      #{index + 1} across the grid · avg rank {competitor.averageRank} ·{" "}
+                      {competitor.appearances} pins
                     </p>
+                    <ListingCard
+                      listing={{
+                        rankAbsolute: index + 1,
+                        rankGroup: index + 1,
+                        type: "maps_search",
+                        title: competitor.title,
+                        domain: null,
+                        address: null,
+                        placeId: competitor.placeId,
+                        cid: null,
+                        phone: null,
+                        category: null,
+                        rating: competitor.rating,
+                        reviews: competitor.reviews,
+                        latitude: null,
+                        longitude: null,
+                        url: null,
+                        isPaid: false,
+                      }}
+                      targetBusiness={targetBusiness}
+                    />
                   </div>
                 ))
               )}
@@ -126,12 +131,13 @@ function PinDetail({
   targetBusiness: string
 }) {
   const tone = rankTone(result.rank, result.error)
+  const organic = result.listings.filter((listing) => !listing.isPaid)
 
   return (
     <div className="flex min-h-0 flex-col gap-3 pt-2">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs text-muted-foreground">Rank at this coordinate</p>
+          <p className="text-xs text-muted-foreground">Target rank at this GPS point</p>
           <p className="font-heading text-3xl" style={{ color: tone.fill }}>
             {result.error ? "Error" : result.found ? `#${result.rank}` : "Not found"}
           </p>
@@ -143,50 +149,29 @@ function PinDetail({
       </p>
       {result.error ? <p className="text-sm text-destructive">{result.error}</p> : null}
       <Separator />
-      <p className="text-xs font-medium text-muted-foreground">
-        Google Maps listings for this pin
-      </p>
-      <ScrollArea className="h-[min(360px,42vh)] pr-3">
+      <div>
+        <p className="text-xs font-medium text-foreground">
+          All businesses ranking at this point
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          {organic.length} organic
+          {result.listings.length !== organic.length
+            ? ` · ${result.listings.length - organic.length} ad`
+            : ""}
+        </p>
+      </div>
+      <ScrollArea className="h-[min(420px,48vh)] pr-3">
         <ol className="flex flex-col gap-2">
           {result.listings.length === 0 ? (
             <li className="text-sm text-muted-foreground">No listings returned.</li>
           ) : (
-            result.listings.map((listing) => {
-              const isTarget =
-                listing.title.toLowerCase().includes(targetBusiness.toLowerCase()) ||
-                (listing.placeId && listing.placeId === targetBusiness)
-              return (
-                <li
-                  key={`${listing.placeId ?? listing.title}-${listing.rankAbsolute}-${listing.isPaid}`}
-                  className={cn(
-                    "rounded-xl border px-3 py-2.5",
-                    isTarget ? "border-primary bg-primary/5" : "bg-card"
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {listing.isPaid ? "Ad · " : `#${listing.rankGroup} · `}
-                        {listing.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{listing.address}</p>
-                    </div>
-                    {listing.rating != null && (
-                      <span className="inline-flex items-center gap-1 text-xs">
-                        <Star className="size-3 fill-amber-400 text-amber-400" />
-                        {listing.rating.toFixed(1)}
-                        <span className="text-muted-foreground">({listing.reviews ?? 0})</span>
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    {[listing.category, listing.domain, listing.placeId]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                </li>
-              )
-            })
+            result.listings.map((listing) => (
+              <li
+                key={`${listing.placeId ?? listing.title}-${listing.rankAbsolute}-${listing.isPaid}`}
+              >
+                <ListingCard listing={listing} targetBusiness={targetBusiness} />
+              </li>
+            ))
           )}
         </ol>
       </ScrollArea>

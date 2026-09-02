@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     "Scan Google Maps rankings from a lattice of GPS coordinates using the DataForSEO Maps SERP API.",
 }
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
