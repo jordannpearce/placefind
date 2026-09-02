@@ -51,6 +51,20 @@ function pool() {
   return globalForPg.gridpinPool
 }
 
+export const DEFAULT_RESEND_FROM = "GridPins <hello@gridpins.com>"
+const LEGACY_RESEND_FROM = new Set([
+  "GridPins <beth.t@example.com>",
+  "GridPins <hello@gridpin.app>",
+  "beth.t@example.com",
+  "hello@gridpin.app",
+])
+
+function defaultResendFrom(value?: string) {
+  const trimmed = value?.trim() || ""
+  if (!trimmed || LEGACY_RESEND_FROM.has(trimmed)) return DEFAULT_RESEND_FROM
+  return trimmed
+}
+
 function emptyDb(): Database {
   return {
     users: [],
@@ -58,7 +72,7 @@ function emptyDb(): Database {
     emails: [],
     workspaces: {},
     agencies: [],
-    settings: { resendApiKey: "", resendFrom: "GridPins <beth.t@example.com>" },
+    settings: { resendApiKey: "", resendFrom: DEFAULT_RESEND_FROM },
   }
 }
 
@@ -211,7 +225,7 @@ function hydrate(raw: Partial<Database>): Database {
     agencies: raw.agencies ?? [],
     settings: {
       resendApiKey: raw.settings?.resendApiKey ?? "",
-      resendFrom: raw.settings?.resendFrom || "GridPins <beth.t@example.com>",
+      resendFrom: defaultResendFrom(raw.settings?.resendFrom),
     },
   }
   for (const user of db.users) {
@@ -392,7 +406,7 @@ async function loadFromPostgres(): Promise<Database> {
     })),
     settings: {
       resendApiKey: settingsMap.resendApiKey || "",
-      resendFrom: settingsMap.resendFrom || "GridPins <beth.t@example.com>",
+      resendFrom: defaultResendFrom(settingsMap.resendFrom),
     },
   })
   return db

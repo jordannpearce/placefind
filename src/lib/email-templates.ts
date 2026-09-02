@@ -1,8 +1,22 @@
 import { campaignLimit, monthlyTotal, PLANS } from "./plans"
 import type { PlanId } from "./types"
 
+const LOCAL_APP_URL = "http://127.0.0.1:43127"
+const PUBLIC_APP_URL = "https://gridpins.com"
+
 export function appUrl() {
-  return process.env.APP_URL || "http://127.0.0.1:43127"
+  const configured = process.env.APP_URL?.trim()
+  if (configured) return configured.replace(/\/$/, "")
+
+  const env = process.env.NODE_ENV
+  const host = (process.env.HOSTNAME || process.env.HOST || "").toLowerCase()
+  const isLocal =
+    env === "development" ||
+    host === "localhost" ||
+    host.startsWith("127.") ||
+    host.endsWith(".local")
+
+  return isLocal ? LOCAL_APP_URL : PUBLIC_APP_URL
 }
 
 function wrap(title: string, body: string) {

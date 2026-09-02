@@ -78,7 +78,7 @@ export function AdminResend({ initial }: { initial: ResendSettings }) {
           <Input
             value={from}
             onChange={(event) => setFrom(event.target.value)}
-            placeholder="GridPins <hello@yourdomain.com>"
+            placeholder="GridPins <hello@gridpins.com>"
           />
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { Resend } from "resend"
 
-import { readDb, updateDb } from "./db"
+import { DEFAULT_RESEND_FROM, readDb, updateDb } from "./db"
 import type { EmailKind, MailRecord } from "./types"
 import { randomToken } from "./password"
 
@@ -17,7 +17,7 @@ export async function resolveResendConfig() {
   const from =
     db.settings.resendFrom.trim() ||
     process.env.RESEND_FROM?.trim() ||
-    "GridPins <beth.t@example.com>"
+    DEFAULT_RESEND_FROM
   return {
     apiKey,
     from,
