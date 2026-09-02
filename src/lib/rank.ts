@@ -58,7 +58,7 @@ export function rankTone(rank: number | null | undefined, error?: string | null)
     return { fill: "#64748b", text: "#ffffff", label: "Error" }
   }
   if (rank == null) {
-    return { fill: "#94a3b8", text: "#0f172a", label: "Not found" }
+    return { fill: "#94a3b8", text: "#0f172a", label: "Outside pack" }
   }
   const fill = rankFill(rank)
   if (rank <= 3) {

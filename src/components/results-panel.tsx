@@ -174,7 +174,7 @@ function PinDetail({
         <div>
           <p className="text-xs text-muted-foreground">Target rank at this GPS point</p>
           <p className="font-heading text-3xl" style={{ color: tone.fill }}>
-            {result.error ? "Error" : result.found ? `#${result.rank}` : "Not found"}
+            {result.error ? "Error" : result.found ? `#${result.rank}` : "—"}
           </p>
         </div>
         <Badge style={{ background: tone.fill, color: tone.text }}>{tone.label}</Badge>
@@ -183,6 +183,13 @@ function PinDetail({
         {result.locationCoordinate}
       </p>
       {result.error ? <p className="text-sm text-destructive">{result.error}</p> : null}
+      {!result.error && !result.found ? (
+        <p className="text-sm leading-6 text-muted-foreground">
+          {organic.length > 0
+            ? `Maps returned ${organic.length} businesses here, but your listing was not in that pack. Google weights the searcher’s GPS. Pins on the edge of a grid often fall outside your proximity halo — that is a real rank miss, not a failed scan.`
+            : "Maps returned no places at this coordinate. Try a smaller radius or a denser grid closer to the storefront."}
+        </p>
+      ) : null}
       <Separator />
       <div>
         <p className="text-xs font-medium text-foreground">
