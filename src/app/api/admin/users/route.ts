@@ -2,9 +2,10 @@ import { NextResponse } from "next/server"
 
 import { requireAdmin } from "@/lib/auth-guard"
 import { findOrCreateAgency, findOrCreateWorkspace, readDb, updateDb } from "@/lib/db"
+import { ACTIVATION_TOKEN_TTL_MS, createHashedToken } from "@/lib/auth-tokens"
 import { accountCreatedEmail, activationEmail, appUrl, billingEmail } from "@/lib/email-templates"
-import { previewUrl, sendMail } from "@/lib/mail"
-import { hashPassword, hashToken, randomToken } from "@/lib/password"
+import { previewUrl, sendAuthMail, sendMail } from "@/lib/mail"
+import { hashPassword } from "@/lib/password"
 import { clampExtraCampaigns, isPlanId, PLANS } from "@/lib/plans"
 import { publicUser } from "@/lib/session"
 import { defaultCampaign } from "@/lib/storage"
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
   }
 
   const status: UserStatus = body.status === "pending" || body.status === "suspended" ? body.status : "active"
-  const token = status === "pending" ? randomToken() : ""
+  let token = ""
 
   const user = await updateDb((db) => {
     if (db.users.some((item) => item.email === email)) return null
@@ -94,14 +95,7 @@ export async function POST(request: Request) {
       workspace.activeCampaignId = workspace.campaigns[0]?.id ?? ""
     }
     if (status === "pending") {
-      db.tokens = db.tokens.filter((item) => item.userId !== created.id || item.type !== "activation")
-      db.tokens.push({
-        id: `tok_${Date.now()}`,
-        userId: created.id,
-        type: "activation",
-        tokenHash: hashToken(token),
-        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 48).toISOString(),
-      })
+      token = createHashedToken(db, created.id, "activation", ACTIVATION_TOKEN_TTL_MS)
     }
     return created
   })
@@ -115,7 +109,7 @@ export async function POST(request: Request) {
     if (status === "pending") {
       const verifyUrl = `${appUrl()}/verify?token=${token}`
       const template = activationEmail(user.name, verifyUrl)
-      const mail = await sendMail({
+      const mail = await sendAuthMail({
         to: user.email,
         subject: template.subject,
         html: template.html,
@@ -125,7 +119,7 @@ export async function POST(request: Request) {
       preview = mail.provider === "preview" ? previewUrl(mail.id) : null
     } else {
       const template = accountCreatedEmail(user.name, user.email)
-      const mail = await sendMail({
+      const mail = await sendAuthMail({
         to: user.email,
         subject: template.subject,
         html: template.html,

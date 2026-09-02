@@ -164,6 +164,7 @@ export type PlanId = "starter" | "agency" | "enterprise"
 export type EmailKind =
   | "activation"
   | "account_created"
+  | "password_reset"
   | "billing"
   | "info"
   | "marketing"

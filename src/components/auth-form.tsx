@@ -91,7 +91,16 @@ export function AuthForm({ mode }: { mode: Mode }) {
           required
         />
       </Field>
-      <Field label="Password">
+      <Field
+        label="Password"
+        hint={
+          mode === "login" ? (
+            <Link href="/forgot-password" className="text-primary hover:underline">
+              Forgot password?
+            </Link>
+          ) : null
+        }
+      >
         <Input
           type="password"
           value={password}
@@ -123,14 +132,32 @@ export function AuthForm({ mode }: { mode: Mode }) {
       <Button type="submit" className="w-full" size="lg" disabled={pending}>
         {pending ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}
       </Button>
+      {mode === "login" ? (
+        <p className="text-center text-sm">
+          <Link href="/forgot-password" className="text-primary hover:underline">
+            Forgot password?
+          </Link>
+        </p>
+      ) : null}
     </form>
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  hint?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <div className="flex items-center justify-between gap-3">
+        <Label>{label}</Label>
+        {hint ? <span className="shrink-0 text-xs">{hint}</span> : null}
+      </div>
       {children}
     </div>
   )

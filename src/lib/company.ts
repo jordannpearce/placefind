@@ -1,5 +1,7 @@
 export const SUPPORT_INBOX = "hello@info.gridpins.com"
 export const SUPPORT_FROM = `GridPins <${SUPPORT_INBOX}>`
+/** Activations, password resets, and other account mail. */
+export const AUTH_FROM = SUPPORT_FROM
 export const SUPPORT_PHONE_DISPLAY = "(833) 523-9707"
 export const SUPPORT_PHONE_TEL = "tel:+18335239707"
 export const COMPANY_LEGAL_NAME = "GridPins"

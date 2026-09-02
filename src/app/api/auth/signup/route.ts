@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server"
 
+import { ACTIVATION_TOKEN_TTL_MS, createHashedToken } from "@/lib/auth-tokens"
 import { findOrCreateAgency, updateDb } from "@/lib/db"
-import { activationEmail } from "@/lib/email-templates"
-import { sendMail, previewUrl } from "@/lib/mail"
-import { hashPassword, hashToken, randomToken } from "@/lib/password"
+import { activationEmail, appUrl } from "@/lib/email-templates"
+import { previewUrl, sendAuthMail } from "@/lib/mail"
+import { hashPassword } from "@/lib/password"
 import { defaultCampaign } from "@/lib/storage"
 
 export async function POST(request: Request) {
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   if (!email.includes("@")) return NextResponse.json({ error: "A valid email is required." }, { status: 400 })
   if (password.length < 8) return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 })
 
-  const token = randomToken()
+  let token = ""
   const user = await updateDb((db) => {
     if (db.users.some((item) => item.email === email)) return null
     const agency = findOrCreateAgency(db, body.company?.trim() || name)
@@ -50,14 +51,7 @@ export async function POST(request: Request) {
       activeCampaignId: campaigns[0]?.id ?? "",
       scans: {},
     }
-    db.tokens = db.tokens.filter((item) => item.userId !== created.id || item.type !== "activation")
-    db.tokens.push({
-      id: `tok_${Date.now()}`,
-      userId: created.id,
-      type: "activation",
-      tokenHash: hashToken(token),
-      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 48).toISOString(),
-    })
+    token = createHashedToken(db, created.id, "activation", ACTIVATION_TOKEN_TTL_MS)
     return created
   })
 
@@ -65,10 +59,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "An account with that email already exists." }, { status: 409 })
   }
 
-  const origin = new URL(request.url).origin
-  const verifyUrl = `${origin}/verify?token=${token}`
+  const verifyUrl = `${appUrl()}/verify?token=${token}`
   const template = activationEmail(user.name, verifyUrl)
-  const mail = await sendMail({
+  const mail = await sendAuthMail({
     to: user.email,
     subject: template.subject,
     html: template.html,

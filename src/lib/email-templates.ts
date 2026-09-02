@@ -4,19 +4,70 @@ import type { PlanId } from "./types"
 const LOCAL_APP_URL = "http://127.0.0.1:43127"
 const PUBLIC_APP_URL = "https://gridpins.com"
 
-export function appUrl() {
-  const configured = process.env.APP_URL?.trim()
-  if (configured) return configured.replace(/\/$/, "")
+function hostnameOf(value: string) {
+  try {
+    return new URL(value).hostname.toLowerCase()
+  } catch {
+    return ""
+  }
+}
 
-  const env = process.env.NODE_ENV
+function isLoopbackHost(hostname: string) {
+  return hostname === "localhost" || hostname.startsWith("127.") || hostname === "[::1]"
+}
+
+function isEphemeralEmailHost(hostname: string) {
+  const host = hostname.toLowerCase()
+  const isPublicIp = Boolean(host.match(/^(\d{1,3}\.){3}\d{1,3}$/)) && !isLoopbackHost(host)
+  return (
+    host.includes("cursor.com") ||
+    host.includes("cursor.sh") ||
+    host.endsWith(".vercel.app") ||
+    isPublicIp
+  )
+}
+
+function looksDeployed() {
+  return Boolean(
+    process.env.RAILWAY_ENVIRONMENT ||
+      process.env.RAILWAY_PUBLIC_DOMAIN ||
+      process.env.VERCEL ||
+      process.env.RENDER ||
+      process.env.FLY_APP_NAME
+  )
+}
+
+export function appUrl() {
+  const configured = process.env.APP_URL?.trim().replace(/\/$/, "") || ""
+  const deployed = process.env.NODE_ENV === "production" || looksDeployed()
+  if (configured) {
+    const host = hostnameOf(configured)
+    if (host && !isEphemeralEmailHost(host) && !(deployed && isLoopbackHost(host))) {
+      return configured
+    }
+  }
+
+  if (deployed) {
+    return PUBLIC_APP_URL
+  }
+
   const host = (process.env.HOSTNAME || process.env.HOST || "").toLowerCase()
   const isLocal =
-    env === "development" ||
+    process.env.NODE_ENV === "development" ||
     host === "localhost" ||
     host.startsWith("127.") ||
     host.endsWith(".local")
 
   return isLocal ? LOCAL_APP_URL : PUBLIC_APP_URL
+}
+
+export function loginUrl() {
+  return `${appUrl()}/login`
+}
+
+function loginCta() {
+  const href = loginUrl()
+  return `<p>Log in at <a href="${href}" style="color:#2f6b5a;">${href}</a>.</p>`
 }
 
 function wrap(title: string, body: string) {
@@ -58,7 +109,23 @@ export function activationEmail(name: string, verifyUrl: string) {
       `<p>Hi ${escapeHtml(name)},</p>
        <p>Click below to activate your GridPins workspace and start tracking Maps rankings on a grid.</p>
        <p><a href="${verifyUrl}" style="display:inline-block;background:#2f6b5a;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Activate account</a></p>
-       <p style="font-size:13px;color:#6b7c74;">If the button does not work, paste this link:<br>${verifyUrl}</p>`
+       <p style="font-size:13px;color:#6b7c74;">If the button does not work, paste this link:<br>${verifyUrl}</p>
+       ${loginCta()}`
+    ),
+  }
+}
+
+export function passwordResetEmail(name: string, resetUrl: string) {
+  return {
+    subject: "Reset your GridPins password",
+    html: wrap(
+      "Reset your password",
+      `<p>Hi ${escapeHtml(name)},</p>
+       <p>We received a request to reset the password for your GridPins account. This link expires in one hour and can be used once.</p>
+       <p><a href="${resetUrl}" style="display:inline-block;background:#2f6b5a;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Set a new password</a></p>
+       <p style="font-size:13px;color:#6b7c74;">If the button does not work, paste this link:<br>${resetUrl}</p>
+       ${loginCta()}
+       <p style="font-size:13px;color:#6b7c74;">If you did not ask for this, you can ignore this email.</p>`
     ),
   }
 }
@@ -99,7 +166,7 @@ export function infoEmail(name: string, headline: string, body: string) {
 }
 
 export function accountCreatedEmail(name: string, email: string) {
-  const loginUrl = `${appUrl()}/login`
+  const href = loginUrl()
   return {
     subject: "Your GridPins account is ready",
     html: wrap(
@@ -107,7 +174,8 @@ export function accountCreatedEmail(name: string, email: string) {
       `<p>Hi ${escapeHtml(name)},</p>
        <p>An administrator created a GridPins workspace for <strong>${escapeHtml(email)}</strong>.</p>
        <p>Sign in with the email and password they gave you to open your dashboard, campaigns, and grid tracker.</p>
-       <p><a href="${loginUrl}" style="display:inline-block;background:#2f6b5a;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Sign in</a></p>`
+       <p><a href="${href}" style="display:inline-block;background:#2f6b5a;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Sign in</a></p>
+       ${loginCta()}`
     ),
   }
 }

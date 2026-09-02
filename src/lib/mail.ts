@@ -1,11 +1,11 @@
 import { Resend } from "resend"
 
-import { SUPPORT_FROM, SUPPORT_INBOX } from "./company"
+import { AUTH_FROM, SUPPORT_FROM, SUPPORT_INBOX } from "./company"
 import { DEFAULT_RESEND_FROM, readDb, updateDb } from "./db"
 import type { EmailKind, MailRecord } from "./types"
 import { randomToken } from "./password"
 
-export { SUPPORT_FROM, SUPPORT_INBOX }
+export { AUTH_FROM, SUPPORT_FROM, SUPPORT_INBOX }
 
 export function maskSecret(value: string) {
   const trimmed = value.trim()
@@ -74,6 +74,20 @@ export async function sendMail(input: {
   })
 
   return record
+}
+
+/** Account mail (activation, reset, welcome) always from hello@info.gridpins.com. */
+export async function sendAuthMail(input: {
+  to: string
+  subject: string
+  html: string
+  kind: Extract<EmailKind, "activation" | "account_created" | "password_reset">
+  userId?: string | null
+}): Promise<MailRecord> {
+  return sendMail({
+    ...input,
+    from: AUTH_FROM,
+  })
 }
 
 export function previewUrl(id: string) {
