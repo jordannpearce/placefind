@@ -9,7 +9,7 @@ export async function SiteHeader() {
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         <Link href="/" className="font-heading text-2xl tracking-tight">
-          GridPin
+          GridPins
         </Link>
         <nav className="flex items-center gap-1 text-sm">
           <Link href="/pricing" className="hidden rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground sm:inline">
@@ -39,7 +39,7 @@ export function SiteFooter() {
   return (
     <footer className="border-t">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-        <p>GridPin · Google Maps grid rank tracker</p>
+        <p>GridPins · Google Maps grid rank tracker</p>
         <div className="flex gap-4">
           <Link href="/pricing" className="hover:text-foreground">
             Pricing

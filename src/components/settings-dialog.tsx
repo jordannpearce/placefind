@@ -52,7 +52,7 @@ export function SettingsDialog({
           <DialogTitle>DataForSEO API keys</DialogTitle>
           <DialogDescription>
             Agencies and brands can use their own DataForSEO login. Keys stay in this
-            browser and are sent only to GridPin’s scan routes.
+            browser and are sent only to GridPins’ scan routes.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

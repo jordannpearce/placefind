@@ -17,7 +17,7 @@ export async function resolveResendConfig() {
   const from =
     db.settings.resendFrom.trim() ||
     process.env.RESEND_FROM?.trim() ||
-    "GridPin <beth.t@example.com>"
+    "GridPins <beth.t@example.com>"
   return {
     apiKey,
     from,

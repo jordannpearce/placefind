@@ -54,7 +54,7 @@ export function AppNav({
       <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between gap-3 px-4">
         <div className="flex items-center gap-4">
           <Link href="/dashboard" className="font-heading text-xl tracking-tight">
-            GridPin
+            GridPins
           </Link>
           <nav className="hidden items-center gap-1 text-sm sm:flex">
             {LINKS.map((link) => (

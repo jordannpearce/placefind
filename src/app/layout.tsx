@@ -22,7 +22,7 @@ const instrument = Instrument_Serif({
 })
 
 export const metadata: Metadata = {
-  title: "GridPin — Google Maps grid rank tracker",
+  title: "GridPins — Google Maps grid rank tracker",
   description:
     "SaaS grid rank tracking for Google Maps. Campaigns per location, multiple keywords, and DataForSEO scans from every nearby street.",
 }

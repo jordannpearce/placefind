@@ -58,7 +58,7 @@ function emptyDb(): Database {
     emails: [],
     workspaces: {},
     agencies: [],
-    settings: { resendApiKey: "", resendFrom: "GridPin <beth.t@example.com>" },
+    settings: { resendApiKey: "", resendFrom: "GridPins <beth.t@example.com>" },
   }
 }
 
@@ -111,7 +111,7 @@ export function findOrCreateAgency(db: Database, name: string): Agency {
 
 function seedDb(db: Database): Database {
   const now = new Date().toISOString()
-  const gridpin = findOrCreateAgency(db, "GridPin")
+  const gridpin = findOrCreateAgency(db, "GridPins")
   const taylor = findOrCreateAgency(db, "Taylor Agency")
   const admin: User = {
     id: "user_tm_admin",
@@ -123,7 +123,7 @@ function seedDb(db: Database): Database {
     plan: "enterprise",
     extraCampaigns: 0,
     marketingOptIn: false,
-    company: "GridPin",
+    company: "GridPins",
     agencyId: gridpin.id,
     createdAt: now,
     lastLoginAt: null,
@@ -171,10 +171,10 @@ function ensureAdmin(db: Database) {
     if (!verifyPassword(ADMIN_PASSWORD, existing.passwordHash)) {
       existing.passwordHash = hashPassword(ADMIN_PASSWORD)
     }
-    if (!existing.agencyId) existing.agencyId = findOrCreateAgency(db, existing.company || "GridPin").id
+    if (!existing.agencyId) existing.agencyId = findOrCreateAgency(db, existing.company || "GridPins").id
     return
   }
-  const agency = findOrCreateAgency(db, "GridPin")
+  const agency = findOrCreateAgency(db, "GridPins")
   db.users.push({
     id: "user_tm_admin",
     name: "TM",
@@ -185,7 +185,7 @@ function ensureAdmin(db: Database) {
     plan: "enterprise",
     extraCampaigns: 0,
     marketingOptIn: false,
-    company: "GridPin",
+    company: "GridPins",
     agencyId: agency.id,
     createdAt: new Date().toISOString(),
     lastLoginAt: null,
@@ -211,7 +211,7 @@ function hydrate(raw: Partial<Database>): Database {
     agencies: raw.agencies ?? [],
     settings: {
       resendApiKey: raw.settings?.resendApiKey ?? "",
-      resendFrom: raw.settings?.resendFrom || "GridPin <beth.t@example.com>",
+      resendFrom: raw.settings?.resendFrom || "GridPins <beth.t@example.com>",
     },
   }
   for (const user of db.users) {
@@ -392,7 +392,7 @@ async function loadFromPostgres(): Promise<Database> {
     })),
     settings: {
       resendApiKey: settingsMap.resendApiKey || "",
-      resendFrom: settingsMap.resendFrom || "GridPin <beth.t@example.com>",
+      resendFrom: settingsMap.resendFrom || "GridPins <beth.t@example.com>",
     },
   })
   return db

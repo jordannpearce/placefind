@@ -15,7 +15,7 @@ export default function HomePage() {
             See where a listing ranks from every nearby street.
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">
-            GridPin samples an N×N lattice of GPS points and asks DataForSEO for the Maps SERP at
+            GridPins samples an N×N lattice of GPS points and asks DataForSEO for the Maps SERP at
             each coordinate. Agencies and brands run campaigns per location, track multiple
             keywords, and schedule ranking checks.
           </p>
@@ -47,7 +47,7 @@ export default function HomePage() {
             },
             {
               title: "Your DataForSEO key",
-              body: "Agencies paste their own API login. Without a key, GridPin still runs a realistic Austin coffee demo so you can learn the product.",
+              body: "Agencies paste their own API login. Without a key, GridPins still runs a realistic Austin coffee demo so you can learn the product.",
             },
           ].map((item) => (
             <div key={item.title}>
@@ -64,7 +64,7 @@ export default function HomePage() {
           {[
             "Confirm the listing with name, city, state, and a Google Maps link.",
             "Choose grid size (3×3 through 13×13) and a radius in miles.",
-            "GridPin posts one Maps task per pin, using location_coordinate.",
+            "GridPins posts one Maps task per pin, using location_coordinate.",
             "Pins color by rank. Open a pin to see every business and review count.",
           ].map((step, index) => (
             <li key={step} className="rounded-2xl border bg-card p-4">

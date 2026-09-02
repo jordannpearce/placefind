@@ -581,7 +581,7 @@ export function TrackerApp() {
             <Menu />
           </Button>
           <div>
-            <p className="font-heading text-xl leading-none tracking-tight">GridPin</p>
+            <p className="font-heading text-xl leading-none tracking-tight">GridPins</p>
             <p className="text-[11px] text-muted-foreground">Google Maps grid rank tracker</p>
           </div>
         </div>
@@ -729,7 +729,7 @@ export function TrackerApp() {
           <DialogHeader>
             <DialogTitle>How a Maps grid scan works</DialogTitle>
             <DialogDescription>
-              Google ranks local results differently from each GPS point. GridPin samples a
+              Google ranks local results differently from each GPS point. GridPins samples a
               lattice of coordinates and asks DataForSEO for the Maps SERP at every pin.
             </DialogDescription>
           </DialogHeader>
