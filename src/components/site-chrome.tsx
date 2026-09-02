@@ -1,6 +1,7 @@
 import Link from "next/link"
 
 import { buttonVariants } from "@/components/ui/button"
+import { Wordmark } from "@/components/wordmark"
 import { readSession } from "@/lib/session"
 
 export async function SiteHeader() {
@@ -8,8 +9,8 @@ export async function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-        <Link href="/" className="font-heading text-2xl tracking-tight">
-          GridPins
+        <Link href="/" className="inline-flex items-center">
+          <Wordmark className="text-2xl leading-none" />
         </Link>
         <nav className="flex items-center gap-1 text-sm">
           <Link href="/why-grids" className="hidden rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground sm:inline">
@@ -42,7 +43,10 @@ export function SiteFooter() {
   return (
     <footer className="border-t">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-        <p>GridPins · Google Maps grid rank tracker</p>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Wordmark className="text-xl leading-none" />
+          <span>· Google Maps grid rank tracker</span>
+        </p>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           <Link href="/why-grids" className="hover:text-foreground">
             Why grids

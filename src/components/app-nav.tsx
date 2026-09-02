@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
+import { Wordmark } from "@/components/wordmark"
 import { cn } from "@/lib/utils"
 
 const LINKS = [
@@ -53,8 +54,8 @@ export function AppNav({
       ) : null}
       <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between gap-3 px-4">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="font-heading text-xl tracking-tight">
-            GridPins
+          <Link href="/dashboard" className="inline-flex items-center">
+            <Wordmark className="text-xl leading-none" />
           </Link>
           <nav className="hidden items-center gap-1 text-sm sm:flex">
             {LINKS.map((link) => (

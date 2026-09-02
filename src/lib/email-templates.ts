@@ -22,6 +22,11 @@ export function appUrl() {
 function wrap(title: string, body: string) {
   return `<!doctype html>
 <html>
+  <head>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet" />
+  </head>
   <body style="margin:0;background:#f4f1ea;font-family:Georgia,serif;color:#1f3d34;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
       <tr>
@@ -29,7 +34,9 @@ function wrap(title: string, body: string) {
           <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#fffdf8;border:1px solid #e4ddd0;border-radius:16px;padding:32px;">
             <tr>
               <td>
-                <p style="margin:0 0 4px;letter-spacing:.12em;font-size:11px;text-transform:uppercase;color:#5f7a70;">GridPins</p>
+                <p style="margin:0 0 16px;font-family:'Poppins',Arial,sans-serif;font-weight:800;font-size:22px;letter-spacing:-0.03em;line-height:1;">
+                  <span style="color:#001A17;">Grid</span><span style="color:#00D85A;">Pins</span>
+                </p>
                 <h1 style="margin:0 0 16px;font-size:28px;font-weight:400;">${title}</h1>
                 ${body}
                 <p style="margin:28px 0 0;font-size:12px;color:#6b7c74;">Google Maps grid rank tracking for local brands and agencies.</p>

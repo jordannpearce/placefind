@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google"
+import { Geist, Geist_Mono, Instrument_Serif, Poppins } from "next/font/google"
 
 import { TooltipProvider } from "@/components/ui/tooltip"
 
@@ -21,6 +21,12 @@ const instrument = Instrument_Serif({
   weight: "400",
 })
 
+const poppins = Poppins({
+  variable: "--font-poppins",
+  subsets: ["latin"],
+  weight: "800",
+})
+
 export const metadata: Metadata = {
   title: "GridPins — Google Maps grid rank tracker",
   description:
@@ -31,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${instrument.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${instrument.variable} ${poppins.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <TooltipProvider>{children}</TooltipProvider>

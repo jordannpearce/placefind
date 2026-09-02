@@ -7,6 +7,7 @@ import { Info, Menu, PanelRight, Settings, X } from "lucide-react"
 import { ScanForm } from "@/components/scan-form"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { ResultsPanel } from "@/components/results-panel"
+import { Wordmark } from "@/components/wordmark"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -619,7 +620,9 @@ export function TrackerApp() {
             <Menu />
           </Button>
           <div>
-            <p className="font-heading text-xl leading-none tracking-tight">GridPins</p>
+            <p className="leading-none">
+              <Wordmark className="text-xl leading-none" />
+            </p>
             <p className="text-[11px] text-muted-foreground">Google Maps grid rank tracker</p>
           </div>
         </div>
