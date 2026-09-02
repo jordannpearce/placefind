@@ -233,6 +233,31 @@ const AMBIGUOUS_CITIES = new Set(
     "florence",
     "milan",
     "venice",
+    "merit",
+    "reserve",
+    "house",
+    "congress",
+    "trinity",
+    "university",
+    "college",
+    "hospital",
+    "school",
+    "academy",
+    "institute",
+    "company",
+    "market",
+    "plaza",
+    "square",
+    "circle",
+    "office",
+    "group",
+    "agency",
+    "temple",
+    "chapel",
+    "store",
+    "shop",
+    "farm",
+    "base",
   ].map((word) => normalizeName(word))
 )
 
@@ -269,7 +294,6 @@ function addPhrase(kind: GeoKind, name: string, raw: string) {
 
 for (const state of STATE_ENTRIES) {
   addPhrase("state", state.name, state.name)
-  addPhrase("state", state.name, state.abbr)
 }
 
 for (const city of cities as string[]) {
@@ -296,12 +320,31 @@ function isAmbiguousCity(normalized: string, tokenCount: number): boolean {
   return AMBIGUOUS_CITIES.has(normalized)
 }
 
+const STATE_BY_ABBR = new Map(STATE_ENTRIES.map((state) => [state.abbr, state.name]))
+
+function findStateAbbreviations(title: string): GeoMatch[] {
+  const matches: GeoMatch[] = []
+  const regex = /(?:^|[,\s])([A-Z]{2})(?=\s|$|,)/g
+  let found: RegExpExecArray | null
+  while ((found = regex.exec(title))) {
+    const abbr = found[1]
+    const name = STATE_BY_ABBR.get(abbr)
+    if (!name) continue
+    const prefix = title.slice(Math.max(0, found.index - 1), found.index + 1)
+    if (!prefix.includes(",") && /^(CO|IN|OR|ME|OK|DE|HI|ID|LA|MA|PA|AL|AR|MD)$/.test(abbr)) {
+      continue
+    }
+    matches.push({ kind: "state", name, matched: abbr })
+  }
+  return matches
+}
+
 export function findGeoInName(title: string): GeoMatch[] {
   const normalized = normalizeName(title)
   if (!normalized) return []
   const tokens = normalized.split(" ").filter(Boolean)
-  const found: GeoMatch[] = []
-  const used = new Set<string>()
+  const found: GeoMatch[] = findStateAbbreviations(title)
+  const used = new Set<string>(found.map((item) => `${item.kind}:${item.name}`))
 
   const take = (phrase: Phrase) => {
     const key = `${phrase.kind}:${phrase.name}`
