@@ -11,7 +11,12 @@ export default function PricingPage() {
         Every plan includes campaign tracking, keyword grids, scheduled scans, and your own
         DataForSEO key. Entry is one brand and one location. Growth adds extra campaign slots at $5
         each. Agency is fifty campaigns with no add-on. Activation, billing, and product emails go
-        out through Resend.
+        out through Resend. Refunds follow the{" "}
+        <Link href="/refunds" className="text-primary hover:underline">
+          Refund Policy
+        </Link>
+        : we only credit a month when you show the software failed more than 10% of that billing
+        cycle.
       </p>
       <div className="mt-10 grid gap-5 md:grid-cols-3">
         {PLAN_ORDER.map((id) => {

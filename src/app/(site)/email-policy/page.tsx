@@ -1,0 +1,69 @@
+import type { Metadata } from "next"
+
+import { H, LegalDoc, P } from "@/components/legal-doc"
+
+export const metadata: Metadata = {
+  title: "Email Policy — GridPins",
+  description: "When GridPins sends activation, billing, product, and marketing email, and how to opt out.",
+}
+
+export default function EmailPolicyPage() {
+  return (
+    <LegalDoc
+      title="Email Policy"
+      updated="September 2, 2026"
+      lede="GridPins sends mail from our domain, gridpins.com (typically hello@gridpins.com). This page is the policy for those messages: what we send, why, and how you control marketing."
+    >
+      <section className="space-y-3">
+        <H>Transactional mail we always send</H>
+        <P>
+          Account creation, activation links, password or access notices, billing and plan-change
+          receipts, and operational notices about your workspace are transactional. We send them
+          because you asked for an account or changed a paid setting. You cannot unsubscribe from
+          these while the account is open; they are part of running the service.
+        </P>
+      </section>
+      <section className="space-y-3">
+        <H>Product updates and notifications</H>
+        <P>
+          Administrators may send product-update and notification messages to selected accounts.
+          Those messages explain changes to GridPins, scan behavior, or your workspace. If you do
+          not want optional product mail, say so in Account or reply to hello@gridpins.com.
+        </P>
+      </section>
+      <section className="space-y-3">
+        <H>Marketing mail</H>
+        <P>
+          Marketing messages (tips, promotions, agency offers) go only to addresses that opted in
+          at signup or in Account, or that an administrator explicitly selected after you joined.
+          Checkboxes on Admin → Emails control who receives a given send. We do not buy third-party
+          lists to promote GridPins.
+        </P>
+      </section>
+      <section className="space-y-3">
+        <H>How we send</H>
+        <P>
+          When a Resend API key is configured, mail is delivered through Resend from a gridpins.com
+          from-address. If no key is set, GridPins stores the HTML in the in-app inbox so
+          activation still works in development. Preview copies are not a public mailing list.
+        </P>
+      </section>
+      <section className="space-y-3">
+        <H>Opt out and complaints</H>
+        <P>
+          Turn off marketing in Account → email preferences, or email hello@gridpins.com with the
+          address you want removed from promotional sends. We honor unsubscribe requests for
+          marketing promptly. Transactional mail continues as long as the account exists.
+        </P>
+      </section>
+      <section className="space-y-3">
+        <H>Accuracy</H>
+        <P>
+          Do not sign up someone else without permission. Agency users should only add contacts
+          they are authorized to email. We may pause sending if a domain bounces or is flagged for
+          abuse.
+        </P>
+      </section>
+    </LegalDoc>
+  )
+}

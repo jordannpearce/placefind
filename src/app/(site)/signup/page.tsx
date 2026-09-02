@@ -19,6 +19,25 @@ export default function SignupPage() {
           Log in
         </Link>
       </p>
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">
+        By creating an account you agree to the{" "}
+        <Link href="/terms" className="underline">
+          Terms
+        </Link>
+        ,{" "}
+        <Link href="/privacy" className="underline">
+          Privacy Policy
+        </Link>
+        ,{" "}
+        <Link href="/email-policy" className="underline">
+          Email Policy
+        </Link>
+        , and{" "}
+        <Link href="/refunds" className="underline">
+          Refund Policy
+        </Link>
+        .
+      </p>
     </div>
   )
 }

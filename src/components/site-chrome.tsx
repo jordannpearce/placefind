@@ -12,6 +12,9 @@ export async function SiteHeader() {
           GridPins
         </Link>
         <nav className="flex items-center gap-1 text-sm">
+          <Link href="/why-grids" className="hidden rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground sm:inline">
+            Why grids
+          </Link>
           <Link href="/pricing" className="hidden rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground sm:inline">
             Pricing
           </Link>
@@ -40,15 +43,24 @@ export function SiteFooter() {
     <footer className="border-t">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <p>GridPins · Google Maps grid rank tracker</p>
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          <Link href="/why-grids" className="hover:text-foreground">
+            Why grids
+          </Link>
           <Link href="/pricing" className="hover:text-foreground">
             Pricing
           </Link>
-          <Link href="/login" className="hover:text-foreground">
-            Log in
+          <Link href="/terms" className="hover:text-foreground">
+            Terms
           </Link>
-          <Link href="/signup" className="hover:text-foreground">
-            Sign up
+          <Link href="/privacy" className="hover:text-foreground">
+            Privacy
+          </Link>
+          <Link href="/email-policy" className="hover:text-foreground">
+            Email
+          </Link>
+          <Link href="/refunds" className="hover:text-foreground">
+            Refunds
           </Link>
         </div>
       </div>

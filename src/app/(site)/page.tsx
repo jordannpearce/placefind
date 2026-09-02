@@ -15,27 +15,61 @@ export default function HomePage() {
             See where a listing ranks from every nearby street.
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">
-            GridPins samples an N×N lattice of GPS points and asks DataForSEO for the Maps SERP at
-            each coordinate. Agencies and brands run campaigns per location, track multiple
-            keywords, and schedule ranking checks.
+            Maps is personal to the searcher’s pin. GridPins samples an N×N GPS lattice and ranks
+            your listing at each coordinate so you can see proximity — not one vanity number from
+            the office. Agencies and brands run campaigns per location, track several keywords, and
+            schedule the next pass.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Link href="/signup" className={buttonVariants({ size: "lg" })}>
               Create a workspace
             </Link>
-            <Link href="/login" className={buttonVariants({ variant: "outline", size: "lg" })}>
-              Log in to demo
+            <Link href="/why-grids" className={buttonVariants({ variant: "outline", size: "lg" })}>
+              Why grids matter
             </Link>
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            Demo account: demo@gridpin.app / demo1234 · Admin: admin@gridpin.app / GridPin!admin
+            Demo workspace: demo@gridpin.app / demo1234
           </p>
         </div>
         <MiniGrid />
       </section>
 
       <section className="border-y bg-card/60">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 md:grid-cols-3">
+        <div className="mx-auto max-w-6xl px-4 py-14">
+          <h2 className="font-heading text-3xl tracking-tight">Proximity decides the local pack</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
+            Relevance and reviews matter. Distance still moves the pack. A café can be #1 on its
+            block and invisible 1.2 miles south. If you only rank-check from one centroid, you miss
+            the streets a competitor already owns — and you brief clients on a coincidence.
+          </p>
+          <div className="mt-8 grid gap-8 md:grid-cols-3">
+            {[
+              {
+                title: "The rank halo",
+                body: "A grid draws the shape of where you hold top 3. It is rarely a clean circle. Arterials, rivers, and a stronger GBP next door flatten one side.",
+              },
+              {
+                title: "Neighborhood, not city",
+                body: "“Austin, TX” is not a rank. The searcher on South Congress and the searcher in Mueller are in different packs. Sample both.",
+              },
+              {
+                title: "Proof for retainers",
+                body: "When a client says they dropped, show the pins that held and the pins that moved. Anecdotes end. Coverage and ATR stay.",
+              },
+            ].map((item) => (
+              <div key={item.title}>
+                <h3 className="font-heading text-2xl">{item.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-16">
+        <h2 className="font-heading text-3xl">What GridPins is built for</h2>
+        <div className="mt-8 grid gap-8 md:grid-cols-3">
           {[
             {
               title: "Campaigns per location",
@@ -51,10 +85,46 @@ export default function HomePage() {
             },
           ].map((item) => (
             <div key={item.title}>
-              <h2 className="font-heading text-2xl">{item.title}</h2>
+              <h3 className="font-heading text-2xl">{item.title}</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.body}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="border-y bg-card/60">
+        <div className="mx-auto max-w-6xl px-4 py-16">
+          <h2 className="font-heading text-3xl">When a single rank check fails you</h2>
+          <div className="mt-8 grid gap-6 md:grid-cols-2">
+            {[
+              {
+                title: "New locations",
+                body: "A second store does not inherit the first store’s pack. Scan the new trade area before you spend on photos and ads. You will see how far proximity reaches on day one.",
+              },
+              {
+                title: "Service-area businesses",
+                body: "Plumbers and mobile details often rank from a hidden address. A grid shows which ZIP codes actually surface you, and which ones a city-center competitor still owns.",
+              },
+              {
+                title: "Category vs brand",
+                body: "You can win the brand query and lose “emergency dentist.” Run both keywords. The grids will not match, and that gap is the brief.",
+              },
+              {
+                title: "Competitor openings",
+                body: "A new GBP two blocks away first shows up as orange and red pins on one edge. Weekly scans catch that before the monthly recap.",
+              },
+            ].map((item) => (
+              <div key={item.title} className="rounded-2xl border bg-background p-5">
+                <h3 className="font-heading text-2xl">{item.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.body}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-8 text-sm">
+            <Link href="/why-grids" className="text-primary hover:underline">
+              Read the full note on proximity and grid tracking
+            </Link>
+          </p>
         </div>
       </section>
 
@@ -107,7 +177,7 @@ function MiniGrid() {
     <div className="rounded-[28px] border bg-[linear-gradient(180deg,#dce8d8,#c5d6c0)] p-5 shadow-sm">
       <p className="text-xs font-medium">coffee · Houndstooth Coffee</p>
       <p className="text-[11px] text-muted-foreground">3×3 · 1.4 mi radius · Austin, TX</p>
-      <div className="mt-6 grid grid-cols-3 gap-6 place-items-center py-6">
+      <div className="mt-6 grid grid-cols-3 place-items-center gap-6 py-6">
         {ranks.map((rank, index) => (
           <span
             key={index}
@@ -119,7 +189,7 @@ function MiniGrid() {
         ))}
       </div>
       <p className="text-[11px] text-muted-foreground">
-        Local pack on the north-west pins. Competitors take the south edge.
+        Local pack on the north-west pins. Competitors take the south edge — that is proximity.
       </p>
     </div>
   )
