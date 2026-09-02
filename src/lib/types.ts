@@ -157,3 +157,63 @@ export type KeywordStatRow = {
   keyword: string
   stats: ScanStats
 }
+
+export type UserRole = "user" | "admin"
+export type UserStatus = "pending" | "active" | "suspended"
+export type PlanId = "starter" | "agency" | "enterprise"
+export type EmailKind = "activation" | "billing" | "info" | "marketing"
+
+export type User = {
+  id: string
+  name: string
+  email: string
+  passwordHash: string
+  role: UserRole
+  status: UserStatus
+  plan: PlanId
+  marketingOptIn: boolean
+  company: string
+  createdAt: string
+  lastLoginAt: string | null
+  dfsLogin: string
+  dfsPassword: string
+}
+
+export type SessionPayload = {
+  uid: string
+  email: string
+  name: string
+  role: UserRole
+  plan: PlanId
+  exp: number
+}
+
+export type AuthToken = {
+  id: string
+  userId: string
+  type: "activation" | "reset"
+  tokenHash: string
+  expiresAt: string
+}
+
+export type MailRecord = {
+  id: string
+  to: string
+  subject: string
+  html: string
+  kind: EmailKind
+  userId: string | null
+  provider: "resend" | "preview"
+  createdAt: string
+}
+
+export type UserWorkspace = {
+  campaigns: Campaign[]
+  settings: ApiSettings
+  activeCampaignId: string
+  scans: Record<string, KeywordResults>
+}
+
+export type PublicUser = Omit<User, "passwordHash" | "dfsPassword"> & {
+  hasDfsPassword: boolean
+}

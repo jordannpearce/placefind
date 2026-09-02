@@ -24,7 +24,7 @@ const instrument = Instrument_Serif({
 export const metadata: Metadata = {
   title: "GridPin — Google Maps grid rank tracker",
   description:
-    "Scan Google Maps rankings from a lattice of GPS coordinates using the DataForSEO Maps SERP API.",
+    "SaaS grid rank tracking for Google Maps. Campaigns per location, multiple keywords, and DataForSEO scans from every nearby street.",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

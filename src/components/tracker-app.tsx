@@ -81,6 +81,7 @@ export function TrackerApp() {
   const [activeCampaignId, setActiveCampaignId] = useState(workspace.activeId)
   const [settings, setSettings] = useState<ApiSettings>(workspace.settings)
   const [scansByKeyword, setScansByKeyword] = useState<KeywordResults>(workspace.scans)
+  const [hydratedFromServer, setHydratedFromServer] = useState(false)
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
@@ -145,6 +146,67 @@ export function TrackerApp() {
       cancelled = true
     }
   }, [workspace.live, workspace.settings.login, workspace.settings.password])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/me/workspace")
+      .then((response) => (response.ok ? response.json() : null))
+      .then(
+        (data: {
+          campaigns?: Campaign[]
+          settings?: ApiSettings
+          activeCampaignId?: string
+          scans?: KeywordResults
+          dfsLogin?: string
+        } | null) => {
+          if (cancelled || !data) {
+            setHydratedFromServer(true)
+            return
+          }
+          if (data.campaigns && data.campaigns.length > 0) {
+            setCampaigns(data.campaigns)
+            saveCampaigns(data.campaigns)
+            const activeId = data.activeCampaignId || data.campaigns[0].id
+            setActiveCampaignId(activeId)
+            saveActiveCampaignId(activeId)
+            const active = data.campaigns.find((campaign) => campaign.id === activeId) ?? data.campaigns[0]
+            setConfig(campaignToConfig(active, !data.settings?.login))
+          }
+          if (data.settings) {
+            const settingsNext = {
+              login: data.settings.login || data.dfsLogin || "",
+              password: data.settings.password || "",
+            }
+            setSettings(settingsNext)
+            saveSettings(settingsNext)
+            if (settingsNext.login && settingsNext.password) {
+              setLiveConfigured(true)
+              setModeLabel("live")
+            }
+          }
+          if (data.scans) setScansByKeyword(data.scans)
+          setHydratedFromServer(true)
+        }
+      )
+      .catch(() => setHydratedFromServer(true))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!hydratedFromServer) return
+    fetch("/api/me/workspace", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        campaigns,
+        settings,
+        activeCampaignId,
+        scans: scansByKeyword,
+      }),
+    }).catch(() => undefined)
+  }, [activeCampaignId, campaigns, hydratedFromServer, scansByKeyword, settings])
 
   const persistScans = useCallback(
     (campaignId: string, scans: KeywordResults) => {

@@ -1,19 +1,8 @@
 # GridPin
 
-A Google Maps grid rank tracker. Drop a keyword and a business on a map, sample an N×N lattice of GPS points, and color each square by where that business ranks in the local Maps SERP.
+SaaS Google Maps grid rank tracker. Agencies and brands create a workspace, confirm a listing, and scan an N×N GPS lattice through the DataForSEO Maps SERP API.
 
-GridPin talks to the [DataForSEO Google Maps SERP API](https://docs.dataforseo.com/v3/serp/google/maps/live/advanced/) using `location_coordinate` (`latitude,longitude,zoom`). Without credentials it runs a realistic Austin coffee demo so you can use the product immediately.
-
-## What you can do
-
-- Save your own DataForSEO login in Settings (or use `.env.local` / demo data)
-- Look up a listing by business name, city, and state, then confirm it on Google Maps
-- Create a campaign per brand and location, and add as many campaigns as you need
-- Track multiple keywords on the same grid and compare ranks after a scan
-- Choose grid size (3×3 through 13×13) and a scan radius in miles
-- Schedule daily or weekly ranking checks (due campaigns light up when you open GridPin)
-- Watch pins fill in as each coordinate returns
-- See ATR, local-pack share, coverage, competitors, review counts, and city/state names in listings
+The marketing site, login, dashboard, and admin live in this same Next.js app. Without DataForSEO or Resend keys it still runs: rankings use the Austin coffee demo, and emails land in a local inbox.
 
 ## Run it locally
 
@@ -25,40 +14,47 @@ npm run dev
 
 Open [http://127.0.0.1:43127](http://127.0.0.1:43127).
 
+### Seeded accounts
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Demo user | demo@gridpin.app | demo1234 |
+| Admin | admin@gridpin.app | GridPin!admin |
+
+Accounts and campaigns are stored in `.data/gridpin.json` (gitignored). Delete that file to reseed.
+
+### Resend emails
+
+Set `RESEND_API_KEY` and `RESEND_FROM` to send activation, billing, info, and marketing mail. If those are empty, GridPin writes the HTML to the outbox. Sign-up shows **Open the activation email**, and admins can browse every message under **Admin → Emails**.
+
 ### Live DataForSEO scans
 
-Use **Settings** in the app to enter your DataForSEO API login and password (from [app.dataforseo.com](https://app.dataforseo.com/api-access)). Keys stay in this browser. You can also put them in `.env.local`:
+Paste a DataForSEO login in **Account** or the tracker Settings gear, or put it in `.env.local`:
 
 ```bash
 DATAFORSEO_LOGIN=your_login
 DATAFORSEO_PASSWORD=your_password
 ```
 
-3. Restart the dev server. The header badge switches from **Demo data** to **DataForSEO live**.
-4. Uncheck **Use demo data** and run a scan.
+Each pin is one live Maps task (~$0.002). A 7×7 scan is 49 tasks per keyword.
 
-Each pin is one live Maps task. DataForSEO bills per task (about $0.002). A 7×7 scan is 49 tasks. Live calls allow one task per POST; GridPin fires them concurrently (4 at a time) to stay under the 2,000 calls/minute cap.
+## Product
 
-## How the grid works
+- Marketing site and pricing
+- Email/password accounts with activation
+- Dashboard of campaigns per brand and location
+- Tracker with multiple keywords, grid size, radius, and schedules
+- Account billing plans (emails, no Stripe checkout yet)
+- Admin: users, plans, status, broadcast info/marketing mail
 
-1. Build a square lattice around the center. A 7×7 scan is 49 coordinates.
-2. For each pin, POST to `https://api.dataforseo.com/v3/serp/google/maps/live/advanced` with the same keyword and a unique `location_coordinate`.
-3. Read organic `maps_search` items. Match your business by name or Place ID and take `rank_group`.
-4. Paint the square: green for the local pack (1–3), through yellow and red, gray if the listing is missing.
+## How a grid scan works
 
-The standard `task_post` endpoint can batch up to 100 tasks per POST. This app uses the **live** endpoint so the map can update pin-by-pin without polling.
-
-## Project layout
-
-- `src/lib/grid.ts` — GPS lattice, mile-to-degree math, coordinate formatting
-- `src/lib/dataforseo.ts` — live Maps client and business matching
-- `src/lib/mock-scan.ts` — demo engine used when credentials are missing
-- `src/app/api/scan-point/route.ts` — one coordinate per request
-- `src/app/api/geocode/route.ts` — Nominatim search / reverse geocode
-- `src/lib/storage.ts` — campaigns, keywords, DataForSEO keys, and last scan per keyword
+1. Build a square lattice around the listing. A 7×7 scan is 49 coordinates.
+2. POST each pin to `https://api.dataforseo.com/v3/serp/google/maps/live/advanced` with `location_coordinate` as `latitude,longitude,zoom`.
+3. Match the business in organic `maps_search` items and take `rank_group`.
+4. Color the pin from green (local pack) through red.
 
 ## Notes
 
-- Nominatim (OpenStreetMap) geocodes the center. No Google Maps JavaScript key is required.
-- Demo rankings are geographically biased around real Austin coffee shops so the heatmap looks like a live scan.
-- Do not commit `.env.local`.
+- Nominatim geocodes the center. No Google Maps JavaScript key is required.
+- Do not commit `.env.local` or `.data/`.

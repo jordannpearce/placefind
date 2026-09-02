@@ -1,0 +1,83 @@
+import { NextResponse } from "next/server"
+
+import { updateDb } from "@/lib/db"
+import { activationEmail } from "@/lib/email-templates"
+import { sendMail, previewUrl } from "@/lib/mail"
+import { hashPassword, hashToken, randomToken } from "@/lib/password"
+import { defaultCampaigns } from "@/lib/storage"
+
+export async function POST(request: Request) {
+  let body: { name?: string; email?: string; password?: string; company?: string; marketingOptIn?: boolean }
+  try {
+    body = (await request.json()) as typeof body
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+  }
+
+  const name = body.name?.trim() || ""
+  const email = body.email?.trim().toLowerCase() || ""
+  const password = body.password || ""
+  if (name.length < 2) return NextResponse.json({ error: "Name is required." }, { status: 400 })
+  if (!email.includes("@")) return NextResponse.json({ error: "A valid email is required." }, { status: 400 })
+  if (password.length < 8) return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 })
+
+  const token = randomToken()
+  const user = await updateDb((db) => {
+    if (db.users.some((item) => item.email === email)) return null
+    const created = {
+      id: `user_${Date.now()}`,
+      name,
+      email,
+      passwordHash: hashPassword(password),
+      role: "user" as const,
+      status: "pending" as const,
+      plan: "starter" as const,
+      marketingOptIn: Boolean(body.marketingOptIn),
+      company: body.company?.trim() || "",
+      createdAt: new Date().toISOString(),
+      lastLoginAt: null,
+      dfsLogin: "",
+      dfsPassword: "",
+    }
+    db.users.push(created)
+    const campaigns = defaultCampaigns()
+    db.workspaces[created.id] = {
+      campaigns,
+      settings: { login: "", password: "" },
+      activeCampaignId: campaigns[0]?.id ?? "",
+      scans: {},
+    }
+    db.tokens = db.tokens.filter((item) => item.userId !== created.id || item.type !== "activation")
+    db.tokens.push({
+      id: `tok_${Date.now()}`,
+      userId: created.id,
+      type: "activation",
+      tokenHash: hashToken(token),
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 48).toISOString(),
+    })
+    return created
+  })
+
+  if (!user) {
+    return NextResponse.json({ error: "An account with that email already exists." }, { status: 409 })
+  }
+
+  const origin = new URL(request.url).origin
+  const verifyUrl = `${origin}/verify?token=${token}`
+  const template = activationEmail(user.name, verifyUrl)
+  const mail = await sendMail({
+    to: user.email,
+    subject: template.subject,
+    html: template.html,
+    kind: "activation",
+    userId: user.id,
+  })
+
+  return NextResponse.json({
+    ok: true,
+    message: mail.provider === "resend"
+      ? "Check your inbox for an activation link."
+      : "Resend is not configured, so the activation email is in the local inbox.",
+    previewUrl: mail.provider === "preview" ? previewUrl(mail.id) : null,
+  })
+}
