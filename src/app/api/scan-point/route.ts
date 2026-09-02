@@ -1,4 +1,4 @@
-import { fetchMapsPoint, getScanMode } from "@/lib/dataforseo"
+import { fetchMapsPoint, getScanMode, resolveRequestAuth } from "@/lib/dataforseo"
 import { mockDelayMs, mockScanPoint } from "@/lib/mock-scan"
 import type { DeviceType, ScanPointResponse } from "@/lib/types"
 
@@ -51,11 +51,11 @@ export async function POST(request: Request) {
   const languageCode = body.languageCode?.trim() || "en"
   const device: DeviceType = body.device === "mobile" ? "mobile" : "desktop"
   const depth = Math.min(Math.max(Number(body.depth ?? 20), 10), 100)
-  const auth = {
-    login: body.apiLogin ?? "",
-    password: body.apiPassword ?? "",
-  }
-  const mode = getScanMode(body.forceMock, auth)
+  const auth = await resolveRequestAuth({
+    login: body.apiLogin,
+    password: body.apiPassword,
+  })
+  const mode = getScanMode(body.forceMock && Boolean(body.apiLogin && body.apiPassword), auth)
 
   try {
     if (mode === "mock") {

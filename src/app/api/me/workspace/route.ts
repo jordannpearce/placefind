@@ -10,15 +10,18 @@ export async function GET() {
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const workspace = auth.workspace
   const extras = auth.user.extraCampaigns
+  const login = workspace.settings.login || auth.user.dfsLogin || ""
+  const password = workspace.settings.password || auth.user.dfsPassword || ""
   return NextResponse.json({
     campaigns: workspace.campaigns,
-    settings: workspace.settings,
+    settings: { login, password },
     activeCampaignId: workspace.activeCampaignId,
     scans: workspace.scans,
     plan: auth.user.plan,
     extraCampaigns: extras,
     campaignLimit: campaignLimit(auth.user.plan, extras),
-    dfsLogin: auth.user.dfsLogin,
+    dfsLogin: login,
+    hasDfsPassword: Boolean(password),
   })
 }
 
@@ -56,9 +59,13 @@ export async function PUT(request: Request) {
       current.campaigns = incoming
     }
     if (body.settings) {
-      current.settings = {
-        login: body.settings.login ?? current.settings.login,
-        password: body.settings.password ?? current.settings.password,
+      const login = body.settings.login?.trim() ?? current.settings.login
+      const password = body.settings.password?.trim() || current.settings.password
+      current.settings = { login, password }
+      const user = db.users.find((item) => item.id === auth.user.id)
+      if (user) {
+        if (login) user.dfsLogin = login
+        if (password) user.dfsPassword = password
       }
     }
     if (typeof body.activeCampaignId === "string") current.activeCampaignId = body.activeCampaignId

@@ -1,13 +1,14 @@
-import { resolveDataForSeoAuth, verifyDataForSeoAuth } from "@/lib/dataforseo"
+import { resolveRequestAuth, verifyDataForSeoAuth } from "@/lib/dataforseo"
 
 export async function GET() {
-  const envLive = Boolean(resolveDataForSeoAuth(null))
+  const auth = await resolveRequestAuth(null)
+  const live = Boolean(auth)
   return Response.json({
-    envLive,
-    live: envLive,
-    mode: envLive ? "live" : "mock",
-    message: envLive
-      ? "Server DataForSEO credentials found."
+    envLive: live,
+    live,
+    mode: live ? "live" : "mock",
+    message: live
+      ? "DataForSEO credentials found."
       : "Add your DataForSEO login and password in Settings, or use demo data.",
   })
 }
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const auth = resolveDataForSeoAuth({
+  const auth = await resolveRequestAuth({
     login: body.apiLogin,
     password: body.apiPassword,
   })

@@ -166,6 +166,7 @@ export function TrackerApp() {
           activeCampaignId?: string
           scans?: KeywordResults
           dfsLogin?: string
+          hasDfsPassword?: boolean
           plan?: PlanId
           extraCampaigns?: number
           campaignLimit?: number
@@ -181,7 +182,10 @@ export function TrackerApp() {
             setActiveCampaignId(activeId)
             saveActiveCampaignId(activeId)
             const active = data.campaigns.find((campaign) => campaign.id === activeId) ?? data.campaigns[0]
-            setConfig(campaignToConfig(active, !data.settings?.login))
+            const serverLive = Boolean(
+              (data.settings?.login && data.settings?.password) || data.hasDfsPassword
+            )
+            setConfig(campaignToConfig(active, !serverLive))
           }
           if (data.settings) {
             const settingsNext = {
@@ -190,9 +194,10 @@ export function TrackerApp() {
             }
             setSettings(settingsNext)
             saveSettings(settingsNext)
-            if (settingsNext.login && settingsNext.password) {
+            if (settingsNext.login && (settingsNext.password || data.hasDfsPassword)) {
               setLiveConfigured(true)
               setModeLabel("live")
+              setConfig((current) => ({ ...current, forceMock: false }))
             }
           }
           if (data.scans) setScansByKeyword(data.scans)
@@ -517,6 +522,7 @@ export function TrackerApp() {
     })
     const data = (await response.json()) as { hits?: BusinessCandidate[]; error?: string }
     if (!response.ok) throw new Error(data.error || "Search failed")
+    if ((data.hits?.length ?? 0) === 0 && data.error) throw new Error(data.error)
     return data.hits ?? []
   }
 
@@ -767,6 +773,11 @@ export function TrackerApp() {
           setLiveConfigured(live)
           setConfig((current) => ({ ...current, forceMock: !live }))
           setModeLabel(live ? "live" : "mock")
+          void fetch("/api/account", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dfsLogin: next.login, dfsPassword: next.password || undefined }),
+          })
         }}
       />
     </div>

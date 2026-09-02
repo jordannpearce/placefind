@@ -59,6 +59,26 @@ export function resolveDataForSeoAuth(user?: Partial<DataForSeoAuth> | null): Da
   return envDataForSeoAuth()
 }
 
+/** Prefer keys from the request, then the signed-in account, then server env. */
+export async function resolveRequestAuth(input?: {
+  login?: string
+  password?: string
+} | null): Promise<DataForSeoAuth | null> {
+  const fromBody = resolveDataForSeoAuth(input)
+  if (fromBody) return fromBody
+  try {
+    const { requireUser } = await import("@/lib/auth-guard")
+    const session = await requireUser()
+    if (!session) return envDataForSeoAuth()
+    return resolveDataForSeoAuth({
+      login: session.user.dfsLogin || session.workspace.settings.login,
+      password: session.user.dfsPassword || session.workspace.settings.password,
+    })
+  } catch {
+    return envDataForSeoAuth()
+  }
+}
+
 export function hasDataForSeoCredentials(user?: Partial<DataForSeoAuth> | null): boolean {
   return Boolean(resolveDataForSeoAuth(user))
 }

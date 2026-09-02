@@ -51,8 +51,8 @@ export function SettingsDialog({
         <DialogHeader>
           <DialogTitle>DataForSEO API keys</DialogTitle>
           <DialogDescription>
-            Agencies and brands can use their own DataForSEO login. Keys stay in this
-            browser and are sent only to GridPins’ scan routes.
+            Paste the API login and password from app.dataforseo.com. Keys save to your
+            GridPins account and are used for live Maps search and scans — not the Austin demo.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

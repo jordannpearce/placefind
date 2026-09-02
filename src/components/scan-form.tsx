@@ -264,7 +264,13 @@ export function ScanForm({
             try {
               const next = await onFindBusiness()
               setHits(next)
-              if (next.length === 0) setSearchError("No matching businesses. Try a fuller name.")
+              if (next.length === 0) {
+                setSearchError(
+                  liveConfigured
+                    ? "No listings came back from Maps for that name and city. Check spelling, or try the city only."
+                    : "No listings found. Save your DataForSEO keys in Settings, then search again — demo search only knows Austin coffee shops."
+                )
+              }
             } catch (error) {
               setSearchError(error instanceof Error ? error.message : "Search failed")
             } finally {

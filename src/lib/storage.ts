@@ -340,6 +340,16 @@ export function nextScanAt(from: Date, cadence: ScheduleCadence): string | null 
   return next.toISOString()
 }
 
+export function toStateName(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+  const upper = trimmed.toUpperCase()
+  const byAbbr = US_STATES.find((state) => state.abbr === upper)
+  if (byAbbr) return byAbbr.name
+  const byName = US_STATES.find((state) => state.name.toLowerCase() === trimmed.toLowerCase())
+  return byName?.name ?? trimmed
+}
+
 export function toStateAbbr(value: string): string {
   const trimmed = value.trim()
   if (!trimmed) return ""
