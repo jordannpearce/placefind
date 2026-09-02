@@ -2,6 +2,7 @@ import { resolveDataForSeoAuth } from "@/lib/dataforseo"
 import { googleMapsUrl } from "@/lib/grid"
 import { searchMockBusinesses } from "@/lib/mock-scan"
 import { namesMatch } from "@/lib/rank"
+import { toStateAbbr } from "@/lib/storage"
 import type { BusinessCandidate } from "@/lib/types"
 
 const NOMINATIM = "https://nominatim.openstreetmap.org"
@@ -70,7 +71,7 @@ async function searchNominatim(
         title,
         address: hit.display_name,
         city: hitCity,
-        state: hitState,
+        state: toStateAbbr(hitState) || hitState,
         lat,
         lng,
         placeId: null,

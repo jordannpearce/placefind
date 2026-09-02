@@ -8,7 +8,8 @@ GridPin talks to the [DataForSEO Google Maps SERP API](https://docs.dataforseo.c
 
 - Save your own DataForSEO login in Settings (or use `.env.local` / demo data)
 - Look up a listing by business name, city, and state, then confirm it on Google Maps
-- Create a campaign per brand and location
+- Create a campaign per brand and location, and add as many campaigns as you need
+- Track multiple keywords on the same grid and compare ranks after a scan
 - Choose grid size (3×3 through 13×13) and a scan radius in miles
 - Schedule daily or weekly ranking checks (due campaigns light up when you open GridPin)
 - Watch pins fill in as each coordinate returns
@@ -54,7 +55,7 @@ The standard `task_post` endpoint can batch up to 100 tasks per POST. This app u
 - `src/lib/mock-scan.ts` — demo engine used when credentials are missing
 - `src/app/api/scan-point/route.ts` — one coordinate per request
 - `src/app/api/geocode/route.ts` — Nominatim search / reverse geocode
-- `src/components/tracker-app.tsx` — scan orchestration and layout
+- `src/lib/storage.ts` — campaigns, keywords, DataForSEO keys, and last scan per keyword
 
 ## Notes
 

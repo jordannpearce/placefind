@@ -6,13 +6,16 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { rankTone } from "@/lib/rank"
-import type { PointResult, ScanStats } from "@/lib/types"
+import type { KeywordStatRow, PointResult, ScanStats } from "@/lib/types"
 
 type ResultsPanelProps = {
   stats: ScanStats | null
   selected: PointResult | null
   targetBusiness: string
   emptyMessage: string
+  keywordStats: KeywordStatRow[]
+  activeKeyword: string
+  onSelectKeyword: (keyword: string) => void
 }
 
 export function ResultsPanel({
@@ -20,6 +23,9 @@ export function ResultsPanel({
   selected,
   targetBusiness,
   emptyMessage,
+  keywordStats,
+  activeKeyword,
+  onSelectKeyword,
 }: ResultsPanelProps) {
   if (!stats) {
     return (
@@ -47,6 +53,7 @@ export function ResultsPanel({
         <TabsList className="w-full">
           <TabsTrigger value="pin">Selected pin</TabsTrigger>
           <TabsTrigger value="rivals">Competitors</TabsTrigger>
+          {keywordStats.length > 1 ? <TabsTrigger value="keywords">Keywords</TabsTrigger> : null}
         </TabsList>
         <TabsContent value="pin" className="min-h-0">
           {selected ? (
@@ -98,6 +105,34 @@ export function ResultsPanel({
             </div>
           </ScrollArea>
         </TabsContent>
+        {keywordStats.length > 1 ? (
+          <TabsContent value="keywords" className="min-h-0">
+            <div className="flex flex-col gap-2 pt-2">
+              <p className="text-[11px] text-muted-foreground">
+                Compare this listing across every keyword on the campaign.
+              </p>
+              {keywordStats.map((row) => {
+                const selectedKeyword = row.keyword === activeKeyword
+                return (
+                  <button
+                    key={row.keyword}
+                    type="button"
+                    onClick={() => onSelectKeyword(row.keyword)}
+                    className={`rounded-xl border px-3 py-2.5 text-left ${
+                      selectedKeyword ? "border-foreground bg-muted/60" : "bg-card"
+                    }`}
+                  >
+                    <p className="text-sm font-medium">{row.keyword}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      ATR {row.stats.atr?.toFixed(1) ?? "—"} · pack {row.stats.top3Share}% · coverage{" "}
+                      {row.stats.coverage}% · avg {row.stats.averageRank?.toFixed(1) ?? "—"}
+                    </p>
+                  </button>
+                )
+              })}
+            </div>
+          </TabsContent>
+        ) : null}
       </Tabs>
     </div>
   )

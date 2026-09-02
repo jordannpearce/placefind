@@ -24,21 +24,26 @@ import {
   campaignToConfig,
   configToCampaignPatch,
   defaultCampaign,
+  deleteScans,
   loadActiveCampaignId,
   loadCampaigns,
+  loadScans,
   loadSettings,
   nextScanAt,
   saveActiveCampaignId,
   saveCampaigns,
+  saveScans,
   saveSettings,
   toStateAbbr,
+  uniqueCampaignName,
 } from "@/lib/storage"
 import type {
   ApiSettings,
   BusinessCandidate,
   Campaign,
   GeocodeHit,
-  PointResult,
+  KeywordResults,
+  KeywordStatRow,
   ScanConfig,
   ScanPointResponse,
 } from "@/lib/types"
@@ -64,6 +69,7 @@ function readWorkspace() {
     campaigns,
     activeId: active.id,
     config: campaignToConfig(active, !hasUserKeys),
+    scans: loadScans(active.id),
     live: hasUserKeys,
   }
 }
@@ -74,10 +80,17 @@ export function TrackerApp() {
   const [campaigns, setCampaigns] = useState<Campaign[]>(workspace.campaigns)
   const [activeCampaignId, setActiveCampaignId] = useState(workspace.activeId)
   const [settings, setSettings] = useState<ApiSettings>(workspace.settings)
-  const [results, setResults] = useState<Record<string, PointResult>>({})
+  const [scansByKeyword, setScansByKeyword] = useState<KeywordResults>(workspace.scans)
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
+  const [scanProgress, setScanProgress] = useState({
+    done: 0,
+    total: 0,
+    keyword: "",
+    keywordIndex: 0,
+    keywordCount: 0,
+  })
   const [liveConfigured, setLiveConfigured] = useState(workspace.live)
   const [modeLabel, setModeLabel] = useState<"live" | "mock">(workspace.live ? "live" : "mock")
   const [placingCenter, setPlacingCenter] = useState(false)
@@ -93,12 +106,19 @@ export function TrackerApp() {
     [config.center.lat, config.center.lng, config.gridSize, config.spacingMiles]
   )
 
+  const results = scansByKeyword[config.activeKeyword] ?? {}
   const resultList = useMemo(() => Object.values(results), [results])
   const stats = resultList.length > 0 ? computeStats(resultList, config.targetBusiness) : null
   const selected = selectedId ? results[selectedId] ?? null : null
-  const completed = resultList.length
-  const total = points.length
-  const progress = scanning || completed > 0 ? Math.round((completed / total) * 100) : 0
+  const progress =
+    scanning && scanProgress.total > 0
+      ? Math.round((scanProgress.done / scanProgress.total) * 100)
+      : 0
+  const keywordStats: KeywordStatRow[] = config.keywords.flatMap((keyword) => {
+    const rows = Object.values(scansByKeyword[keyword] ?? {})
+    if (rows.length === 0) return []
+    return [{ keyword, stats: computeStats(rows, config.targetBusiness) }]
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -126,10 +146,12 @@ export function TrackerApp() {
     }
   }, [workspace.live, workspace.settings.login, workspace.settings.password])
 
-  const persistCampaigns = useCallback((next: Campaign[]) => {
-    setCampaigns(next)
-    saveCampaigns(next)
-  }, [])
+  const persistScans = useCallback(
+    (campaignId: string, scans: KeywordResults) => {
+      saveScans(campaignId, scans)
+    },
+    []
+  )
 
   const patchConfig = useCallback((next: Partial<ScanConfig>) => {
     setConfig((current) => {
@@ -140,20 +162,33 @@ export function TrackerApp() {
       if ((next.spacingMiles != null || next.radiusMiles != null) && next.zoom == null) {
         merged.zoom = suggestedZoom(merged.spacingMiles)
       }
-      persistCampaigns(
-        campaigns.map((campaign) =>
+      setCampaigns((list) => {
+        const updated = list.map((campaign) =>
           campaign.id === activeCampaignId
             ? { ...campaign, ...configToCampaignPatch(merged) }
             : campaign
         )
-      )
+        saveCampaigns(updated)
+        return updated
+      })
       return merged
     })
+    if (next.keywords) {
+      setScansByKeyword((current) => {
+        const kept: KeywordResults = {}
+        for (const keyword of next.keywords ?? []) {
+          if (current[keyword]) kept[keyword] = current[keyword]
+        }
+        persistScans(activeCampaignId, kept)
+        return kept
+      })
+    }
     if (next.center || next.gridSize || next.spacingMiles || next.radiusMiles) {
-      setResults({})
+      setScansByKeyword({})
+      persistScans(activeCampaignId, {})
       setSelectedId(null)
     }
-  }, [activeCampaignId, campaigns, persistCampaigns])
+  }, [activeCampaignId, persistScans])
 
   const pickCenter = useCallback(
     async (lat: number, lng: number) => {
@@ -174,75 +209,114 @@ export function TrackerApp() {
     [patchConfig]
   )
 
-  const runScan = useCallback(async () => {
+  const runScan = useCallback(async (scope: "active" | "all" = "all") => {
+    const keywords = (scope === "active" ? [config.activeKeyword] : config.keywords).filter(Boolean)
+    if (keywords.length === 0) return
+
     abortRef.current = false
     setScanning(true)
     setScanError(null)
-    setResults({})
     setSelectedId(null)
-    setLoadingIds(new Set(points.map((point) => point.id)))
+    const originalKeyword = config.activeKeyword
+    const jobTotal = points.length * keywords.length
+    setScanProgress({
+      done: 0,
+      total: jobTotal,
+      keyword: keywords[0],
+      keywordIndex: 1,
+      keywordCount: keywords.length,
+    })
+    setScansByKeyword((current) => {
+      const next = { ...current }
+      for (const keyword of keywords) next[keyword] = {}
+      return next
+    })
 
     try {
-      await mapPool(
-        points,
-        config.forceMock || !liveConfigured ? 8 : 4,
-        async (point) => {
-          if (abortRef.current) {
-            return {
-              id: point.id,
-              lat: point.lat,
-              lng: point.lng,
-              locationCoordinate: "",
-              rank: null,
-              found: false,
-              listings: [],
-              error: "Cancelled",
-              mode: "mock",
-            } satisfies ScanPointResponse
-          }
+      for (let index = 0; index < keywords.length; index += 1) {
+        if (abortRef.current) break
+        const keyword = keywords[index]
+        setConfig((current) => ({ ...current, activeKeyword: keyword }))
+        setScanProgress((current) => ({
+          ...current,
+          keyword,
+          keywordIndex: index + 1,
+        }))
+        setLoadingIds(new Set(points.map((point) => point.id)))
 
-          const response = await fetch("/api/scan-point", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              pointId: point.id,
-              keyword: config.keyword,
-              targetBusiness: config.targetBusiness,
-              targetPlaceId: config.targetPlaceId || undefined,
-              lat: point.lat,
-              lng: point.lng,
-              zoom: config.zoom,
-              languageCode: config.languageCode,
-              device: config.device,
-              depth: config.depth,
-              forceMock: config.forceMock,
-              apiLogin: settings.login || undefined,
-              apiPassword: settings.password || undefined,
-            }),
-          })
-          const payload = (await response.json()) as ScanPointResponse & { error?: string }
-          if (!response.ok && payload.error) {
-            throw new Error(payload.error)
+        await mapPool(
+          points,
+          config.forceMock || !liveConfigured ? 8 : 4,
+          async (point) => {
+            if (abortRef.current) {
+              return {
+                id: point.id,
+                lat: point.lat,
+                lng: point.lng,
+                locationCoordinate: "",
+                rank: null,
+                found: false,
+                listings: [],
+                error: "Cancelled",
+                mode: "mock",
+              } satisfies ScanPointResponse
+            }
+
+            const response = await fetch("/api/scan-point", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                pointId: point.id,
+                keyword,
+                targetBusiness: config.targetBusiness,
+                targetPlaceId: config.targetPlaceId || undefined,
+                lat: point.lat,
+                lng: point.lng,
+                zoom: config.zoom,
+                languageCode: config.languageCode,
+                device: config.device,
+                depth: config.depth,
+                forceMock: config.forceMock,
+                apiLogin: settings.login || undefined,
+                apiPassword: settings.password || undefined,
+              }),
+            })
+            const payload = (await response.json()) as ScanPointResponse & { error?: string }
+            if (!response.ok && payload.error) {
+              throw new Error(payload.error)
+            }
+            if (payload.mode) setModeLabel(payload.mode)
+            return payload
+          },
+          (result) => {
+            setScansByKeyword((current) => ({
+              ...current,
+              [keyword]: { ...current[keyword], [result.id]: result },
+            }))
+            setLoadingIds((current) => {
+              const next = new Set(current)
+              next.delete(result.id)
+              return next
+            })
+            setSelectedId((current) => current ?? result.id)
+            setScanProgress((current) => ({ ...current, done: current.done + 1 }))
           }
-          if (payload.mode) setModeLabel(payload.mode)
-          return payload
-        },
-        (result) => {
-          setResults((current) => ({ ...current, [result.id]: result }))
-          setLoadingIds((current) => {
-            const next = new Set(current)
-            next.delete(result.id)
-            return next
-          })
-          setSelectedId((current) => current ?? result.id)
-        }
-      )
+        )
+      }
     } catch (error) {
       setScanError(error instanceof Error ? error.message : "Scan failed")
     } finally {
       setScanning(false)
       setLoadingIds(new Set())
+      setConfig((current) => ({
+        ...current,
+        activeKeyword: keywords.includes(originalKeyword) ? originalKeyword : keywords[0],
+      }))
       const finishedAt = new Date()
+      setScansByKeyword((current) => {
+        persistScans(activeCampaignId, current)
+        return current
+      })
       setCampaigns((current) => {
         const next = current.map((campaign) =>
           campaign.id === activeCampaignId
@@ -250,6 +324,7 @@ export function TrackerApp() {
                 ...campaign,
                 lastScanAt: finishedAt.toISOString(),
                 nextScanAt: nextScanAt(finishedAt, config.schedule),
+                activeKeyword: keywords.includes(originalKeyword) ? originalKeyword : keywords[0],
               }
             : campaign
         )
@@ -257,7 +332,7 @@ export function TrackerApp() {
         return next
       })
     }
-  }, [activeCampaignId, config, liveConfigured, points, settings])
+  }, [activeCampaignId, config, liveConfigured, persistScans, points, settings])
 
   const cancelScan = useCallback(() => {
     abortRef.current = true
@@ -268,19 +343,24 @@ export function TrackerApp() {
   const selectCampaign = (id: string) => {
     const campaign = campaigns.find((item) => item.id === id)
     if (!campaign) return
+    persistScans(activeCampaignId, scansByKeyword)
     setActiveCampaignId(id)
     saveActiveCampaignId(id)
     setConfig(campaignToConfig(campaign, config.forceMock))
-    setResults({})
+    setScansByKeyword(loadScans(id))
     setSelectedId(null)
   }
 
   const createCampaign = () => {
+    persistScans(activeCampaignId, scansByKeyword)
     const id = `camp_${Date.now()}`
     const campaign: Campaign = {
       ...defaultCampaign(),
       id,
-      name: `${config.targetBusiness || "New brand"} · ${config.businessCity || "New location"}`,
+      name: uniqueCampaignName(
+        `${config.targetBusiness || "New brand"} · ${config.businessCity || "New location"}`,
+        campaigns
+      ),
       brand: config.targetBusiness,
       ...configToCampaignPatch(config),
       createdAt: new Date().toISOString(),
@@ -292,17 +372,22 @@ export function TrackerApp() {
     saveCampaigns(next)
     setActiveCampaignId(id)
     saveActiveCampaignId(id)
+    setScansByKeyword({})
+    setSelectedId(null)
   }
 
   const deleteCampaign = (id: string) => {
     const next = campaigns.filter((campaign) => campaign.id !== id)
     if (next.length === 0) return
+    deleteScans(id)
     setCampaigns(next)
     saveCampaigns(next)
     const fallback = next[0]
     setActiveCampaignId(fallback.id)
     saveActiveCampaignId(fallback.id)
     setConfig(campaignToConfig(fallback, config.forceMock))
+    setScansByKeyword(loadScans(fallback.id))
+    setSelectedId(null)
   }
 
   const renameCampaign = (name: string) => {
@@ -370,7 +455,10 @@ export function TrackerApp() {
       stats={stats}
       selected={selected}
       targetBusiness={config.targetBusiness}
-      emptyMessage="Set a keyword and business, then run a grid scan. Each square is one DataForSEO location_coordinate task."
+      emptyMessage="Add keywords and a listing, then scan this campaign. Each pin is one Maps task per keyword."
+      keywordStats={keywordStats}
+      activeKeyword={config.activeKeyword}
+      onSelectKeyword={(keyword) => patchConfig({ activeKeyword: keyword })}
     />
   )
 
@@ -452,20 +540,43 @@ export function TrackerApp() {
             <div className="pointer-events-none absolute inset-x-0 top-0 z-[400] flex justify-between p-3">
               <div className="pointer-events-auto rounded-2xl bg-background/90 px-3 py-2 text-xs shadow-sm ring-1 ring-foreground/10 backdrop-blur">
                 <p className="font-medium">
-                  {config.keyword} · {config.targetBusiness}
+                  {config.activeKeyword} · {config.targetBusiness}
                 </p>
                 <p className="text-muted-foreground">
                   {config.gridSize}×{config.gridSize} · {config.radiusMiles.toFixed(1)} mi radius ·{" "}
-                  {config.zoom}z
+                  {config.keywords.length} keyword{config.keywords.length === 1 ? "" : "s"}
                 </p>
+                {config.keywords.length > 1 ? (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {config.keywords.map((keyword) => (
+                      <button
+                        key={keyword}
+                        type="button"
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[11px]",
+                          keyword === config.activeKeyword
+                            ? "bg-foreground text-background"
+                            : "bg-muted text-muted-foreground hover:text-foreground"
+                        )}
+                        onClick={() => patchConfig({ activeKeyword: keyword })}
+                      >
+                        {keyword}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <Legend />
             </div>
-            {(scanning || (completed > 0 && completed < total)) && (
+            {scanning && (
               <div className="absolute inset-x-3 bottom-3 z-[400] rounded-2xl bg-background/95 p-3 shadow-sm ring-1 ring-foreground/10 backdrop-blur">
                 <div className="mb-2 flex items-center justify-between text-xs">
                   <span>
-                    Scanning {completed}/{total} coordinates
+                    Scanning “{scanProgress.keyword}”
+                    {scanProgress.keywordCount > 1
+                      ? ` · keyword ${scanProgress.keywordIndex} of ${scanProgress.keywordCount}`
+                      : ""}{" "}
+                    · {scanProgress.done}/{scanProgress.total} tasks
                   </span>
                   <span className="text-muted-foreground">{progress}%</span>
                 </div>
@@ -535,7 +646,8 @@ export function TrackerApp() {
           </ol>
           <p className="text-xs text-muted-foreground">
             Add your DataForSEO login in Settings, or leave keys empty to run the Austin
-            coffee demo. Each campaign stores a brand, location, grid, radius, and schedule.
+            coffee demo. Each campaign stores a brand, location, keywords, grid, radius, and
+            schedule. Switch keywords on the map after a scan to compare ranks.
           </p>
         </DialogContent>
       </Dialog>

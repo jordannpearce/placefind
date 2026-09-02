@@ -1,9 +1,19 @@
 import { spacingFromRadius } from "./grid"
-import type { ApiSettings, Campaign, ScanConfig, ScheduleCadence } from "./types"
+import type {
+  ApiSettings,
+  Campaign,
+  KeywordResults,
+  PointResult,
+  ScanConfig,
+  ScheduleCadence,
+} from "./types"
 
 const SETTINGS_KEY = "gridpin.settings"
 const CAMPAIGNS_KEY = "gridpin.campaigns"
 const ACTIVE_KEY = "gridpin.activeCampaignId"
+const SCANS_KEY = "gridpin.scans"
+
+export const MAX_KEYWORDS = 8
 
 export const US_STATES: Array<{ name: string; abbr: string }> = [
   { name: "Alabama", abbr: "AL" },
@@ -59,9 +69,48 @@ export const US_STATES: Array<{ name: string; abbr: string }> = [
   { name: "Wyoming", abbr: "WY" },
 ]
 
+export function normalizeKeywords(raw: unknown, fallback = "coffee"): string[] {
+  const list = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string" && raw.trim()
+      ? [raw]
+      : []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of list) {
+    if (typeof item !== "string") continue
+    const value = item.trim().replace(/\s+/g, " ")
+    if (!value) continue
+    const key = value.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(value)
+    if (out.length >= MAX_KEYWORDS) break
+  }
+  return out.length > 0 ? out : [fallback]
+}
+
+export function pickActiveKeyword(keywords: string[], preferred?: string | null): string {
+  if (preferred) {
+    const match = keywords.find((keyword) => keyword.toLowerCase() === preferred.trim().toLowerCase())
+    if (match) return match
+  }
+  return keywords[0] ?? "coffee"
+}
+
+export function uniqueCampaignName(base: string, campaigns: Campaign[]): string {
+  const trimmed = base.trim() || "New campaign"
+  if (!campaigns.some((campaign) => campaign.name === trimmed)) return trimmed
+  let n = 2
+  while (campaigns.some((campaign) => campaign.name === `${trimmed} ${n}`)) n += 1
+  return `${trimmed} ${n}`
+}
+
 export function defaultConfig(): ScanConfig {
+  const keywords = ["coffee", "espresso", "coffee shop"]
   return {
-    keyword: "coffee",
+    keywords,
+    activeKeyword: "coffee",
     targetBusiness: "Houndstooth Coffee",
     targetPlaceId: "",
     businessCity: "Austin",
@@ -87,7 +136,8 @@ export function defaultCampaign(): Campaign {
     id: "camp_houndstooth_austin",
     name: "Houndstooth · Austin",
     brand: "Houndstooth Coffee",
-    keyword: config.keyword,
+    keywords: config.keywords,
+    activeKeyword: config.activeKeyword,
     businessName: config.targetBusiness,
     businessCity: config.businessCity,
     businessState: config.businessState,
@@ -103,6 +153,48 @@ export function defaultCampaign(): Campaign {
     createdAt: new Date().toISOString(),
     lastScanAt: null,
     nextScanAt: null,
+  }
+}
+
+export function defaultCampaigns(): Campaign[] {
+  const houndstooth = defaultCampaign()
+  return [
+    houndstooth,
+    {
+      ...houndstooth,
+      id: "camp_jos_austin",
+      name: "Jo's Coffee · Austin",
+      brand: "Jo's Coffee",
+      keywords: ["coffee", "austin coffee"],
+      activeKeyword: "coffee",
+      businessName: "Jo's Coffee",
+      mapsUrl: "https://www.google.com/maps/search/Jo's+Coffee/@30.2651,-97.7468,16z",
+      locationLabel: "Jo's Coffee, Austin, TX",
+      center: { lat: 30.2651, lng: -97.7468 },
+      schedule: "manual",
+    },
+  ]
+}
+
+type LegacyCampaign = Partial<Campaign> & { keyword?: string }
+
+function migrateCampaign(raw: LegacyCampaign): Campaign {
+  const fallback = defaultCampaign()
+  let keywords = normalizeKeywords(raw.keywords ?? raw.keyword, fallback.keywords[0])
+  if (
+    raw.id === "camp_houndstooth_austin" &&
+    keywords.length === 1 &&
+    keywords[0].toLowerCase() === "coffee"
+  ) {
+    keywords = [...fallback.keywords]
+  }
+  return {
+    ...fallback,
+    ...raw,
+    keywords,
+    activeKeyword: pickActiveKeyword(keywords, raw.activeKeyword ?? raw.keyword),
+    id: raw.id || `camp_${Date.now()}`,
+    name: raw.name?.trim() || fallback.name,
   }
 }
 
@@ -123,18 +215,19 @@ export function saveSettings(settings: ApiSettings) {
 }
 
 export function loadCampaigns(): Campaign[] {
-  if (typeof window === "undefined") return [defaultCampaign()]
+  if (typeof window === "undefined") return defaultCampaigns()
   try {
     const raw = window.localStorage.getItem(CAMPAIGNS_KEY)
     if (!raw) {
-      const seed = [defaultCampaign()]
+      const seed = defaultCampaigns()
       window.localStorage.setItem(CAMPAIGNS_KEY, JSON.stringify(seed))
       return seed
     }
-    const parsed = JSON.parse(raw) as Campaign[]
-    return parsed.length > 0 ? parsed : [defaultCampaign()]
+    const parsed = JSON.parse(raw) as LegacyCampaign[]
+    const migrated = parsed.map(migrateCampaign).filter((campaign) => Boolean(campaign.id))
+    return migrated.length > 0 ? migrated : defaultCampaigns()
   } catch {
-    return [defaultCampaign()]
+    return defaultCampaigns()
   }
 }
 
@@ -152,8 +245,10 @@ export function saveActiveCampaignId(id: string) {
 }
 
 export function campaignToConfig(campaign: Campaign, forceMock: boolean): ScanConfig {
+  const keywords = normalizeKeywords(campaign.keywords)
   return {
-    keyword: campaign.keyword,
+    keywords,
+    activeKeyword: pickActiveKeyword(keywords, campaign.activeKeyword),
     targetBusiness: campaign.businessName,
     targetPlaceId: campaign.placeId,
     businessCity: campaign.businessCity,
@@ -174,8 +269,10 @@ export function campaignToConfig(campaign: Campaign, forceMock: boolean): ScanCo
 }
 
 export function configToCampaignPatch(config: ScanConfig): Partial<Campaign> {
+  const keywords = normalizeKeywords(config.keywords)
   return {
-    keyword: config.keyword,
+    keywords,
+    activeKeyword: pickActiveKeyword(keywords, config.activeKeyword),
     businessName: config.targetBusiness,
     businessCity: config.businessCity,
     businessState: config.businessState,
@@ -188,6 +285,51 @@ export function configToCampaignPatch(config: ScanConfig): Partial<Campaign> {
     languageCode: config.languageCode,
     device: config.device,
     schedule: config.schedule,
+  }
+}
+
+export function loadScans(campaignId: string): KeywordResults {
+  if (typeof window === "undefined") return {}
+  try {
+    const raw = window.localStorage.getItem(SCANS_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, Record<string, PointResult[]>>
+    const byKeyword = parsed[campaignId] ?? {}
+    const out: KeywordResults = {}
+    for (const [keyword, rows] of Object.entries(byKeyword)) {
+      out[keyword] = Object.fromEntries(rows.map((row) => [row.id, row]))
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+export function saveScans(campaignId: string, scans: KeywordResults) {
+  if (typeof window === "undefined") return
+  let all: Record<string, Record<string, PointResult[]>> = {}
+  try {
+    const raw = window.localStorage.getItem(SCANS_KEY)
+    if (raw) all = JSON.parse(raw) as Record<string, Record<string, PointResult[]>>
+  } catch {
+    all = {}
+  }
+  all[campaignId] = Object.fromEntries(
+    Object.entries(scans).map(([keyword, byId]) => [keyword, Object.values(byId)])
+  )
+  window.localStorage.setItem(SCANS_KEY, JSON.stringify(all))
+}
+
+export function deleteScans(campaignId: string) {
+  if (typeof window === "undefined") return
+  try {
+    const raw = window.localStorage.getItem(SCANS_KEY)
+    if (!raw) return
+    const all = JSON.parse(raw) as Record<string, unknown>
+    delete all[campaignId]
+    window.localStorage.setItem(SCANS_KEY, JSON.stringify(all))
+  } catch {
+    return
   }
 }
 

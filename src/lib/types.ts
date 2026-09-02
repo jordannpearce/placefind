@@ -91,7 +91,8 @@ export type ScanStats = {
 }
 
 export type ScanConfig = {
-  keyword: string
+  keywords: string[]
+  activeKeyword: string
   targetBusiness: string
   targetPlaceId: string
   businessCity: string
@@ -131,7 +132,8 @@ export type Campaign = {
   id: string
   name: string
   brand: string
-  keyword: string
+  keywords: string[]
+  activeKeyword: string
   businessName: string
   businessCity: string
   businessState: string
@@ -147,4 +149,11 @@ export type Campaign = {
   createdAt: string
   lastScanAt: string | null
   nextScanAt: string | null
+}
+
+export type KeywordResults = Record<string, Record<string, PointResult>>
+
+export type KeywordStatRow = {
+  keyword: string
+  stats: ScanStats
 }

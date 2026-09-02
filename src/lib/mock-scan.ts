@@ -261,6 +261,19 @@ function placeToListing(place: MockPlace, rankAbsolute: number, isPaid = false):
   }
 }
 
+function keywordAffinity(place: MockPlace, keyword: string): number {
+  const k = normalizeName(keyword)
+  if (!k) return 0
+  const title = normalizeName(place.title)
+  const category = normalizeName(place.category)
+  let bias = 0
+  if (title.includes(k) || k.split(" ").every((part) => title.includes(part))) bias -= 1.1
+  if (category.includes(k) || k.includes(category)) bias -= 0.5
+  if (k.includes("espresso") && title.includes("espresso")) bias -= 1.6
+  if (k.includes("coffee shop") && category.includes("coffee shop")) bias -= 0.7
+  return bias
+}
+
 export function mockScanPoint(input: {
   pointId: string
   keyword: string
@@ -272,8 +285,8 @@ export function mockScanPoint(input: {
 }): PointResult {
   const scored = AUSTIN_COFFEE.map((place) => {
     const miles = haversineMiles(input.lat, input.lng, place.lat, place.lng)
-    const noise = seededNoise(input.lat, input.lng, place.placeId) * 0.8
-    return { place, score: miles + noise }
+    const noise = seededNoise(input.lat, input.lng, `${place.placeId}:${input.keyword}`) * 0.8
+    return { place, score: miles + noise + keywordAffinity(place, input.keyword) }
   }).sort((a, b) => a.score - b.score)
 
   const organic = scored.slice(0, 12).map((entry, index) => {

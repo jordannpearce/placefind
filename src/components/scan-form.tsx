@@ -1,14 +1,14 @@
 "use client"
 
 import { useState, type ReactNode } from "react"
-import { Crosshair, ExternalLink, Loader2, Plus, Trash2 } from "lucide-react"
+import { Crosshair, ExternalLink, Loader2, Plus, Trash2, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { estimateScanCostUsd, GRID_SIZES, spacingFromRadius } from "@/lib/grid"
-import { formatWhen, isCampaignDue, US_STATES } from "@/lib/storage"
+import { formatWhen, isCampaignDue, MAX_KEYWORDS, US_STATES } from "@/lib/storage"
 import type {
   BusinessCandidate,
   Campaign,
@@ -27,7 +27,7 @@ type ScanFormProps = {
   onCreateCampaign: () => void
   onDeleteCampaign: (id: string) => void
   onRenameCampaign: (name: string) => void
-  onSubmit: () => void
+  onSubmit: (scope: "active" | "all") => void
   onCancel: () => void
   onFindBusiness: () => Promise<BusinessCandidate[]>
   onPickBusiness: (hit: BusinessCandidate) => void
@@ -58,27 +58,44 @@ export function ScanForm({
   const [hits, setHits] = useState<BusinessCandidate[]>([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
+  const [draftKeyword, setDraftKeyword] = useState("")
   const active = campaigns.find((campaign) => campaign.id === activeCampaignId)
   const pointCount = config.gridSize * config.gridSize
-  const cost = estimateScanCostUsd(pointCount)
+  const keywordCount = config.keywords.length
+  const allCost = estimateScanCostUsd(pointCount * keywordCount)
+  const oneCost = estimateScanCostUsd(pointCount)
   const due = active ? isCampaignDue(active) : false
+
+  function addKeyword() {
+    const next = draftKeyword.trim()
+    if (!next) return
+    const existing = config.keywords.find((keyword) => keyword.toLowerCase() === next.toLowerCase())
+    if (existing) {
+      onChange({ activeKeyword: existing })
+      setDraftKeyword("")
+      return
+    }
+    if (config.keywords.length >= MAX_KEYWORDS) return
+    onChange({ keywords: [...config.keywords, next], activeKeyword: next })
+    setDraftKeyword("")
+  }
 
   return (
     <form
       className="flex flex-col gap-5"
       onSubmit={(event) => {
         event.preventDefault()
-        onSubmit()
+        onSubmit(keywordCount > 1 ? "all" : "active")
       }}
     >
-      <Field label="Campaign" hint="One campaign per brand and location.">
+      <Field label={`Campaigns · ${campaigns.length}`} hint="One campaign per brand and location. Add as many as you track.">
         <div className="flex gap-2">
           <NativeSelect
             value={activeCampaignId}
             onChange={onSelectCampaign}
             options={campaigns.map((campaign) => ({
               value: campaign.id,
-              label: `${campaign.name}${isCampaignDue(campaign) ? " · due" : ""}`,
+              label: `${campaign.name}${isCampaignDue(campaign) ? " · due" : ""} · ${campaign.keywords.length} kw`,
             }))}
           />
           <Button type="button" variant="outline" size="icon" onClick={onCreateCampaign} aria-label="New campaign">
@@ -114,13 +131,74 @@ export function ScanForm({
         ) : null}
       </Field>
 
-      <Field label="Keyword" hint="The Google Maps search you want to rank for.">
-        <Input
-          value={config.keyword}
-          onChange={(event) => onChange({ keyword: event.target.value })}
-          placeholder="coffee"
-          required
-        />
+      <Field
+        label="Keywords"
+        hint={`Each keyword is its own Maps search on this grid. Up to ${MAX_KEYWORDS}.`}
+      >
+        <div className="flex flex-wrap gap-1.5">
+          {config.keywords.map((keyword) => {
+            const selected = keyword === config.activeKeyword
+            return (
+              <span
+                key={keyword}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${
+                  selected
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-input bg-background text-foreground"
+                }`}
+              >
+                <button
+                  type="button"
+                  className="font-medium"
+                  onClick={() => onChange({ activeKeyword: keyword })}
+                >
+                  {keyword}
+                </button>
+                {config.keywords.length > 1 ? (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${keyword}`}
+                    className="opacity-70 hover:opacity-100"
+                    onClick={() => {
+                      const keywords = config.keywords.filter((item) => item !== keyword)
+                      onChange({
+                        keywords,
+                        activeKeyword:
+                          keyword === config.activeKeyword ? keywords[0] : config.activeKeyword,
+                      })
+                    }}
+                  >
+                    <X className="size-3" />
+                  </button>
+                ) : null}
+              </span>
+            )
+          })}
+        </div>
+        <div className="mt-2 flex gap-2">
+          <Input
+            value={draftKeyword}
+            onChange={(event) => setDraftKeyword(event.target.value)}
+            placeholder="Add a keyword"
+            disabled={config.keywords.length >= MAX_KEYWORDS}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                addKeyword()
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={addKeyword}
+            disabled={!draftKeyword.trim() || config.keywords.length >= MAX_KEYWORDS}
+            aria-label="Add keyword"
+          >
+            <Plus />
+          </Button>
+        </div>
       </Field>
 
       <div className="space-y-2">
@@ -330,16 +408,28 @@ export function ScanForm({
       </label>
 
       <div className="rounded-xl bg-muted/70 px-3 py-2.5 text-xs text-muted-foreground">
-        This scan posts {pointCount} Google Maps tasks
+        {keywordCount > 1
+          ? `All ${keywordCount} keywords × ${pointCount} pins = ${pointCount * keywordCount} Maps tasks`
+          : `This scan posts ${pointCount} Google Maps tasks`}
         {config.forceMock || !liveConfigured
           ? " against the mock engine."
-          : ` to your DataForSEO account (~$${cost.toFixed(3)}).`}
+          : ` to your DataForSEO account (~$${allCost.toFixed(3)}).`}
       </div>
 
       {scanning ? (
         <Button type="button" variant="outline" onClick={onCancel}>
           Stop scan
         </Button>
+      ) : keywordCount > 1 ? (
+        <div className="grid gap-2">
+          <Button type="button" size="lg" className="h-10" onClick={() => onSubmit("all")}>
+            {due ? "Run due scan · all keywords" : `Scan all ${keywordCount} keywords`}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => onSubmit("active")}>
+            Scan “{config.activeKeyword}” only
+            {!(config.forceMock || !liveConfigured) ? ` (~$${oneCost.toFixed(3)})` : ""}
+          </Button>
+        </div>
       ) : (
         <Button type="submit" size="lg" className="h-10">
           {due ? "Run due scan" : `Run ${config.gridSize}×${config.gridSize} scan`}
