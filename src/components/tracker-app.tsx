@@ -31,6 +31,7 @@ import {
   saveActiveCampaignId,
   saveCampaigns,
   saveSettings,
+  toStateAbbr,
 } from "@/lib/storage"
 import type {
   ApiSettings,
@@ -336,7 +337,7 @@ export function TrackerApp() {
       targetBusiness: hit.title,
       targetPlaceId: hit.placeId ?? "",
       businessCity: hit.city || config.businessCity,
-      businessState: hit.state || config.businessState,
+      businessState: toStateAbbr(hit.state || config.businessState),
       mapsUrl: hit.mapsUrl,
       locationLabel: [hit.title, hit.city, hit.state].filter(Boolean).join(", "),
       center: { lat: hit.lat, lng: hit.lng },

@@ -26,8 +26,7 @@ Open [http://127.0.0.1:43127](http://127.0.0.1:43127).
 
 ### Live DataForSEO scans
 
-1. Create an account at [app.dataforseo.com](https://app.dataforseo.com/api-access).
-2. Put your login and password in `.env.local`:
+Use **Settings** in the app to enter your DataForSEO API login and password (from [app.dataforseo.com](https://app.dataforseo.com/api-access)). Keys stay in this browser. You can also put them in `.env.local`:
 
 ```bash
 DATAFORSEO_LOGIN=your_login

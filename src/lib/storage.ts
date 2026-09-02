@@ -198,8 +198,19 @@ export function nextScanAt(from: Date, cadence: ScheduleCadence): string | null 
   return next.toISOString()
 }
 
+export function toStateAbbr(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+  const upper = trimmed.toUpperCase()
+  const byAbbr = US_STATES.find((state) => state.abbr === upper)
+  if (byAbbr) return byAbbr.abbr
+  const byName = US_STATES.find((state) => state.name.toLowerCase() === trimmed.toLowerCase())
+  return byName?.abbr ?? upper.slice(0, 2)
+}
+
 export function isCampaignDue(campaign: Campaign, now = new Date()): boolean {
-  if (campaign.schedule === "manual" || !campaign.nextScanAt) return false
+  if (campaign.schedule === "manual") return false
+  if (!campaign.lastScanAt || !campaign.nextScanAt) return true
   return new Date(campaign.nextScanAt).getTime() <= now.getTime()
 }
 
