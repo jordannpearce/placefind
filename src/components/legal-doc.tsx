@@ -24,6 +24,10 @@ export function LegalDoc({
         Questions:{" "}
         <a className="text-primary hover:underline" href="mailto:hello@gridpins.com">
           hello@gridpins.com
+        </a>{" "}
+        or{" "}
+        <a className="text-primary hover:underline" href="mailto:hello@info.gridpins.com">
+          hello@info.gridpins.com
         </a>
         . Also see{" "}
         <Link href="/terms" className="text-primary hover:underline">

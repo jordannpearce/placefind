@@ -12,7 +12,7 @@ export default function EmailPolicyPage() {
     <LegalDoc
       title="Email Policy"
       updated="September 2, 2026"
-      lede="GridPins sends mail from our domain, gridpins.com (typically hello@gridpins.com). This page is the policy for those messages: what we send, why, and how you control marketing."
+      lede="GridPins sends mail from our domain, gridpins.com — typically hello@gridpins.com and hello@info.gridpins.com. We send and receive email at hello@info.gridpins.com. This page is the policy for those messages: what we send, why, and how you control marketing."
     >
       <section className="space-y-3">
         <H>Transactional mail we always send</H>
@@ -28,7 +28,8 @@ export default function EmailPolicyPage() {
         <P>
           Administrators may send product-update and notification messages to selected accounts.
           Those messages explain changes to GridPins, scan behavior, or your workspace. If you do
-          not want optional product mail, say so in Account or reply to hello@gridpins.com.
+          not want optional product mail, say so in Account or reply to hello@gridpins.com or
+          hello@info.gridpins.com.
         </P>
       </section>
       <section className="space-y-3">
@@ -44,17 +45,19 @@ export default function EmailPolicyPage() {
         <H>How we send</H>
         <P>
           When transactional email is configured, mail is delivered through our email provider from
-          a gridpins.com from-address. If that service is not configured, GridPins stores the HTML
-          in the in-app inbox so activation still works. Preview copies are not a public mailing
-          list.
+          a gridpins.com from-address, including hello@gridpins.com and hello@info.gridpins.com. We
+          send and receive at hello@info.gridpins.com. If that service is not configured, GridPins
+          stores the HTML in the in-app inbox so activation still works. Preview copies are not a
+          public mailing list.
         </P>
       </section>
       <section className="space-y-3">
         <H>Opt out and complaints</H>
         <P>
-          Turn off marketing in Account → email preferences, or email hello@gridpins.com with the
-          address you want removed from promotional sends. We honor unsubscribe requests for
-          marketing promptly. Transactional mail continues as long as the account exists.
+          Turn off marketing in Account → email preferences, or email hello@gridpins.com or
+          hello@info.gridpins.com with the address you want removed from promotional sends. We honor
+          unsubscribe requests for marketing promptly. Transactional mail continues as long as the
+          account exists.
         </P>
       </section>
       <section className="space-y-3">
