@@ -40,10 +40,10 @@ export default function PrivacyPage() {
       <section className="space-y-3">
         <H>Processors</H>
         <P>
-          Hosting and the production database run on our cloud provider (currently Railway). Email
-          may be sent through Resend when an API key is configured; otherwise messages stay in an
-          in-app outbox. Live Maps lookups go to DataForSEO with the credentials you provide. Those
-          providers process data on our or your instructions under their own terms.
+          Hosting and the production database run on our cloud infrastructure. Transactional email
+          may be sent through our email provider when that service is configured; otherwise messages
+          stay in an in-app outbox. Live Maps lookups go to DataForSEO with the credentials you
+          provide. Those providers process data on our or your instructions under their own terms.
         </P>
       </section>
       <section className="space-y-3">

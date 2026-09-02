@@ -43,9 +43,10 @@ export default function EmailPolicyPage() {
       <section className="space-y-3">
         <H>How we send</H>
         <P>
-          When a Resend API key is configured, mail is delivered through Resend from a gridpins.com
-          from-address. If no key is set, GridPins stores the HTML in the in-app inbox so
-          activation still works in development. Preview copies are not a public mailing list.
+          When transactional email is configured, mail is delivered through our email provider from
+          a gridpins.com from-address. If that service is not configured, GridPins stores the HTML
+          in the in-app inbox so activation still works. Preview copies are not a public mailing
+          list.
         </P>
       </section>
       <section className="space-y-3">
