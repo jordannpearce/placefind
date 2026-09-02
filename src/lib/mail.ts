@@ -1,8 +1,11 @@
 import { Resend } from "resend"
 
+import { SUPPORT_FROM, SUPPORT_INBOX } from "./company"
 import { DEFAULT_RESEND_FROM, readDb, updateDb } from "./db"
 import type { EmailKind, MailRecord } from "./types"
 import { randomToken } from "./password"
+
+export { SUPPORT_FROM, SUPPORT_INBOX }
 
 export function maskSecret(value: string) {
   const trimmed = value.trim()
@@ -31,18 +34,22 @@ export async function sendMail(input: {
   html: string
   kind: EmailKind
   userId?: string | null
+  from?: string
+  replyTo?: string
 }): Promise<MailRecord> {
   const id = `mail_${Date.now()}_${randomToken().slice(0, 8)}`
   const { apiKey, from } = await resolveResendConfig()
   let provider: MailRecord["provider"] = "preview"
+  const sender = input.from?.trim() || from
 
   if (apiKey) {
     const resend = new Resend(apiKey)
     const result = await resend.emails.send({
-      from,
+      from: sender,
       to: input.to,
       subject: input.subject,
       html: input.html,
+      replyTo: input.replyTo,
     })
     if (result.error) {
       throw new Error(result.error.message)
@@ -71,4 +78,25 @@ export async function sendMail(input: {
 
 export function previewUrl(id: string) {
   return `/inbox/${id}`
+}
+
+/** Public contact / lead mail must actually send. Never fall back to a silent local drop. */
+export async function sendSupportInbox(input: {
+  subject: string
+  html: string
+  kind: EmailKind
+  replyTo: string
+}): Promise<MailRecord> {
+  const { apiKey } = await resolveResendConfig()
+  if (!apiKey) {
+    throw new Error("MAIL_NOT_CONFIGURED")
+  }
+  return sendMail({
+    to: SUPPORT_INBOX,
+    from: SUPPORT_FROM,
+    replyTo: input.replyTo,
+    subject: input.subject,
+    html: input.html,
+    kind: input.kind,
+  })
 }

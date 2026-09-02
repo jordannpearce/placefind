@@ -138,10 +138,78 @@ export function marketingEmail(name: string, headline: string, body: string) {
   }
 }
 
-function escapeHtml(value: string) {
+export function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
+}
+
+function definitionList(rows: Array<[string, string]>) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;font-size:15px;line-height:1.5;">
+    ${rows
+      .map(
+        ([label, value]) =>
+          `<tr>
+            <td style="padding:6px 12px 6px 0;color:#6b7c74;vertical-align:top;width:140px;">${escapeHtml(label)}</td>
+            <td style="padding:6px 0;color:#1f3d34;">${escapeHtml(value) || "—"}</td>
+          </tr>`
+      )
+      .join("")}
+  </table>`
+}
+
+export function contactInboxEmail(input: {
+  name: string
+  email: string
+  phone: string
+  businessName: string
+  city: string
+  state: string
+  comments: string
+}) {
+  return {
+    subject: `Contact form: ${input.businessName} — ${input.name}`,
+    html: wrap(
+      "New contact message",
+      `<p>A visitor sent this from the GridPins contact form. Reply to the visitor at ${escapeHtml(input.email)}.</p>
+       ${definitionList([
+         ["Name", input.name],
+         ["Email", input.email],
+         ["Phone", input.phone],
+         ["Business", input.businessName],
+         ["City", input.city],
+         ["State", input.state],
+         ["Comments", input.comments],
+       ])}`
+    ),
+  }
+}
+
+export function leadInboxEmail(input: {
+  name: string
+  email: string
+  phone: string
+  businessName: string
+  city: string
+  state: string
+  comments: string
+}) {
+  return {
+    subject: `GBP help opt-in: ${input.businessName} — ${input.name}`,
+    html: wrap(
+      "New Get Found lead",
+      `<p>A business owner opted in for Google Business Profile ranking help. They agreed to marketing and info emails from GridPins. Reply at ${escapeHtml(input.email)}.</p>
+       ${definitionList([
+         ["Name", input.name],
+         ["Email", input.email],
+         ["Phone", input.phone],
+         ["Business", input.businessName],
+         ["City", input.city],
+         ["State", input.state],
+         ["What they need", input.comments || "Not specified"],
+       ])}`
+    ),
+  }
 }

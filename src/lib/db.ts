@@ -10,6 +10,7 @@ import type {
   AppSettings,
   AuthToken,
   MailRecord,
+  MarketingLead,
   PlanId,
   User,
   UserWorkspace,
@@ -25,6 +26,7 @@ export type Database = {
   workspaces: Record<string, UserWorkspace>
   agencies: Agency[]
   settings: AppSettings
+  leads: MarketingLead[]
 }
 
 const ADMIN_EMAIL = "tmrapp1995@gmail.com"
@@ -72,7 +74,38 @@ function emptyDb(): Database {
     emails: [],
     workspaces: {},
     agencies: [],
-    settings: { resendApiKey: "", resendFrom: DEFAULT_RESEND_FROM },
+    settings: { resendApiKey: "", resendFrom: DEFAULT_RESEND_FROM, resendAudienceId: "" },
+    leads: [],
+  }
+}
+
+function normalizeLead(raw: Partial<MarketingLead>): MarketingLead | null {
+  if (!raw.email?.trim()) return null
+  return {
+    id: raw.id || `lead_${Date.now()}`,
+    name: raw.name || "",
+    email: raw.email.trim().toLowerCase(),
+    phone: raw.phone || "",
+    businessName: raw.businessName || "",
+    city: raw.city || "",
+    state: raw.state || "",
+    comments: raw.comments || "",
+    source: "get-found",
+    audienceSynced: Boolean(raw.audienceSynced),
+    createdAt: raw.createdAt || new Date().toISOString(),
+  }
+}
+
+function parseStoredLeads(value?: string): MarketingLead[] {
+  if (!value?.trim()) return []
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((item) => normalizeLead(item as Partial<MarketingLead>))
+      .filter((item): item is MarketingLead => Boolean(item))
+  } catch {
+    return []
   }
 }
 
@@ -226,7 +259,9 @@ function hydrate(raw: Partial<Database>): Database {
     settings: {
       resendApiKey: raw.settings?.resendApiKey ?? "",
       resendFrom: defaultResendFrom(raw.settings?.resendFrom),
+      resendAudienceId: raw.settings?.resendAudienceId ?? "",
     },
+    leads: (raw.leads ?? []).map((lead) => normalizeLead(lead)).filter((lead): lead is MarketingLead => Boolean(lead)),
   }
   for (const user of db.users) {
     if (!user.agencyId) user.agencyId = findOrCreateAgency(db, user.company || user.name).id
@@ -407,7 +442,9 @@ async function loadFromPostgres(): Promise<Database> {
     settings: {
       resendApiKey: settingsMap.resendApiKey || "",
       resendFrom: defaultResendFrom(settingsMap.resendFrom),
+      resendAudienceId: settingsMap.resendAudienceId || "",
     },
+    leads: parseStoredLeads(settingsMap.marketingLeads),
   })
   return db
 }
@@ -486,6 +523,14 @@ async function saveToPostgres(db: Database) {
     await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
       "resendFrom",
       db.settings.resendFrom,
+    ])
+    await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
+      "resendAudienceId",
+      db.settings.resendAudienceId,
+    ])
+    await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
+      "marketingLeads",
+      JSON.stringify(db.leads),
     ])
     await client.query("COMMIT")
   } catch (error) {

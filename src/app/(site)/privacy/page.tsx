@@ -20,7 +20,9 @@ export default function PrivacyPage() {
           Account data includes your name, email, password hash, company or agency, plan, and
           optional DataForSEO login. Campaign data includes brand names, listing details, keywords,
           grid settings, and scan results you generate. If you write to us, we keep that
-          correspondence.
+          correspondence. Contact and Get found forms collect name, email, phone, business name,
+          city, state, and comments; those submissions go to hello@info.gridpins.com. Get found
+          also records your consent to marketing and information emails from GridPins.
         </P>
         <P>
           Technical data includes signed session cookies, impersonation cookies used only by
@@ -32,9 +34,9 @@ export default function PrivacyPage() {
         <H>How we use it</H>
         <P>
           We use this information to run your workspace, enforce plan limits, send activation and
-          billing mail, let admins support your account, and improve reliability. We do not sell
-          your contact list. Marketing mail is sent only under the Email Policy and your opt-in
-          settings.
+          billing mail, reply to contact and lead forms at hello@info.gridpins.com, let admins
+          support your account, and improve reliability. We do not sell your contact list.
+          Marketing mail is sent only under the Email Policy and your opt-in settings.
         </P>
       </section>
       <section className="space-y-3">
@@ -60,7 +62,7 @@ export default function PrivacyPage() {
           We keep account and campaign data while the workspace is active and for a reasonable
           period after closure for billing disputes and legal holds. You can update profile,
           marketing opt-in, and API credentials in Account. To request deletion of an account,
-          email hello@gridpins.com from the address on file.
+          email hello@gridpins.com or hello@info.gridpins.com from the address on file.
         </P>
       </section>
       <section className="space-y-3">
@@ -74,7 +76,7 @@ export default function PrivacyPage() {
         <H>Changes</H>
         <P>
           We will post updates on this page with a new date. If you have a privacy question, write
-          to hello@gridpins.com.
+          to hello@gridpins.com or hello@info.gridpins.com.
         </P>
       </section>
     </LegalDoc>

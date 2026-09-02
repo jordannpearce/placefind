@@ -8,16 +8,22 @@ export async function SiteHeader() {
   const session = await readSession()
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
+      <div className="mx-auto flex min-h-14 max-w-6xl items-center justify-between gap-3 px-4 py-2">
         <Link href="/" className="inline-flex items-center">
           <Wordmark className="text-2xl leading-none" />
         </Link>
-        <nav className="flex items-center gap-1 text-sm">
-          <Link href="/why-grids" className="hidden rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground sm:inline">
+        <nav className="flex flex-wrap items-center justify-end gap-1 text-sm">
+          <Link href="/why-grids" className="hidden rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground md:inline">
             Why grids
           </Link>
-          <Link href="/pricing" className="hidden rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground sm:inline">
+          <Link href="/get-found" className="rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground">
+            Get found
+          </Link>
+          <Link href="/pricing" className="hidden rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground md:inline">
             Pricing
+          </Link>
+          <Link href="/contact" className="rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground">
+            Contact
           </Link>
           {session ? (
             <Link href="/dashboard" className={buttonVariants({ size: "sm" })}>
@@ -51,8 +57,14 @@ export function SiteFooter() {
           <Link href="/why-grids" className="hover:text-foreground">
             Why grids
           </Link>
+          <Link href="/get-found" className="hover:text-foreground">
+            Get found
+          </Link>
           <Link href="/pricing" className="hover:text-foreground">
             Pricing
+          </Link>
+          <Link href="/contact" className="hover:text-foreground">
+            Contact
           </Link>
           <Link href="/terms" className="hover:text-foreground">
             Terms

@@ -122,8 +122,9 @@ export default function TermsPage() {
       <section className="space-y-3">
         <H>11. Contact</H>
         <P>
-          Legal notices: hello@gridpins.com. These Terms are the entire agreement for the software
-          service, together with the Privacy Policy, Email Policy, and Refund Policy.
+          Legal notices: hello@gridpins.com. Support, contact-form, and Get found submissions go to
+          hello@info.gridpins.com. These Terms are the entire agreement for the software service,
+          together with the Privacy Policy, Email Policy, and Refund Policy.
         </P>
       </section>
     </LegalDoc>

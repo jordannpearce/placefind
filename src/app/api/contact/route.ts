@@ -1,0 +1,61 @@
+import { NextResponse } from "next/server"
+
+import { MISSING_MAIL_ERROR, SUPPORT_INBOX } from "@/lib/company"
+import { contactInboxEmail } from "@/lib/email-templates"
+import { sendSupportInbox } from "@/lib/mail"
+import { isHoneypotTripped, parsePublicInquiry } from "@/lib/public-forms"
+import { clientIp, consumeRateLimit } from "@/lib/rate-limit"
+
+export async function POST(request: Request) {
+  let body: Record<string, unknown>
+  try {
+    body = (await request.json()) as Record<string, unknown>
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+  }
+
+  if (isHoneypotTripped(body)) {
+    return NextResponse.json({ ok: true })
+  }
+
+  const limited = consumeRateLimit(`contact:${clientIp(request)}`)
+  if (!limited.ok) {
+    return NextResponse.json(
+      {
+        error: `Too many submissions. Wait a few minutes or email ${SUPPORT_INBOX}.`,
+      },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfterSec) } }
+    )
+  }
+
+  const parsed = parsePublicInquiry(body)
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+  if (!parsed.data.comments) {
+    return NextResponse.json({ error: "Comments are required." }, { status: 400 })
+  }
+
+  const template = contactInboxEmail(parsed.data)
+  try {
+    await sendSupportInbox({
+      subject: template.subject,
+      html: template.html,
+      kind: "contact",
+      replyTo: parsed.data.email,
+    })
+  } catch (error) {
+    if (error instanceof Error && error.message === "MAIL_NOT_CONFIGURED") {
+      return NextResponse.json({ error: MISSING_MAIL_ERROR }, { status: 503 })
+    }
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error && error.message
+            ? `We couldn’t send your message: ${error.message}`
+            : MISSING_MAIL_ERROR,
+      },
+      { status: 502 }
+    )
+  }
+
+  return NextResponse.json({ ok: true })
+}

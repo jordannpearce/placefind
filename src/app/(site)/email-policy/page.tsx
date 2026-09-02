@@ -36,9 +36,25 @@ export default function EmailPolicyPage() {
         <H>Marketing mail</H>
         <P>
           Marketing messages (tips, promotions, agency offers) go only to addresses that opted in
-          at signup or in Account, or that an administrator explicitly selected after you joined.
-          Checkboxes on Admin → Emails control who receives a given send. We do not buy third-party
-          lists to promote GridPins.
+          at signup or in Account, on the Get found page, or that an administrator explicitly
+          selected after you joined. Checkboxes on Admin → Emails control who receives a given
+          send. We do not buy third-party lists to promote GridPins.
+        </P>
+        <P>
+          The Get found form is a marketing opt-in for Google Business Profile ranking tips and
+          help. Submitting it requires an explicit checkbox. Those messages come from
+          hello@info.gridpins.com. You can unsubscribe from a later email or by writing
+          hello@info.gridpins.com.
+        </P>
+      </section>
+      <section className="space-y-3">
+        <H>Contact and lead forms</H>
+        <P>
+          The contact form at /contact and the Get found opt-in at /get-found send your name,
+          email, phone, business name, city, state, and comments to hello@info.gridpins.com. We
+          send and receive that mail at hello@info.gridpins.com. Reply-to on those notices is the
+          address you typed so we can write you back. If we cannot deliver the message, the form
+          shows an error instead of dropping it.
         </P>
       </section>
       <section className="space-y-3">

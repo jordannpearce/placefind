@@ -48,7 +48,7 @@ Each pin is one live Maps task (~$0.002). A 7×7 scan is 49 tasks per keyword.
 
 ## Product
 
-- Marketing site and pricing
+- Marketing site, pricing, contact form, and Get found opt-in
 - Email/password accounts with activation
 - Dashboard of campaigns per brand and location
 - Tracker with multiple keywords, grid size, radius, and schedules

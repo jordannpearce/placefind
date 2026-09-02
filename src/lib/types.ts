@@ -168,6 +168,8 @@ export type EmailKind =
   | "info"
   | "marketing"
   | "notification"
+  | "contact"
+  | "lead"
 
 export type Agency = {
   id: string
@@ -178,6 +180,21 @@ export type Agency = {
 export type AppSettings = {
   resendApiKey: string
   resendFrom: string
+  resendAudienceId: string
+}
+
+export type MarketingLead = {
+  id: string
+  name: string
+  email: string
+  phone: string
+  businessName: string
+  city: string
+  state: string
+  comments: string
+  source: "get-found"
+  audienceSynced: boolean
+  createdAt: string
 }
 
 export type User = {
