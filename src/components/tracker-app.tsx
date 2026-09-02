@@ -2,9 +2,10 @@
 
 import dynamic from "next/dynamic"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Info, Menu, PanelRight, X } from "lucide-react"
+import { Info, Menu, PanelRight, Settings, X } from "lucide-react"
 
 import { ScanForm } from "@/components/scan-form"
+import { SettingsDialog } from "@/components/settings-dialog"
 import { ResultsPanel } from "@/components/results-panel"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,10 +17,30 @@ import {
 } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
-import { buildGrid, suggestedZoom } from "@/lib/grid"
+import { buildGrid, spacingFromRadius, suggestedZoom } from "@/lib/grid"
 import { mapPool } from "@/lib/pool"
 import { computeStats } from "@/lib/stats"
-import type { GeocodeHit, PointResult, ScanConfig, ScanPointResponse } from "@/lib/types"
+import {
+  campaignToConfig,
+  configToCampaignPatch,
+  defaultCampaign,
+  loadActiveCampaignId,
+  loadCampaigns,
+  loadSettings,
+  nextScanAt,
+  saveActiveCampaignId,
+  saveCampaigns,
+  saveSettings,
+} from "@/lib/storage"
+import type {
+  ApiSettings,
+  BusinessCandidate,
+  Campaign,
+  GeocodeHit,
+  PointResult,
+  ScanConfig,
+  ScanPointResponse,
+} from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const RankMap = dynamic(() => import("@/components/rank-map"), {
@@ -31,31 +52,36 @@ const RankMap = dynamic(() => import("@/components/rank-map"), {
   ),
 })
 
-const DEFAULT_CONFIG: ScanConfig = {
-  keyword: "coffee",
-  targetBusiness: "Houndstooth Coffee",
-  targetPlaceId: "",
-  locationLabel: "Downtown Austin, TX",
-  center: { lat: 30.2672, lng: -97.7431 },
-  gridSize: 5,
-  spacingMiles: 0.7,
-  zoom: 15,
-  languageCode: "en",
-  device: "desktop",
-  depth: 20,
-  forceMock: true,
+function readWorkspace() {
+  const settings = loadSettings()
+  const campaigns = loadCampaigns()
+  const activeId = loadActiveCampaignId(campaigns)
+  const active = campaigns.find((campaign) => campaign.id === activeId) ?? campaigns[0]
+  const hasUserKeys = Boolean(settings.login && settings.password)
+  return {
+    settings,
+    campaigns,
+    activeId: active.id,
+    config: campaignToConfig(active, !hasUserKeys),
+    live: hasUserKeys,
+  }
 }
 
 export function TrackerApp() {
-  const [config, setConfig] = useState<ScanConfig>(DEFAULT_CONFIG)
+  const [workspace] = useState(readWorkspace)
+  const [config, setConfig] = useState<ScanConfig>(workspace.config)
+  const [campaigns, setCampaigns] = useState<Campaign[]>(workspace.campaigns)
+  const [activeCampaignId, setActiveCampaignId] = useState(workspace.activeId)
+  const [settings, setSettings] = useState<ApiSettings>(workspace.settings)
   const [results, setResults] = useState<Record<string, PointResult>>({})
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
-  const [liveConfigured, setLiveConfigured] = useState(false)
-  const [modeLabel, setModeLabel] = useState<"live" | "mock">("mock")
+  const [liveConfigured, setLiveConfigured] = useState(workspace.live)
+  const [modeLabel, setModeLabel] = useState<"live" | "mock">(workspace.live ? "live" : "mock")
   const [placingCenter, setPlacingCenter] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [setupOpen, setSetupOpen] = useState(false)
   const [resultsOpen, setResultsOpen] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
@@ -74,31 +100,59 @@ export function TrackerApp() {
   const progress = scanning || completed > 0 ? Math.round((completed / total) * 100) : 0
 
   useEffect(() => {
-    fetch("/api/status")
+    let cancelled = false
+    fetch("/api/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        apiLogin: workspace.settings.login,
+        apiPassword: workspace.settings.password,
+      }),
+    })
       .then((response) => response.json())
-      .then((data: { live?: boolean; mode?: "live" | "mock" }) => {
-        setLiveConfigured(Boolean(data.live))
-        if (data.live) {
-          setConfig((current) => ({ ...current, forceMock: false }))
+      .then((data: { live?: boolean }) => {
+        if (cancelled) return
+        const live = Boolean(data.live) || workspace.live
+        setLiveConfigured(live)
+        if (live) {
           setModeLabel("live")
+          setConfig((current) => ({ ...current, forceMock: false }))
         }
       })
       .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [workspace.live, workspace.settings.login, workspace.settings.password])
+
+  const persistCampaigns = useCallback((next: Campaign[]) => {
+    setCampaigns(next)
+    saveCampaigns(next)
   }, [])
 
   const patchConfig = useCallback((next: Partial<ScanConfig>) => {
     setConfig((current) => {
       const merged = { ...current, ...next }
-      if (next.spacingMiles != null && next.zoom == null) {
-        merged.zoom = suggestedZoom(next.spacingMiles)
+      if (next.radiusMiles != null || next.gridSize != null) {
+        merged.spacingMiles = spacingFromRadius(merged.radiusMiles, merged.gridSize)
       }
+      if ((next.spacingMiles != null || next.radiusMiles != null) && next.zoom == null) {
+        merged.zoom = suggestedZoom(merged.spacingMiles)
+      }
+      persistCampaigns(
+        campaigns.map((campaign) =>
+          campaign.id === activeCampaignId
+            ? { ...campaign, ...configToCampaignPatch(merged) }
+            : campaign
+        )
+      )
       return merged
     })
-    if (next.center || next.gridSize || next.spacingMiles) {
+    if (next.center || next.gridSize || next.spacingMiles || next.radiusMiles) {
       setResults({})
       setSelectedId(null)
     }
-  }, [])
+  }, [activeCampaignId, campaigns, persistCampaigns])
 
   const pickCenter = useCallback(
     async (lat: number, lng: number) => {
@@ -161,6 +215,8 @@ export function TrackerApp() {
               device: config.device,
               depth: config.depth,
               forceMock: config.forceMock,
+              apiLogin: settings.login || undefined,
+              apiPassword: settings.password || undefined,
             }),
           })
           const payload = (await response.json()) as ScanPointResponse & { error?: string }
@@ -185,8 +241,22 @@ export function TrackerApp() {
     } finally {
       setScanning(false)
       setLoadingIds(new Set())
+      const finishedAt = new Date()
+      setCampaigns((current) => {
+        const next = current.map((campaign) =>
+          campaign.id === activeCampaignId
+            ? {
+                ...campaign,
+                lastScanAt: finishedAt.toISOString(),
+                nextScanAt: nextScanAt(finishedAt, config.schedule),
+              }
+            : campaign
+        )
+        saveCampaigns(next)
+        return next
+      })
     }
-  }, [config, liveConfigured, points])
+  }, [activeCampaignId, config, liveConfigured, points, settings])
 
   const cancelScan = useCallback(() => {
     abortRef.current = true
@@ -194,12 +264,99 @@ export function TrackerApp() {
     setLoadingIds(new Set())
   }, [])
 
+  const selectCampaign = (id: string) => {
+    const campaign = campaigns.find((item) => item.id === id)
+    if (!campaign) return
+    setActiveCampaignId(id)
+    saveActiveCampaignId(id)
+    setConfig(campaignToConfig(campaign, config.forceMock))
+    setResults({})
+    setSelectedId(null)
+  }
+
+  const createCampaign = () => {
+    const id = `camp_${Date.now()}`
+    const campaign: Campaign = {
+      ...defaultCampaign(),
+      id,
+      name: `${config.targetBusiness || "New brand"} · ${config.businessCity || "New location"}`,
+      brand: config.targetBusiness,
+      ...configToCampaignPatch(config),
+      createdAt: new Date().toISOString(),
+      lastScanAt: null,
+      nextScanAt: null,
+    }
+    const next = [...campaigns, campaign]
+    setCampaigns(next)
+    saveCampaigns(next)
+    setActiveCampaignId(id)
+    saveActiveCampaignId(id)
+  }
+
+  const deleteCampaign = (id: string) => {
+    const next = campaigns.filter((campaign) => campaign.id !== id)
+    if (next.length === 0) return
+    setCampaigns(next)
+    saveCampaigns(next)
+    const fallback = next[0]
+    setActiveCampaignId(fallback.id)
+    saveActiveCampaignId(fallback.id)
+    setConfig(campaignToConfig(fallback, config.forceMock))
+  }
+
+  const renameCampaign = (name: string) => {
+    setCampaigns((current) => {
+      const next = current.map((campaign) =>
+        campaign.id === activeCampaignId ? { ...campaign, name } : campaign
+      )
+      saveCampaigns(next)
+      return next
+    })
+  }
+
+  const findBusiness = async (): Promise<BusinessCandidate[]> => {
+    const response = await fetch("/api/business-search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: config.targetBusiness,
+        city: config.businessCity,
+        state: config.businessState,
+        apiLogin: settings.login || undefined,
+        apiPassword: settings.password || undefined,
+      }),
+    })
+    const data = (await response.json()) as { hits?: BusinessCandidate[]; error?: string }
+    if (!response.ok) throw new Error(data.error || "Search failed")
+    return data.hits ?? []
+  }
+
+  const pickBusiness = (hit: BusinessCandidate) => {
+    patchConfig({
+      targetBusiness: hit.title,
+      targetPlaceId: hit.placeId ?? "",
+      businessCity: hit.city || config.businessCity,
+      businessState: hit.state || config.businessState,
+      mapsUrl: hit.mapsUrl,
+      locationLabel: [hit.title, hit.city, hit.state].filter(Boolean).join(", "),
+      center: { lat: hit.lat, lng: hit.lng },
+    })
+  }
+
   const form = (
     <ScanForm
       config={config}
+      campaigns={campaigns}
+      activeCampaignId={activeCampaignId}
       onChange={patchConfig}
+      onSelectCampaign={selectCampaign}
+      onCreateCampaign={createCampaign}
+      onDeleteCampaign={deleteCampaign}
+      onRenameCampaign={renameCampaign}
       onSubmit={runScan}
       onCancel={cancelScan}
+      onFindBusiness={findBusiness}
+      onPickBusiness={pickBusiness}
       scanning={scanning}
       liveConfigured={liveConfigured}
       placingCenter={placingCenter}
@@ -248,6 +405,14 @@ export function TrackerApp() {
           <Button
             variant="ghost"
             size="icon-sm"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="DataForSEO API settings"
+          >
+            <Settings />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setHelpOpen(true)}
             aria-label="How grid tracking works"
           >
@@ -289,7 +454,7 @@ export function TrackerApp() {
                   {config.keyword} · {config.targetBusiness}
                 </p>
                 <p className="text-muted-foreground">
-                  {config.gridSize}×{config.gridSize} · {config.spacingMiles.toFixed(1)} mi ·{" "}
+                  {config.gridSize}×{config.gridSize} · {config.radiusMiles.toFixed(1)} mi radius ·{" "}
                   {config.zoom}z
                 </p>
               </div>
@@ -368,11 +533,24 @@ export function TrackerApp() {
             <li>Color the square by rank so the map shows where you own the local pack.</li>
           </ol>
           <p className="text-xs text-muted-foreground">
-            Live mode needs DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD. Without them, GridPin
-            runs an Austin coffee demo that still uses the same grid math and ranking UI.
+            Add your DataForSEO login in Settings, or leave keys empty to run the Austin
+            coffee demo. Each campaign stores a brand, location, grid, radius, and schedule.
           </p>
         </DialogContent>
       </Dialog>
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        settings={settings}
+        onSave={(next) => {
+          setSettings(next)
+          saveSettings(next)
+          const live = Boolean(next.login && next.password)
+          setLiveConfigured(live)
+          setConfig((current) => ({ ...current, forceMock: !live }))
+          setModeLabel(live ? "live" : "mock")
+        }}
+      />
     </div>
   )
 }

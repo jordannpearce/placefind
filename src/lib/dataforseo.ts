@@ -40,13 +40,51 @@ type DataForSeoResponse = {
   tasks?: DataForSeoTask[]
 }
 
-export function hasDataForSeoCredentials(): boolean {
-  return Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD)
+export type DataForSeoAuth = {
+  login: string
+  password: string
 }
 
-export function getScanMode(forceMock?: boolean): ScanMode {
-  if (forceMock || !hasDataForSeoCredentials()) return "mock"
+export function envDataForSeoAuth(): DataForSeoAuth | null {
+  const login = process.env.DATAFORSEO_LOGIN?.trim()
+  const password = process.env.DATAFORSEO_PASSWORD?.trim()
+  if (!login || !password) return null
+  return { login, password }
+}
+
+export function resolveDataForSeoAuth(user?: Partial<DataForSeoAuth> | null): DataForSeoAuth | null {
+  const login = user?.login?.trim()
+  const password = user?.password?.trim()
+  if (login && password) return { login, password }
+  return envDataForSeoAuth()
+}
+
+export function hasDataForSeoCredentials(user?: Partial<DataForSeoAuth> | null): boolean {
+  return Boolean(resolveDataForSeoAuth(user))
+}
+
+export function getScanMode(
+  forceMock?: boolean,
+  user?: Partial<DataForSeoAuth> | null
+): ScanMode {
+  if (forceMock || !hasDataForSeoCredentials(user)) return "mock"
   return "live"
+}
+
+export async function verifyDataForSeoAuth(auth: DataForSeoAuth): Promise<{ ok: boolean; message: string }> {
+  try {
+    const cred = Buffer.from(`${auth.login}:${auth.password}`).toString("base64")
+    const response = await fetch("https://api.dataforseo.com/v3/appendix/user_data", {
+      headers: { Authorization: `Basic ${cred}` },
+    })
+    const payload = (await response.json()) as { status_code?: number; status_message?: string }
+    if (!response.ok || (payload.status_code && payload.status_code >= 40000)) {
+      return { ok: false, message: payload.status_message || `HTTP ${response.status}` }
+    }
+    return { ok: true, message: "DataForSEO account connected." }
+  } catch {
+    return { ok: false, message: "Could not reach DataForSEO." }
+  }
 }
 
 export async function fetchMapsPoint(input: {
@@ -60,16 +98,16 @@ export async function fetchMapsPoint(input: {
   device: DeviceType
   depth: number
   pointId: string
+  auth?: DataForSeoAuth | null
 }): Promise<PointResult> {
   const locationCoordinate = formatCoordinate(input.lat, input.lng, input.zoom)
-  const login = process.env.DATAFORSEO_LOGIN
-  const password = process.env.DATAFORSEO_PASSWORD
+  const resolved = resolveDataForSeoAuth(input.auth)
 
-  if (!login || !password) {
+  if (!resolved) {
     throw new Error("DataForSEO credentials are not configured")
   }
 
-  const auth = Buffer.from(`${login}:${password}`).toString("base64")
+  const auth = Buffer.from(`${resolved.login}:${resolved.password}`).toString("base64")
   const response = await fetch(LIVE_ENDPOINT, {
     method: "POST",
     headers: {

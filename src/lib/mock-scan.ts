@@ -1,6 +1,7 @@
-import { formatCoordinate, haversineMiles } from "./grid"
+import { formatCoordinate, googleMapsUrl, haversineMiles } from "./grid"
 import { matchTarget } from "./dataforseo"
-import type { Listing, PointResult } from "./types"
+import { namesMatch, normalizeName } from "./rank"
+import type { BusinessCandidate, Listing, PointResult } from "./types"
 
 type MockPlace = {
   title: string
@@ -298,4 +299,43 @@ export function mockScanPoint(input: {
 
 export function mockDelayMs(lat: number, lng: number): number {
   return 90 + Math.round(seededNoise(lat, lng, "delay") * 160)
+}
+
+export function searchMockBusinesses(
+  name: string,
+  city: string,
+  state: string
+): BusinessCandidate[] {
+  const cityNorm = normalizeName(city)
+  const stateNorm = normalizeName(state)
+  const cityOk =
+    !cityNorm ||
+    cityNorm.includes("austin") ||
+    "austin".includes(cityNorm)
+  const stateOk =
+    !stateNorm ||
+    stateNorm === "tx" ||
+    stateNorm === "texas" ||
+    "texas".includes(stateNorm)
+
+  if (!cityOk || !stateOk) return []
+
+  return AUSTIN_COFFEE.filter((place) => namesMatch(place.title, name) || normalizeName(place.title).includes(normalizeName(name)))
+    .slice(0, 8)
+    .map((place) => ({
+      title: place.title,
+      address: place.address,
+      city: "Austin",
+      state: "TX",
+      lat: place.lat,
+      lng: place.lng,
+      placeId: place.placeId,
+      mapsUrl: googleMapsUrl({
+        title: place.title,
+        address: place.address,
+        lat: place.lat,
+        lng: place.lng,
+      }),
+      source: "demo" as const,
+    }))
 }

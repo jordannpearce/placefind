@@ -16,6 +16,8 @@ type Body = {
   device?: DeviceType
   depth?: number
   forceMock?: boolean
+  apiLogin?: string
+  apiPassword?: string
 }
 
 export async function POST(request: Request) {
@@ -49,7 +51,11 @@ export async function POST(request: Request) {
   const languageCode = body.languageCode?.trim() || "en"
   const device: DeviceType = body.device === "mobile" ? "mobile" : "desktop"
   const depth = Math.min(Math.max(Number(body.depth ?? 20), 10), 100)
-  const mode = getScanMode(body.forceMock)
+  const auth = {
+    login: body.apiLogin ?? "",
+    password: body.apiPassword ?? "",
+  }
+  const mode = getScanMode(body.forceMock, auth)
 
   try {
     if (mode === "mock") {
@@ -77,6 +83,7 @@ export async function POST(request: Request) {
       device,
       depth,
       pointId,
+      auth,
     })
     return Response.json({ ...result, mode } satisfies ScanPointResponse)
   } catch (error) {

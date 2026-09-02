@@ -1,5 +1,7 @@
 import type { GridPoint, GridSize } from "./types"
 
+export const GRID_SIZES: GridSize[] = [3, 5, 7, 9, 11, 13]
+
 const MILES_PER_DEGREE_LAT = 69.0
 
 export function milesToLatitudeDelta(miles: number): number {
@@ -79,6 +81,15 @@ export function haversineMiles(
   return 2 * r * Math.asin(Math.min(1, Math.sqrt(a)))
 }
 
+export function spacingFromRadius(radiusMiles: number, gridSize: GridSize): number {
+  if (gridSize <= 1) return radiusMiles
+  return Number(((2 * radiusMiles) / (gridSize - 1)).toFixed(3))
+}
+
+export function radiusFromSpacing(spacingMiles: number, gridSize: GridSize): number {
+  return Number((spacingMiles * ((gridSize - 1) / 2)).toFixed(2))
+}
+
 export function suggestedZoom(spacingMiles: number): number {
   if (spacingMiles <= 0.4) return 17
   if (spacingMiles <= 0.75) return 16
@@ -86,6 +97,23 @@ export function suggestedZoom(spacingMiles: number): number {
   if (spacingMiles <= 2) return 14
   if (spacingMiles <= 3) return 13
   return 12
+}
+
+export function googleMapsUrl(input: {
+  title: string
+  address?: string | null
+  lat?: number | null
+  lng?: number | null
+  placeId?: string | null
+}): string {
+  if (input.placeId && !input.placeId.startsWith("ChIJMock")) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(input.title)}&query_place_id=${input.placeId}`
+  }
+  if (input.lat != null && input.lng != null) {
+    return `https://www.google.com/maps/search/${encodeURIComponent(input.title)}/@${input.lat},${input.lng},16z`
+  }
+  const query = [input.title, input.address].filter(Boolean).join(", ")
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
 }
 
 export function estimateScanCostUsd(pointCount: number): number {

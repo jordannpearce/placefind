@@ -6,12 +6,13 @@ GridPin talks to the [DataForSEO Google Maps SERP API](https://docs.dataforseo.c
 
 ## What you can do
 
-- Scan 3×3, 5×5, 7×7, or 9×9 grids around any address
-- Space pins from 0.3 to 3.0 miles and set Maps zoom (3z–21z)
-- Track a business by name or Google Place ID
-- Watch squares fill in as each coordinate returns
-- See ATR, local-pack share, coverage, and competitors
-- Inspect every listing DataForSEO returned at a pin (rank, rating, reviews, domain, address, place ID)
+- Save your own DataForSEO login in Settings (or use `.env.local` / demo data)
+- Look up a listing by business name, city, and state, then confirm it on Google Maps
+- Create a campaign per brand and location
+- Choose grid size (3×3 through 13×13) and a scan radius in miles
+- Schedule daily or weekly ranking checks (due campaigns light up when you open GridPin)
+- Watch pins fill in as each coordinate returns
+- See ATR, local-pack share, coverage, competitors, review counts, and city/state names in listings
 
 ## Run it locally
 

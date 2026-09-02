@@ -1,20 +1,36 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Crosshair, Loader2, MapPin, Search } from "lucide-react"
+import { useState, type ReactNode } from "react"
+import { Crosshair, ExternalLink, Loader2, Plus, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
-import { estimateScanCostUsd } from "@/lib/grid"
-import type { DeviceType, GeocodeHit, GridSize, ScanConfig } from "@/lib/types"
+import { estimateScanCostUsd, GRID_SIZES, spacingFromRadius } from "@/lib/grid"
+import { formatWhen, isCampaignDue, US_STATES } from "@/lib/storage"
+import type {
+  BusinessCandidate,
+  Campaign,
+  DeviceType,
+  GridSize,
+  ScanConfig,
+  ScheduleCadence,
+} from "@/lib/types"
 
 type ScanFormProps = {
   config: ScanConfig
+  campaigns: Campaign[]
+  activeCampaignId: string
   onChange: (patch: Partial<ScanConfig>) => void
+  onSelectCampaign: (id: string) => void
+  onCreateCampaign: () => void
+  onDeleteCampaign: (id: string) => void
+  onRenameCampaign: (name: string) => void
   onSubmit: () => void
   onCancel: () => void
+  onFindBusiness: () => Promise<BusinessCandidate[]>
+  onPickBusiness: (hit: BusinessCandidate) => void
   scanning: boolean
   liveConfigured: boolean
   placingCenter: boolean
@@ -23,16 +39,29 @@ type ScanFormProps = {
 
 export function ScanForm({
   config,
+  campaigns,
+  activeCampaignId,
   onChange,
+  onSelectCampaign,
+  onCreateCampaign,
+  onDeleteCampaign,
+  onRenameCampaign,
   onSubmit,
   onCancel,
+  onFindBusiness,
+  onPickBusiness,
   scanning,
   liveConfigured,
   placingCenter,
   onTogglePlaceCenter,
 }: ScanFormProps) {
+  const [hits, setHits] = useState<BusinessCandidate[]>([])
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const active = campaigns.find((campaign) => campaign.id === activeCampaignId)
   const pointCount = config.gridSize * config.gridSize
   const cost = estimateScanCostUsd(pointCount)
+  const due = active ? isCampaignDue(active) : false
 
   return (
     <form
@@ -42,6 +71,49 @@ export function ScanForm({
         onSubmit()
       }}
     >
+      <Field label="Campaign" hint="One campaign per brand and location.">
+        <div className="flex gap-2">
+          <NativeSelect
+            value={activeCampaignId}
+            onChange={onSelectCampaign}
+            options={campaigns.map((campaign) => ({
+              value: campaign.id,
+              label: `${campaign.name}${isCampaignDue(campaign) ? " · due" : ""}`,
+            }))}
+          />
+          <Button type="button" variant="outline" size="icon" onClick={onCreateCampaign} aria-label="New campaign">
+            <Plus />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            disabled={campaigns.length <= 1}
+            onClick={() => onDeleteCampaign(activeCampaignId)}
+            aria-label="Delete campaign"
+          >
+            <Trash2 />
+          </Button>
+        </div>
+        <Input
+          className="mt-2"
+          value={active?.name ?? ""}
+          onChange={(event) => onRenameCampaign(event.target.value)}
+          placeholder="Campaign name"
+        />
+        {active ? (
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            Last scan {formatWhen(active.lastScanAt)}
+            {active.schedule !== "manual" ? ` · next ${formatWhen(active.nextScanAt)}` : ""}
+          </p>
+        ) : null}
+        {due ? (
+          <p className="mt-1 rounded-lg bg-amber-100 px-2 py-1 text-[11px] text-amber-950">
+            This campaign is due for a scheduled ranking check.
+          </p>
+        ) : null}
+      </Field>
+
       <Field label="Keyword" hint="The Google Maps search you want to rank for.">
         <Input
           value={config.keyword}
@@ -51,29 +123,103 @@ export function ScanForm({
         />
       </Field>
 
-      <Field
-        label="Target business"
-        hint="Name or Place ID of the listing you are tracking."
-      >
+      <div className="space-y-2">
+        <p className="text-xs font-medium">Find the business</p>
+        <p className="text-[11px] leading-4 text-muted-foreground">
+          Type the listing name, city, and state, then confirm it on Google Maps.
+        </p>
         <Input
           value={config.targetBusiness}
           onChange={(event) => onChange({ targetBusiness: event.target.value })}
-          placeholder="Houndstooth Coffee"
+          placeholder="Business name"
           required
         />
-      </Field>
+        <div className="grid grid-cols-[1fr_88px] gap-2">
+          <Input
+            value={config.businessCity}
+            onChange={(event) => onChange({ businessCity: event.target.value })}
+            placeholder="City"
+            required
+          />
+          <NativeSelect
+            value={config.businessState}
+            onChange={(value) => onChange({ businessState: value })}
+            options={US_STATES.map((state) => ({
+              value: state.abbr,
+              label: state.abbr,
+            }))}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full"
+          disabled={searching || config.targetBusiness.trim().length < 2}
+          onClick={async () => {
+            setSearching(true)
+            setSearchError(null)
+            try {
+              const next = await onFindBusiness()
+              setHits(next)
+              if (next.length === 0) setSearchError("No matching businesses. Try a fuller name.")
+            } catch (error) {
+              setSearchError(error instanceof Error ? error.message : "Search failed")
+            } finally {
+              setSearching(false)
+            }
+          }}
+        >
+          {searching ? <Loader2 className="animate-spin" /> : null}
+          Search name + city + state
+        </Button>
+        {searchError ? <p className="text-[11px] text-destructive">{searchError}</p> : null}
+        {hits.length > 0 ? (
+          <div className="max-h-48 space-y-1 overflow-auto rounded-lg border p-1">
+            {hits.map((hit) => (
+              <div
+                key={`${hit.title}-${hit.lat}-${hit.lng}`}
+                className="flex items-start justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted"
+              >
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left"
+                  onClick={() => {
+                    onPickBusiness(hit)
+                    setHits([])
+                  }}
+                >
+                  <p className="text-xs font-medium">{hit.title}</p>
+                  <p className="text-[11px] text-muted-foreground">{hit.address}</p>
+                </button>
+                <a
+                  href={hit.mapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1 pt-0.5 text-[11px] text-primary hover:underline"
+                >
+                  Maps
+                  <ExternalLink className="size-3" />
+                </a>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {config.mapsUrl ? (
+          <a
+            href={config.mapsUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            Open tracked listing on Google Maps
+            <ExternalLink className="size-3" />
+          </a>
+        ) : null}
+      </div>
 
-      <Field label="Grid center" hint="Search an address or drop a pin on the map.">
-        <LocationSearch
-          key={config.locationLabel}
-          locationLabel={config.locationLabel}
-          onSelect={(hit) =>
-            onChange({
-              locationLabel: hit.label,
-              center: { lat: hit.lat, lng: hit.lng },
-            })
-          }
-        />
+      <Field label="Grid center" hint="Uses the selected listing, or drop a pin.">
+        <p className="text-xs">{config.locationLabel}</p>
         <Button
           type="button"
           variant={placingCenter ? "default" : "outline"}
@@ -90,18 +236,56 @@ export function ScanForm({
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Grid">
+        <Field label="Grid size" hint={`${pointCount} GPS pins`}>
           <NativeSelect
             value={String(config.gridSize)}
-            onChange={(value) => onChange({ gridSize: Number(value) as GridSize })}
+            onChange={(value) => {
+              const gridSize = Number(value) as GridSize
+              onChange({
+                gridSize,
+                spacingMiles: spacingFromRadius(config.radiusMiles, gridSize),
+              })
+            }}
+            options={GRID_SIZES.map((size) => ({
+              value: String(size),
+              label: `${size} × ${size}`,
+            }))}
+          />
+        </Field>
+        <Field label="Schedule">
+          <NativeSelect
+            value={config.schedule}
+            onChange={(value) => onChange({ schedule: value as ScheduleCadence })}
             options={[
-              { value: "3", label: "3 × 3 · 9 pins" },
-              { value: "5", label: "5 × 5 · 25 pins" },
-              { value: "7", label: "7 × 7 · 49 pins" },
-              { value: "9", label: "9 × 9 · 81 pins" },
+              { value: "manual", label: "Manual only" },
+              { value: "daily", label: "Daily" },
+              { value: "weekly", label: "Weekly" },
             ]}
           />
         </Field>
+      </div>
+
+      <Field
+        label={`Scan radius · ${config.radiusMiles.toFixed(1)} mi`}
+        hint={`From the listing out to the edge pins. Spacing ${config.spacingMiles.toFixed(2)} mi.`}
+      >
+        <Slider
+          min={0.5}
+          max={10}
+          step={0.1}
+          value={[config.radiusMiles]}
+          onValueChange={(value) => {
+            const next = Array.isArray(value) ? value[0] : value
+            if (typeof next !== "number") return
+            onChange({
+              radiusMiles: next,
+              spacingMiles: spacingFromRadius(next, config.gridSize),
+            })
+          }}
+        />
+      </Field>
+
+      <div className="grid grid-cols-2 gap-3">
         <Field label="Language">
           <NativeSelect
             value={config.languageCode}
@@ -113,35 +297,6 @@ export function ScanForm({
               { value: "de", label: "German" },
               { value: "pt", label: "Portuguese" },
             ]}
-          />
-        </Field>
-      </div>
-
-      <Field
-        label={`Point spacing · ${config.spacingMiles.toFixed(1)} mi`}
-        hint="Distance between neighboring GPS samples."
-      >
-        <Slider
-          min={0.3}
-          max={3}
-          step={0.1}
-          value={[config.spacingMiles]}
-          onValueChange={(value) => {
-            const next = Array.isArray(value) ? value[0] : value
-            if (typeof next === "number") onChange({ spacingMiles: next })
-          }}
-        />
-      </Field>
-
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Maps zoom">
-          <NativeSelect
-            value={String(config.zoom)}
-            onChange={(value) => onChange({ zoom: Number(value) })}
-            options={[13, 14, 15, 16, 17, 18].map((zoom) => ({
-              value: String(zoom),
-              label: `${zoom}z`,
-            }))}
           />
         </Field>
         <Field label="Device">
@@ -168,8 +323,8 @@ export function ScanForm({
           <span className="font-medium text-foreground">Use demo data</span>
           <span className="mt-0.5 block text-muted-foreground">
             {liveConfigured
-              ? "Skip DataForSEO and run the Austin coffee mock so you can preview the grid."
-              : "Live API is off until you add DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD."}
+              ? "Skip DataForSEO and run the mock engine."
+              : "Add your DataForSEO keys in Settings to run live Maps scans."}
           </span>
         </span>
       </label>
@@ -178,7 +333,7 @@ export function ScanForm({
         This scan posts {pointCount} Google Maps tasks
         {config.forceMock || !liveConfigured
           ? " against the mock engine."
-          : ` to DataForSEO live (~$${cost.toFixed(3)}).`}
+          : ` to your DataForSEO account (~$${cost.toFixed(3)}).`}
       </div>
 
       {scanning ? (
@@ -187,7 +342,7 @@ export function ScanForm({
         </Button>
       ) : (
         <Button type="submit" size="lg" className="h-10">
-          Run {config.gridSize}×{config.gridSize} scan
+          {due ? "Run due scan" : `Run ${config.gridSize}×${config.gridSize} scan`}
         </Button>
       )}
     </form>
@@ -232,75 +387,6 @@ function Field({
       <Label className="text-xs font-medium">{label}</Label>
       {children}
       {hint ? <p className="text-[11px] leading-4 text-muted-foreground">{hint}</p> : null}
-    </div>
-  )
-}
-
-function LocationSearch({
-  locationLabel,
-  onSelect,
-}: {
-  locationLabel: string
-  onSelect: (hit: GeocodeHit) => void
-}) {
-  const [query, setQuery] = useState(locationLabel)
-  const [hits, setHits] = useState<GeocodeHit[]>([])
-  const [searching, setSearching] = useState(false)
-  const debounceRef = useRef<number | null>(null)
-  const canSearch = query.trim().length >= 3 && query.trim() !== locationLabel
-
-  useEffect(() => {
-    if (!canSearch) return
-    if (debounceRef.current) window.clearTimeout(debounceRef.current)
-    debounceRef.current = window.setTimeout(async () => {
-      setSearching(true)
-      try {
-        const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`)
-        const data = (await response.json()) as { hits?: GeocodeHit[] }
-        setHits(data.hits ?? [])
-      } catch {
-        setHits([])
-      } finally {
-        setSearching(false)
-      }
-    }, 450)
-    return () => {
-      if (debounceRef.current) window.clearTimeout(debounceRef.current)
-    }
-  }, [canSearch, query])
-
-  return (
-    <div className="relative">
-      <Search className="pointer-events-none absolute top-2 left-2.5 size-3.5 text-muted-foreground" />
-      <Input
-        className="pl-8"
-        value={query}
-        onChange={(event) => {
-          setQuery(event.target.value)
-          if (event.target.value.trim() === locationLabel) {
-            setHits([])
-          }
-        }}
-        placeholder="Downtown Austin, TX"
-      />
-      {searching && (
-        <Loader2 className="absolute top-2 right-2.5 size-3.5 animate-spin text-muted-foreground" />
-      )}
-      {canSearch && hits.length > 0 && (
-        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-lg border bg-popover p-1 shadow-md">
-          {hits.map((hit) => (
-            <button
-              key={`${hit.lat}-${hit.lng}-${hit.label}`}
-              type="button"
-              className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
-              onClick={() => onSelect(hit)}
-            >
-              <MapPin className="mt-0.5 size-3 shrink-0" />
-              <span>{hit.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

@@ -1,12 +1,43 @@
-import { hasDataForSeoCredentials } from "@/lib/dataforseo"
+import { resolveDataForSeoAuth, verifyDataForSeoAuth } from "@/lib/dataforseo"
 
 export async function GET() {
-  const live = hasDataForSeoCredentials()
+  const envLive = Boolean(resolveDataForSeoAuth(null))
   return Response.json({
-    mode: live ? "live" : "mock",
-    live,
-    message: live
-      ? "DataForSEO credentials found. Scans will hit Google Maps SERP live."
-      : "No DataForSEO credentials. Scans use a realistic mock grid so you can try the product.",
+    envLive,
+    live: envLive,
+    mode: envLive ? "live" : "mock",
+    message: envLive
+      ? "Server DataForSEO credentials found."
+      : "Add your DataForSEO login and password in Settings, or use demo data.",
+  })
+}
+
+export async function POST(request: Request) {
+  let body: { apiLogin?: string; apiPassword?: string }
+  try {
+    body = (await request.json()) as { apiLogin?: string; apiPassword?: string }
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 })
+  }
+
+  const auth = resolveDataForSeoAuth({
+    login: body.apiLogin,
+    password: body.apiPassword,
+  })
+  if (!auth) {
+    return Response.json({
+      live: false,
+      mode: "mock",
+      ok: false,
+      message: "No DataForSEO credentials. Scans will use demo data.",
+    })
+  }
+
+  const check = await verifyDataForSeoAuth(auth)
+  return Response.json({
+    live: check.ok,
+    mode: check.ok ? "live" : "mock",
+    ok: check.ok,
+    message: check.message,
   })
 }

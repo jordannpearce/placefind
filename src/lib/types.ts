@@ -1,4 +1,6 @@
-export type GridSize = 3 | 5 | 7 | 9
+export type GridSize = 3 | 5 | 7 | 9 | 11 | 13
+
+export type ScheduleCadence = "manual" | "daily" | "weekly"
 
 export type DeviceType = "desktop" | "mobile"
 
@@ -92,13 +94,57 @@ export type ScanConfig = {
   keyword: string
   targetBusiness: string
   targetPlaceId: string
+  businessCity: string
+  businessState: string
+  mapsUrl: string
   locationLabel: string
   center: { lat: number; lng: number }
   gridSize: GridSize
+  radiusMiles: number
   spacingMiles: number
   zoom: number
   languageCode: string
   device: DeviceType
   depth: number
   forceMock: boolean
+  schedule: ScheduleCadence
+}
+
+export type ApiSettings = {
+  login: string
+  password: string
+}
+
+export type BusinessCandidate = {
+  title: string
+  address: string
+  city: string
+  state: string
+  lat: number
+  lng: number
+  placeId: string | null
+  mapsUrl: string
+  source: "maps" | "directory" | "demo"
+}
+
+export type Campaign = {
+  id: string
+  name: string
+  brand: string
+  keyword: string
+  businessName: string
+  businessCity: string
+  businessState: string
+  placeId: string
+  mapsUrl: string
+  locationLabel: string
+  center: { lat: number; lng: number }
+  gridSize: GridSize
+  radiusMiles: number
+  languageCode: string
+  device: DeviceType
+  schedule: ScheduleCadence
+  createdAt: string
+  lastScanAt: string | null
+  nextScanAt: string | null
 }
