@@ -21,10 +21,11 @@ import { buildGrid, spacingFromRadius, suggestedZoom } from "@/lib/grid"
 import { mapPool } from "@/lib/pool"
 import { computeStats } from "@/lib/stats"
 import {
+  blankCampaign,
   campaignToConfig,
   configToCampaignPatch,
-  defaultCampaign,
   deleteScans,
+  emptyConfig,
   loadActiveCampaignId,
   loadCampaigns,
   loadScans,
@@ -60,6 +61,10 @@ const RankMap = dynamic(() => import("@/components/rank-map"), {
   ),
 })
 
+function configFromCampaign(campaign: Campaign | undefined, forceMock: boolean): ScanConfig {
+  return campaign ? campaignToConfig(campaign, forceMock) : { ...emptyConfig(), forceMock }
+}
+
 function readWorkspace() {
   const settings = loadSettings()
   const campaigns = loadCampaigns()
@@ -69,9 +74,9 @@ function readWorkspace() {
   return {
     settings,
     campaigns,
-    activeId: active.id,
-    config: campaignToConfig(active, !hasUserKeys),
-    scans: loadScans(active.id),
+    activeId: active?.id ?? "",
+    config: configFromCampaign(active, !hasUserKeys),
+    scans: active ? loadScans(active.id) : {},
     live: hasUserKeys,
   }
 }
@@ -108,6 +113,7 @@ export function TrackerApp() {
     extraCampaigns: 0,
     campaignLimit: 50,
   })
+  const [canBypassCampaignLimit, setCanBypassCampaignLimit] = useState(false)
   const abortRef = useRef(false)
 
   const points = useMemo(
@@ -170,22 +176,39 @@ export function TrackerApp() {
           plan?: PlanId
           extraCampaigns?: number
           campaignLimit?: number
+          canBypassCampaignLimit?: boolean
         } | null) => {
           if (cancelled || !data) {
             setHydratedFromServer(true)
             return
           }
-          if (data.campaigns && data.campaigns.length > 0) {
+          if (typeof data.canBypassCampaignLimit === "boolean") {
+            setCanBypassCampaignLimit(data.canBypassCampaignLimit)
+          }
+          if (Array.isArray(data.campaigns)) {
             setCampaigns(data.campaigns)
             saveCampaigns(data.campaigns)
-            const activeId = data.activeCampaignId || data.campaigns[0].id
-            setActiveCampaignId(activeId)
-            saveActiveCampaignId(activeId)
-            const active = data.campaigns.find((campaign) => campaign.id === activeId) ?? data.campaigns[0]
             const serverLive = Boolean(
               (data.settings?.login && data.settings?.password) || data.hasDfsPassword
             )
-            setConfig(campaignToConfig(active, !serverLive))
+            if (data.campaigns.length === 0) {
+              setActiveCampaignId("")
+              saveActiveCampaignId("")
+              setConfig({ ...emptyConfig(), forceMock: !serverLive })
+              setScansByKeyword({})
+              setSelectedId(null)
+            } else {
+              const activeId =
+                (data.activeCampaignId &&
+                  data.campaigns.some((campaign) => campaign.id === data.activeCampaignId)
+                  ? data.activeCampaignId
+                  : data.campaigns[0].id)
+              setActiveCampaignId(activeId)
+              saveActiveCampaignId(activeId)
+              const active =
+                data.campaigns.find((campaign) => campaign.id === activeId) ?? data.campaigns[0]
+              setConfig(campaignToConfig(active, !serverLive))
+            }
           }
           if (data.settings) {
             const settingsNext = {
@@ -238,9 +261,16 @@ export function TrackerApp() {
         const refresh = await fetch("/api/me/workspace")
         if (!refresh.ok || cancelled) return
         const next = (await refresh.json()) as { campaigns?: Campaign[] }
-        if (next.campaigns) {
+        if (Array.isArray(next.campaigns)) {
           setCampaigns(next.campaigns)
           saveCampaigns(next.campaigns)
+          if (next.campaigns.length === 0) {
+            setActiveCampaignId("")
+            saveActiveCampaignId("")
+            setConfig((current) => ({ ...emptyConfig(), forceMock: current.forceMock }))
+            setScansByKeyword({})
+            setSelectedId(null)
+          }
         }
       })
       .catch(() => undefined)
@@ -257,6 +287,7 @@ export function TrackerApp() {
   )
 
   const patchConfig = useCallback((next: Partial<ScanConfig>) => {
+    if (!activeCampaignId) return
     setConfig((current) => {
       const merged = { ...current, ...next }
       if (next.radiusMiles != null || next.gridSize != null) {
@@ -314,7 +345,7 @@ export function TrackerApp() {
 
   const runScan = useCallback(async (scope: "active" | "all" = "all") => {
     const keywords = (scope === "active" ? [config.activeKeyword] : config.keywords).filter(Boolean)
-    if (keywords.length === 0) return
+    if (!activeCampaignId || !config.targetBusiness.trim() || keywords.length === 0) return
 
     abortRef.current = false
     setScanning(true)
@@ -455,42 +486,42 @@ export function TrackerApp() {
   }
 
   const createCampaign = () => {
-    if (campaigns.length >= planLimits.campaignLimit) {
+    if (!canBypassCampaignLimit && campaigns.length >= planLimits.campaignLimit) {
       setCampaignLimitError(campaignLimitMessage(planLimits.plan, planLimits.extraCampaigns))
       return
     }
     setCampaignLimitError(null)
-    persistScans(activeCampaignId, scansByKeyword)
-    const id = `camp_${Date.now()}`
-    const campaign: Campaign = {
-      ...defaultCampaign(),
-      id,
-      name: uniqueCampaignName(
-        `${config.targetBusiness || "New brand"} · ${config.businessCity || "New location"}`,
-        campaigns
-      ),
-      brand: config.targetBusiness,
-      ...configToCampaignPatch(config),
-      createdAt: new Date().toISOString(),
-      lastScanAt: null,
-      nextScanAt: null,
+    if (activeCampaignId) persistScans(activeCampaignId, scansByKeyword)
+    const campaign = {
+      ...blankCampaign(),
+      name: uniqueCampaignName("New campaign", campaigns),
     }
     const next = [...campaigns, campaign]
     setCampaigns(next)
     saveCampaigns(next)
-    setActiveCampaignId(id)
-    saveActiveCampaignId(id)
+    setActiveCampaignId(campaign.id)
+    saveActiveCampaignId(campaign.id)
+    setConfig({ ...emptyConfig(), forceMock: config.forceMock })
     setScansByKeyword({})
     setSelectedId(null)
   }
 
   const deleteCampaign = (id: string) => {
+    if (!id) return
+    if (!window.confirm("Delete this campaign? This cannot be undone.")) return
     const next = campaigns.filter((campaign) => campaign.id !== id)
-    if (next.length === 0) return
     deleteScans(id)
     setCampaigns(next)
     saveCampaigns(next)
-    const fallback = next[0]
+    if (next.length === 0) {
+      setActiveCampaignId("")
+      saveActiveCampaignId("")
+      setConfig({ ...emptyConfig(), forceMock: config.forceMock })
+      setScansByKeyword({})
+      setSelectedId(null)
+      return
+    }
+    const fallback = next.find((campaign) => campaign.id === activeCampaignId) ?? next[0]
     setActiveCampaignId(fallback.id)
     saveActiveCampaignId(fallback.id)
     setConfig(campaignToConfig(fallback, config.forceMock))
@@ -558,6 +589,7 @@ export function TrackerApp() {
       onTogglePlaceCenter={() => setPlacingCenter((value) => !value)}
       campaignLimit={planLimits.campaignLimit}
       campaignLimitError={campaignLimitError}
+      canBypassCampaignLimit={canBypassCampaignLimit}
     />
   )
 
@@ -651,7 +683,9 @@ export function TrackerApp() {
             <div className="pointer-events-none absolute inset-x-0 top-0 z-[400] flex justify-between p-3">
               <div className="pointer-events-auto rounded-2xl bg-background/90 px-3 py-2 text-xs shadow-sm ring-1 ring-foreground/10 backdrop-blur">
                 <p className="font-medium">
-                  {config.activeKeyword} · {config.targetBusiness}
+                  {campaigns.length === 0
+                    ? "No campaign"
+                    : `${config.activeKeyword || "No keyword"} · ${config.targetBusiness || "No listing"}`}
                 </p>
                 <p className="text-muted-foreground">
                   {config.gridSize}×{config.gridSize} · {config.radiusMiles.toFixed(1)} mi radius ·{" "}

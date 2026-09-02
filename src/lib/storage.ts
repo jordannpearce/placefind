@@ -69,7 +69,7 @@ export const US_STATES: Array<{ name: string; abbr: string }> = [
   { name: "Wyoming", abbr: "WY" },
 ]
 
-export function normalizeKeywords(raw: unknown, fallback = "coffee"): string[] {
+export function normalizeKeywords(raw: unknown, fallback: string | null = "coffee"): string[] {
   const list = Array.isArray(raw)
     ? raw
     : typeof raw === "string" && raw.trim()
@@ -87,7 +87,8 @@ export function normalizeKeywords(raw: unknown, fallback = "coffee"): string[] {
     out.push(value)
     if (out.length >= MAX_KEYWORDS) break
   }
-  return out.length > 0 ? out : [fallback]
+  if (out.length > 0) return out
+  return fallback ? [fallback] : []
 }
 
 export function pickActiveKeyword(keywords: string[], preferred?: string | null): string {
@@ -95,7 +96,7 @@ export function pickActiveKeyword(keywords: string[], preferred?: string | null)
     const match = keywords.find((keyword) => keyword.toLowerCase() === preferred.trim().toLowerCase())
     if (match) return match
   }
-  return keywords[0] ?? "coffee"
+  return keywords[0] ?? ""
 }
 
 export function uniqueCampaignName(base: string, campaigns: Campaign[]): string {
@@ -127,6 +128,55 @@ export function defaultConfig(): ScanConfig {
     depth: 20,
     forceMock: true,
     schedule: "manual",
+  }
+}
+
+export function emptyConfig(): ScanConfig {
+  return {
+    keywords: [],
+    activeKeyword: "",
+    targetBusiness: "",
+    targetPlaceId: "",
+    businessCity: "",
+    businessState: "TX",
+    mapsUrl: "",
+    locationLabel: "",
+    center: { lat: 30.2672, lng: -97.7431 },
+    gridSize: 5,
+    radiusMiles: 1.4,
+    spacingMiles: spacingFromRadius(1.4, 5),
+    zoom: 15,
+    languageCode: "en",
+    device: "desktop",
+    depth: 20,
+    forceMock: true,
+    schedule: "manual",
+  }
+}
+
+export function blankCampaign(name = "New campaign"): Campaign {
+  const config = emptyConfig()
+  return {
+    id: `camp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    name,
+    brand: "",
+    keywords: [],
+    activeKeyword: "",
+    businessName: "",
+    businessCity: "",
+    businessState: "TX",
+    placeId: "",
+    mapsUrl: "",
+    locationLabel: "",
+    center: config.center,
+    gridSize: config.gridSize,
+    radiusMiles: config.radiusMiles,
+    languageCode: config.languageCode,
+    device: config.device,
+    schedule: "manual",
+    createdAt: new Date().toISOString(),
+    lastScanAt: null,
+    nextScanAt: null,
   }
 }
 
@@ -224,8 +274,10 @@ export function loadCampaigns(): Campaign[] {
       return seed
     }
     const parsed = JSON.parse(raw) as LegacyCampaign[]
-    const migrated = parsed.map(migrateCampaign).filter((campaign) => Boolean(campaign.id))
-    return migrated.length > 0 ? migrated : defaultCampaigns()
+    if (!Array.isArray(parsed)) return defaultCampaigns()
+    // A stored empty list is intentional (last campaign deleted). Do not re-seed.
+    if (parsed.length === 0) return []
+    return parsed.map(migrateCampaign).filter((campaign) => Boolean(campaign.id))
   } catch {
     return defaultCampaigns()
   }
@@ -245,7 +297,7 @@ export function saveActiveCampaignId(id: string) {
 }
 
 export function campaignToConfig(campaign: Campaign, forceMock: boolean): ScanConfig {
-  const keywords = normalizeKeywords(campaign.keywords)
+  const keywords = normalizeKeywords(campaign.keywords, null)
   return {
     keywords,
     activeKeyword: pickActiveKeyword(keywords, campaign.activeKeyword),
@@ -269,7 +321,7 @@ export function campaignToConfig(campaign: Campaign, forceMock: boolean): ScanCo
 }
 
 export function configToCampaignPatch(config: ScanConfig): Partial<Campaign> {
-  const keywords = normalizeKeywords(config.keywords)
+  const keywords = normalizeKeywords(config.keywords, null)
   return {
     keywords,
     activeKeyword: pickActiveKeyword(keywords, config.activeKeyword),

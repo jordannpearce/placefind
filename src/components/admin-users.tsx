@@ -1,13 +1,22 @@
 "use client"
 
+import { Plus, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MAX_EXTRA_CAMPAIGNS, PLANS, PLAN_ORDER } from "@/lib/plans"
-import type { Agency, PlanId, PublicUser, UserRole, UserStatus } from "@/lib/types"
+import { blankCampaign, uniqueCampaignName } from "@/lib/storage"
+import type { Agency, Campaign, PlanId, PublicUser, UserRole, UserStatus } from "@/lib/types"
 
 export type AdminUserRow = PublicUser & { campaignCount: number; agencyName: string }
 
@@ -23,6 +32,10 @@ export function AdminUsers({
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const [managing, setManaging] = useState<AdminUserRow | null>(null)
+  const [managedCampaigns, setManagedCampaigns] = useState<Campaign[]>([])
+  const [managedActiveId, setManagedActiveId] = useState("")
+  const [campaignsLoading, setCampaignsLoading] = useState(false)
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -102,6 +115,73 @@ export function AdminUsers({
     } finally {
       setPending(false)
     }
+  }
+
+  async function openCampaigns(user: AdminUserRow) {
+    setError(null)
+    setManaging(user)
+    setCampaignsLoading(true)
+    try {
+      const response = await fetch(`/api/admin/workspace?userId=${encodeURIComponent(user.id)}`)
+      const data = (await response.json()) as {
+        error?: string
+        campaigns?: Campaign[]
+        activeCampaignId?: string
+      }
+      if (!response.ok) throw new Error(data.error || "Could not load campaigns")
+      setManagedCampaigns(data.campaigns ?? [])
+      setManagedActiveId(data.activeCampaignId ?? "")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load campaigns")
+      setManaging(null)
+    } finally {
+      setCampaignsLoading(false)
+    }
+  }
+
+  async function persistManaged(next: Campaign[], activeCampaignId = managedActiveId) {
+    if (!managing) return
+    setError(null)
+    const nextActive = next.some((campaign) => campaign.id === activeCampaignId)
+      ? activeCampaignId
+      : (next[0]?.id ?? "")
+    const response = await fetch(`/api/admin/workspace?userId=${encodeURIComponent(managing.id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ campaigns: next, activeCampaignId: nextActive }),
+    })
+    const data = (await response.json()) as { error?: string; campaigns?: Campaign[] }
+    if (!response.ok) {
+      setError(data.error || "Could not update campaigns")
+      return
+    }
+    const saved = data.campaigns ?? next
+    setManagedCampaigns(saved)
+    setManagedActiveId(nextActive)
+    setRows((current) =>
+      current.map((row) => (row.id === managing.id ? { ...row, campaignCount: saved.length } : row))
+    )
+  }
+
+  async function renameManaged(id: string, name: string) {
+    const next = managedCampaigns.map((campaign) =>
+      campaign.id === id ? { ...campaign, name } : campaign
+    )
+    setManagedCampaigns(next)
+    await persistManaged(next)
+  }
+
+  async function deleteManaged(id: string) {
+    if (!window.confirm("Delete this campaign? This cannot be undone.")) return
+    await persistManaged(managedCampaigns.filter((campaign) => campaign.id !== id))
+  }
+
+  async function addBlankManaged() {
+    const campaign = {
+      ...blankCampaign(),
+      name: uniqueCampaignName("New campaign", managedCampaigns),
+    }
+    await persistManaged([...managedCampaigns, campaign])
   }
 
   async function viewAs(userId: string) {
@@ -357,7 +437,14 @@ export function AdminUsers({
                     Marketing
                   </label>
                 </td>
-                <td className="px-3 py-2">{user.campaignCount}</td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span>{user.campaignCount}</span>
+                    <Button type="button" size="xs" variant="outline" onClick={() => openCampaigns(user)}>
+                      Manage
+                    </Button>
+                  </div>
+                </td>
                 <td className="px-3 py-2">
                   <Button
                     type="button"
@@ -378,6 +465,61 @@ export function AdminUsers({
           </tbody>
         </table>
       </div>
+
+      <Dialog open={Boolean(managing)} onOpenChange={(open) => !open && setManaging(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Campaigns · {managing?.name}</DialogTitle>
+            <DialogDescription>
+              List, rename, delete, or add a blank campaign for this account. Plan limits do not apply
+              to admin edits. Use View as user to open their tracker.
+            </DialogDescription>
+          </DialogHeader>
+          {campaignsLoading ? (
+            <p className="text-sm text-muted-foreground">Loading campaigns…</p>
+          ) : (
+            <div className="space-y-3">
+              {managedCampaigns.length === 0 ? (
+                <p className="rounded-xl border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
+                  No campaigns. Add a blank campaign to give this account an empty workspace.
+                </p>
+              ) : (
+                <ul className="max-h-72 space-y-2 overflow-y-auto">
+                  {managedCampaigns.map((campaign) => (
+                    <li key={campaign.id} className="flex items-center gap-2">
+                      <Input
+                        value={campaign.name}
+                        onChange={(event) =>
+                          setManagedCampaigns((current) =>
+                            current.map((item) =>
+                              item.id === campaign.id ? { ...item, name: event.target.value } : item
+                            )
+                          )
+                        }
+                        onBlur={(event) => renameManaged(campaign.id, event.target.value)}
+                        aria-label={`Rename ${campaign.name}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        aria-label={`Delete ${campaign.name}`}
+                        onClick={() => deleteManaged(campaign.id)}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Button type="button" variant="outline" onClick={addBlankManaged}>
+                <Plus />
+                Add blank campaign
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-import { requireUser } from "@/lib/auth-guard"
+import { requireAdmin, requireUser } from "@/lib/auth-guard"
 import { updateDb } from "@/lib/db"
 import { campaignLimit, campaignLimitMessage } from "@/lib/plans"
 import { defaultCampaign } from "@/lib/storage"
@@ -22,6 +22,7 @@ export async function GET() {
     campaignLimit: campaignLimit(auth.user.plan, extras),
     dfsLogin: login,
     hasDfsPassword: Boolean(password),
+    canBypassCampaignLimit: Boolean(await requireAdmin()),
   })
 }
 
@@ -42,6 +43,7 @@ export async function PUT(request: Request) {
 
   const extras = auth.user.extraCampaigns
   const limit = campaignLimit(auth.user.plan, extras)
+  const admin = await requireAdmin()
   const result = await updateDb((db) => {
     const current = db.workspaces[auth.user.id] ?? {
       campaigns: [defaultCampaign()],
@@ -51,12 +53,19 @@ export async function PUT(request: Request) {
     }
     if (Array.isArray(body.campaigns)) {
       const incoming = body.campaigns as typeof current.campaigns
-      if (incoming.length > limit && incoming.length > current.campaigns.length) {
+      if (!admin && incoming.length > limit && incoming.length > current.campaigns.length) {
         return {
           error: campaignLimitMessage(auth.user.plan, extras),
         }
       }
       current.campaigns = incoming
+      const keep = new Set(incoming.map((campaign) => campaign.id).filter(Boolean))
+      for (const id of Object.keys(current.scans)) {
+        if (!keep.has(id)) delete current.scans[id]
+      }
+      if (!keep.has(current.activeCampaignId)) {
+        current.activeCampaignId = incoming[0]?.id ?? ""
+      }
     }
     if (body.settings) {
       const login = body.settings.login?.trim() ?? current.settings.login
@@ -68,7 +77,12 @@ export async function PUT(request: Request) {
         if (password) user.dfsPassword = password
       }
     }
-    if (typeof body.activeCampaignId === "string") current.activeCampaignId = body.activeCampaignId
+    if (typeof body.activeCampaignId === "string") {
+      const ids = new Set(current.campaigns.map((campaign) => campaign.id))
+      current.activeCampaignId = ids.has(body.activeCampaignId)
+        ? body.activeCampaignId
+        : (current.campaigns[0]?.id ?? "")
+    }
     if (body.scans && typeof body.scans === "object") {
       current.scans = body.scans as typeof current.scans
     }
