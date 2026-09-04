@@ -349,6 +349,6 @@ export function searchMockBusinesses(
         lat: place.lat,
         lng: place.lng,
       }),
-      source: "demo" as const,
+      source: "sample" as const,
     }))
 }

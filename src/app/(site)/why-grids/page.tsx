@@ -121,8 +121,8 @@ export default function WhyGridsPage() {
           </p>
           <p className="mt-4 text-[15px] leading-7 text-foreground/90">
             Starter is one brand and one location. Pro covers five to ten campaigns. Advanced is
-            fifty. Live tasks bill to your DataForSEO key. Without a key, the Austin coffee demo
-            still teaches the workflow — it is not a live market report.
+            fifty. Live tasks bill to your DataForSEO key. Without a key, sample Austin coffee
+            rankings still teach the workflow — they are not a live market report.
           </p>
           <Link href="/signup" className={buttonVariants({ size: "lg", className: "mt-8" })}>
             Create a workspace

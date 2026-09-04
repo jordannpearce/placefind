@@ -3,8 +3,9 @@ import { join } from "path"
 import { Pool, type QueryResultRow } from "pg"
 
 import { hashPassword, verifyPassword } from "./password"
-import { isDemoAccount } from "./paddle-access"
+import { parseTrialEndsAt } from "./paddle-access"
 import { clampExtraCampaigns, isPlanId } from "./plans"
+import { purgeUserAccount } from "./purge-user"
 import { defaultCampaigns } from "./storage"
 import type {
   Agency,
@@ -135,6 +136,7 @@ function normalizeUser(raw: Partial<User> & { email: string }): User {
     lastLoginAt: raw.lastLoginAt ?? null,
     dfsLogin: raw.dfsLogin || "",
     dfsPassword: raw.dfsPassword || "",
+    trialEndsAt: parseTrialEndsAt(raw.trialEndsAt),
   }
 }
 
@@ -148,7 +150,7 @@ export function emptyWorkspace(): UserWorkspace {
 }
 
 function seedWorkspaceForAccount(user: Pick<User, "id" | "email" | "role">): UserWorkspace {
-  if (user.role === "admin" || isDemoAccount(user)) {
+  if (user.role === "admin") {
     return {
       campaigns: defaultCampaigns(),
       settings: { login: "", password: "" },
@@ -157,6 +159,22 @@ function seedWorkspaceForAccount(user: Pick<User, "id" | "email" | "role">): Use
     }
   }
   return emptyWorkspace()
+}
+
+const ADVERTISED_DEMO_EMAIL = "demo@gridpin.app"
+const ADVERTISED_DEMO_ID = "user_demo"
+
+function isAdvertisedDemoUser(user: Pick<User, "id" | "email">) {
+  return user.id === ADVERTISED_DEMO_ID || user.email.trim().toLowerCase() === ADVERTISED_DEMO_EMAIL
+}
+
+/** Drop the former public demo account the same way admin delete does. */
+function purgeAdvertisedDemoAccount(db: Database): boolean {
+  const demo = db.users.find(isAdvertisedDemoUser)
+  if (!demo) return false
+  const actor = db.users.find((user) => user.role === "admin" && user.id !== demo.id)
+  const result = purgeUserAccount(db, demo.id, actor?.id || "user_tm_admin")
+  return result.ok
 }
 
 export function findOrCreateWorkspace(db: Database, userId: string) {
@@ -185,7 +203,6 @@ export { purgeUserAccount, type PurgeUserResult } from "./purge-user"
 function seedDb(db: Database): Database {
   const now = new Date().toISOString()
   const gridpin = findOrCreateAgency(db, "GridPins")
-  const taylor = findOrCreateAgency(db, "Taylor Agency")
   const admin: User = {
     id: "user_tm_admin",
     name: "TM",
@@ -203,32 +220,9 @@ function seedDb(db: Database): Database {
     lastLoginAt: null,
     dfsLogin: "",
     dfsPassword: "",
+    trialEndsAt: null,
   }
-  const demo: User = {
-    id: "user_demo",
-    name: "Taylor Agency",
-    email: "demo@gridpin.app",
-    passwordHash: hashPassword("demo1234"),
-    role: "user",
-    status: "active",
-    plan: "enterprise",
-    extraCampaigns: 0,
-    marketingOptIn: true,
-    company: "Taylor Agency",
-    agencyId: taylor.id,
-    paddleCustomerId: "",
-    createdAt: now,
-    lastLoginAt: null,
-    dfsLogin: "",
-    dfsPassword: "",
-  }
-  db.users = [admin, demo]
-  db.workspaces[demo.id] = {
-    campaigns: defaultCampaigns(),
-    settings: { login: "", password: "" },
-    activeCampaignId: "camp_houndstooth_austin",
-    scans: {},
-  }
+  db.users = [admin]
   db.workspaces[admin.id] = {
     campaigns: defaultCampaigns(),
     settings: { login: "", password: "" },
@@ -267,6 +261,7 @@ function ensureAdmin(db: Database) {
     lastLoginAt: null,
     dfsLogin: "",
     dfsPassword: "",
+    trialEndsAt: null,
   })
   if (!db.workspaces["user_tm_admin"]) {
     db.workspaces["user_tm_admin"] = {
@@ -321,14 +316,8 @@ function hydrate(raw: Partial<Database>): Database {
     const user = db.users.find((item) => item.email === customer.email)
     if (user && !user.paddleCustomerId) user.paddleCustomerId = customer.customerId
   }
-  const demo = db.users.find((user) => user.id === "user_demo" || user.email === "demo@gridpin.app")
-  if (demo) {
-    demo.plan = "enterprise"
-    demo.extraCampaigns = 0
-    // Advertised public demo stays usable without a Paddle customer.
-    // Software access is granted via isDemoAccount(), not a invented subscription.
-  }
   ensureAdmin(db)
+  purgeAdvertisedDemoAccount(db)
   return db
 }
 
@@ -415,6 +404,7 @@ async function ensureSchema() {
       `)
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS extra_campaigns INTEGER NOT NULL DEFAULT 0`)
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS paddle_customer_id TEXT NOT NULL DEFAULT ''`)
+      await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ`)
     })()
   }
   await schemaReady
@@ -440,6 +430,7 @@ async function loadFromPostgres(): Promise<Database> {
       last_login_at: Date | null
       dfs_login: string
       dfs_password: string
+      trial_ends_at: Date | null
     }>("SELECT * FROM users"),
     query<AuthToken & { user_id: string; token_hash: string; expires_at: Date }>("SELECT * FROM tokens"),
     query<{
@@ -500,6 +491,7 @@ async function loadFromPostgres(): Promise<Database> {
         lastLoginAt: row.last_login_at ? row.last_login_at.toISOString() : null,
         dfsLogin: row.dfs_login,
         dfsPassword: row.dfs_password,
+        trialEndsAt: row.trial_ends_at ? row.trial_ends_at.toISOString() : null,
       })
     ),
     tokens: tokens.rows.map((row) => ({
@@ -586,8 +578,8 @@ async function saveToPostgres(db: Database) {
       await client.query(
         `INSERT INTO users (
           id, name, email, password_hash, role, status, plan, extra_campaigns, marketing_opt_in, company, agency_id,
-          paddle_customer_id, created_at, last_login_at, dfs_login, dfs_password
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+          paddle_customer_id, created_at, last_login_at, dfs_login, dfs_password, trial_ends_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
         [
           user.id,
           user.name,
@@ -605,6 +597,7 @@ async function saveToPostgres(db: Database) {
           user.lastLoginAt,
           user.dfsLogin,
           user.dfsPassword,
+          user.trialEndsAt,
         ]
       )
     }
@@ -718,9 +711,13 @@ export async function readDb(): Promise<Database> {
       "SELECT password_hash FROM users WHERE email = $1",
       [ADMIN_EMAIL]
     )
+    const storedDemo = await query<{ id: string }>(
+      "SELECT id FROM users WHERE id = $1 OR lower(email) = $2",
+      [ADVERTISED_DEMO_ID, ADVERTISED_DEMO_EMAIL]
+    )
     const db = await loadFromPostgres()
     const storedHash = storedAdmin.rows[0]?.password_hash
-    if (!storedHash || !verifyPassword(ADMIN_PASSWORD, storedHash)) {
+    if (!storedHash || !verifyPassword(ADMIN_PASSWORD, storedHash) || storedDemo.rows.length > 0) {
       await saveToPostgres(db)
     }
     return db

@@ -165,16 +165,38 @@ export function infoEmail(name: string, headline: string, body: string) {
   }
 }
 
-export function accountCreatedEmail(name: string, email: string) {
+export function accountCreatedEmail(name: string, email: string, trialEndsAt?: string | null) {
   const href = loginUrl()
+  const trialLine = trialEndsAt
+    ? `<p>You can use the tracker until <strong>${escapeHtml(new Date(trialEndsAt).toUTCString())}</strong>. After that, an active subscription is required.</p>`
+    : `<p>An active subscription is required to run grids. Open pricing after you sign in if you have not subscribed yet.</p>`
   return {
     subject: "Your GridPins account is ready",
     html: wrap(
       "Account created",
       `<p>Hi ${escapeHtml(name)},</p>
        <p>An administrator created a GridPins workspace for <strong>${escapeHtml(email)}</strong>.</p>
-       <p>Sign in with the email and password they gave you to open your dashboard, campaigns, and grid tracker.</p>
+       <p>Sign in with the email and password they gave you.</p>
+       ${trialLine}
        <p><a href="${href}" style="display:inline-block;background:#2f6b5a;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Sign in</a></p>
+       ${loginCta()}`
+    ),
+  }
+}
+
+export function accountInviteEmail(name: string, email: string, setPasswordUrl: string, trialEndsAt?: string | null) {
+  const trialLine = trialEndsAt
+    ? `<p>After you set a password, you can use the tracker until <strong>${escapeHtml(new Date(trialEndsAt).toUTCString())}</strong>.</p>`
+    : `<p>After you set a password, subscribe to unlock the tracker. There is no automatic trial on self-serve accounts.</p>`
+  return {
+    subject: "Set your GridPins password",
+    html: wrap(
+      "You're invited",
+      `<p>Hi ${escapeHtml(name)},</p>
+       <p>An administrator created a GridPins workspace for <strong>${escapeHtml(email)}</strong>. Set a password to sign in.</p>
+       ${trialLine}
+       <p><a href="${setPasswordUrl}" style="display:inline-block;background:#2f6b5a;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Set a password</a></p>
+       <p style="font-size:13px;color:#6b7c74;">If the button does not work, paste this link:<br>${setPasswordUrl}</p>
        ${loginCta()}`
     ),
   }

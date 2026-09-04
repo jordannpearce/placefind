@@ -162,7 +162,7 @@ export function AccountForm({ user }: { user: PublicUser }) {
       <section className="space-y-3 rounded-2xl border bg-card p-5">
         <h2 className="font-heading text-2xl">DataForSEO</h2>
         <p className="text-sm text-muted-foreground">
-          Optional. Live Maps scans bill to this account. Leave blank to keep using demo rankings.
+          Optional. Live Maps scans bill to this account. Leave blank to keep using sample rankings.
         </p>
         <Field label="API login">
           <Input value={dfsLogin} onChange={(event) => setDfsLogin(event.target.value)} />

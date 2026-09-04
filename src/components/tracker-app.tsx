@@ -772,7 +772,7 @@ export function TrackerApp() {
                 : "bg-amber-100 text-amber-900"
             )}
           >
-            {modeLabel === "live" ? "DataForSEO live" : "Demo data"}
+            {modeLabel === "live" ? "DataForSEO live" : "Sample data"}
           </span>
           <Button
             variant="ghost"
@@ -930,8 +930,8 @@ export function TrackerApp() {
             <li>Color the square by rank so the map shows where you own the local pack.</li>
           </ol>
           <p className="text-xs text-muted-foreground">
-            Add your DataForSEO login in Settings, or leave keys empty to run the Austin
-            coffee demo. Each campaign stores a brand, location, keywords, grid, radius, and
+            Add your DataForSEO login in Settings, or leave keys empty to run sample Austin
+            coffee rankings. Each campaign stores a brand, location, keywords, grid, radius, and
             schedule. Switch keywords on the map after a scan to compare ranks.
           </p>
         </DialogContent>

@@ -5,12 +5,35 @@ import { findOrCreateAgency, findOrCreateWorkspace, readDb, updateDb } from "@/l
 import { purgeUserAccount } from "@/lib/purge-user"
 import { clearImpersonation, getImpersonatedUserId, publicUser } from "@/lib/session"
 import { ACTIVATION_TOKEN_TTL_MS, createHashedToken } from "@/lib/auth-tokens"
-import { accountCreatedEmail, activationEmail, appUrl, billingEmail } from "@/lib/email-templates"
+import {
+  accountCreatedEmail,
+  accountInviteEmail,
+  activationEmail,
+  appUrl,
+  billingEmail,
+} from "@/lib/email-templates"
 import { previewUrl, sendAuthMail, sendMail } from "@/lib/mail"
-import { hashPassword } from "@/lib/password"
+import { hashPassword, randomToken } from "@/lib/password"
+import {
+  computeTrialEndsAt,
+  isTrialUnit,
+  parseTrialEndsAt,
+  type TrialUnit,
+} from "@/lib/paddle-access"
 import { provisionUserFromPaddle } from "@/lib/paddle-fulfillment"
 import { clampExtraCampaigns, isPlanId, PLANS } from "@/lib/plans"
 import type { PlanId, UserRole, UserStatus } from "@/lib/types"
+
+function trialFromBody(body: { trialEndsAt?: string | null; trialAmount?: number; trialUnit?: TrialUnit | string }) {
+  if (body.trialAmount !== undefined || body.trialUnit !== undefined) {
+    const amount = Number(body.trialAmount)
+    const unit = isTrialUnit(body.trialUnit) ? body.trialUnit : "days"
+    return computeTrialEndsAt(amount, unit)
+  }
+  if (body.trialEndsAt === null) return null
+  if (body.trialEndsAt !== undefined) return parseTrialEndsAt(body.trialEndsAt)
+  return undefined
+}
 
 function serializeUsers(
   db: Awaited<ReturnType<typeof readDb>>
@@ -48,6 +71,9 @@ export async function POST(request: Request) {
     status?: UserStatus
     marketingOptIn?: boolean
     sendEmail?: boolean
+    trialAmount?: number
+    trialUnit?: TrialUnit | string
+    trialEndsAt?: string | null
   }
   try {
     body = (await request.json()) as typeof body
@@ -58,14 +84,21 @@ export async function POST(request: Request) {
   const name = body.name?.trim() || ""
   const email = body.email?.trim().toLowerCase() || ""
   const password = body.password || ""
+  const invite = !password
   if (name.length < 2) return NextResponse.json({ error: "Name is required." }, { status: 400 })
   if (!email.includes("@")) return NextResponse.json({ error: "A valid email is required." }, { status: 400 })
-  if (password.length < 8) {
+  if (!invite && password.length < 8) {
     return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 })
   }
 
-  const status: UserStatus = body.status === "pending" || body.status === "suspended" ? body.status : "active"
+  const status: UserStatus = invite
+    ? "pending"
+    : body.status === "pending" || body.status === "suspended"
+      ? body.status
+      : "active"
+  const trialEndsAt = trialFromBody(body) ?? null
   let token = ""
+  let inviteToken = ""
 
   const user = await updateDb((db) => {
     if (db.users.some((item) => item.email === email)) return null
@@ -74,7 +107,7 @@ export async function POST(request: Request) {
       id: `user_${Date.now()}`,
       name,
       email,
-      passwordHash: hashPassword(password),
+      passwordHash: hashPassword(invite ? randomToken() : password),
       role: body.role === "admin" ? ("admin" as const) : ("user" as const),
       status,
       plan: isPlanId(body.plan) && PLANS[body.plan] ? body.plan : ("starter" as const),
@@ -87,12 +120,15 @@ export async function POST(request: Request) {
       lastLoginAt: null,
       dfsLogin: "",
       dfsPassword: "",
+      trialEndsAt,
     }
     created.extraCampaigns = clampExtraCampaigns(created.plan, body.extraCampaigns)
     db.users.push(created)
     provisionUserFromPaddle(db, created)
     findOrCreateWorkspace(db, created.id)
-    if (status === "pending") {
+    if (invite) {
+      inviteToken = createHashedToken(db, created.id, "reset", ACTIVATION_TOKEN_TTL_MS)
+    } else if (status === "pending") {
       token = createHashedToken(db, created.id, "activation", ACTIVATION_TOKEN_TTL_MS)
     }
     return created
@@ -103,8 +139,20 @@ export async function POST(request: Request) {
   }
 
   let preview: string | null = null
-  if (body.sendEmail !== false) {
-    if (status === "pending") {
+  const shouldEmail = invite || body.sendEmail !== false
+  if (shouldEmail) {
+    if (invite) {
+      const setPasswordUrl = `${appUrl()}/reset-password?token=${inviteToken}`
+      const template = accountInviteEmail(user.name, user.email, setPasswordUrl, user.trialEndsAt)
+      const mail = await sendAuthMail({
+        to: user.email,
+        subject: template.subject,
+        html: template.html,
+        kind: "account_created",
+        userId: user.id,
+      })
+      preview = mail.provider === "preview" ? previewUrl(mail.id) : null
+    } else if (status === "pending") {
       const verifyUrl = `${appUrl()}/verify?token=${token}`
       const template = activationEmail(user.name, verifyUrl)
       const mail = await sendAuthMail({
@@ -116,7 +164,7 @@ export async function POST(request: Request) {
       })
       preview = mail.provider === "preview" ? previewUrl(mail.id) : null
     } else {
-      const template = accountCreatedEmail(user.name, user.email)
+      const template = accountCreatedEmail(user.name, user.email, user.trialEndsAt)
       const mail = await sendAuthMail({
         to: user.email,
         subject: template.subject,
@@ -147,6 +195,10 @@ export async function PATCH(request: Request) {
     agencyId?: string
     agencyName?: string
     marketingOptIn?: boolean
+    trialAmount?: number
+    trialUnit?: TrialUnit | string
+    trialEndsAt?: string | null
+    clearTrial?: boolean
   }
   try {
     body = (await request.json()) as typeof body
@@ -170,6 +222,12 @@ export async function PATCH(request: Request) {
     }
     if (body.role) found.role = body.role
     if (typeof body.marketingOptIn === "boolean") found.marketingOptIn = body.marketingOptIn
+    if (body.clearTrial) {
+      found.trialEndsAt = null
+    } else {
+      const nextTrial = trialFromBody(body)
+      if (nextTrial !== undefined) found.trialEndsAt = nextTrial
+    }
     if (body.agencyId) {
       const agency = db.agencies.find((item) => item.id === body.agencyId)
       if (agency) {

@@ -43,9 +43,9 @@ export async function POST(request: Request) {
   const live = await searchLiveMaps(name, city, state, auth)
   const directory = await searchNominatim(query, city, state)
   const cityCenter = directory.length === 0 && city ? await searchNominatim([city, state].filter(Boolean).join(", "), city, state) : []
-  const demo = auth ? [] : searchMockBusinesses(name, city, state)
+  const sample = auth ? [] : searchMockBusinesses(name, city, state)
 
-  const merged = dedupe([...live.hits, ...directory, ...demo])
+  const merged = dedupe([...live.hits, ...directory, ...sample])
   if (merged.length === 0 && cityCenter[0]) {
     merged.push({
       title: name,

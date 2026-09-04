@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import type { TrialUnit } from "@/lib/paddle-access"
 import { MAX_EXTRA_CAMPAIGNS, PLANS, PLAN_ORDER } from "@/lib/plans"
 import { blankCampaign, uniqueCampaignName } from "@/lib/storage"
 import type { Agency, Campaign, PlanId, PublicUser, UserRole, UserStatus } from "@/lib/types"
@@ -54,6 +55,8 @@ export function AdminUsers({
     status: "active" as UserStatus,
     marketingOptIn: false,
     sendEmail: true,
+    trialAmount: 0,
+    trialUnit: "days" as TrialUnit,
   })
 
   function showToast(kind: Toast["kind"], text: string) {
@@ -80,6 +83,9 @@ export function AdminUsers({
       role?: UserRole
       agencyId?: string
       marketingOptIn?: boolean
+      trialAmount?: number
+      trialUnit?: TrialUnit
+      clearTrial?: boolean
     }
   ) {
     setError(null)
@@ -124,10 +130,12 @@ export function AdminUsers({
         status: "active",
         marketingOptIn: false,
         sendEmail: true,
+        trialAmount: 0,
+        trialUnit: "days",
       })
       setMessage(
         data.previewUrl
-          ? "User created. The welcome email is in the local inbox because Resend is not configured."
+          ? "User created. The welcome or invite email is in the local inbox because Resend is not configured."
           : "User created."
       )
       router.refresh()
@@ -265,8 +273,9 @@ export function AdminUsers({
       <form className="rounded-2xl border bg-card p-5" onSubmit={createUser}>
         <h2 className="font-heading text-2xl">Add a user</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Create an account immediately. Active users can sign in with the password you set. Pending
-          users get an activation email first.
+          Create a tester or staff account. Set a password, or leave it blank to send an invite so
+          they choose one. A trial timer is the only free-use path — self-serve signups stay locked
+          until they subscribe.
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <Field label="Name">
@@ -290,7 +299,7 @@ export function AdminUsers({
               value={form.password}
               onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
               minLength={8}
-              required
+              placeholder="Leave blank to send an invite"
             />
           </Field>
           <Field label="Company">
@@ -357,6 +366,35 @@ export function AdminUsers({
             </Field>
           </div>
         </div>
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <Field label="Trial length">
+            <Input
+              type="number"
+              min={0}
+              className="w-24"
+              value={form.trialAmount}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, trialAmount: Number(event.target.value) }))
+              }
+            />
+          </Field>
+          <Field label="Unit">
+            <select
+              className="h-8 rounded-lg border bg-transparent px-2 text-sm"
+              value={form.trialUnit}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, trialUnit: event.target.value as TrialUnit }))
+              }
+            >
+              <option value="hours">Hours</option>
+              <option value="days">Days</option>
+            </select>
+          </Field>
+          <p className="max-w-sm pb-1 text-xs text-muted-foreground">
+            0 means no software access until they pay. Hours or days start when you create the
+            account.
+          </p>
+        </div>
         <div className="mt-3 flex flex-wrap gap-4 text-sm">
           <label className="flex items-center gap-2">
             <input
@@ -414,6 +452,7 @@ export function AdminUsers({
               <th className="px-3 py-2 font-medium">Plan</th>
               <th className="px-3 py-2 font-medium">Extras</th>
               <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 font-medium">Trial</th>
               <th className="px-3 py-2 font-medium">Mail</th>
               <th className="px-3 py-2 font-medium">Campaigns</th>
               <th className="px-3 py-2 font-medium">Role</th>
@@ -486,6 +525,9 @@ export function AdminUsers({
                     <option value="active">Active</option>
                     <option value="suspended">Suspended</option>
                   </select>
+                </td>
+                <td className="px-3 py-2 align-top">
+                  <TrialEditor user={user} onPatch={patch} />
                 </td>
                 <td className="px-3 py-2">
                   <label className="flex items-center gap-2 text-xs">
@@ -623,6 +665,72 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="space-y-1.5">
       <Label>{label}</Label>
       {children}
+    </div>
+  )
+}
+
+function formatTrial(trialEndsAt: string | null | undefined) {
+  if (!trialEndsAt) return "None"
+  const ends = Date.parse(trialEndsAt)
+  if (!Number.isFinite(ends)) return "None"
+  const remaining = ends - Date.now()
+  const when = new Date(ends).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+  if (remaining <= 0) return `Expired ${when}`
+  return `Until ${when}`
+}
+
+function TrialEditor({
+  user,
+  onPatch,
+}: {
+  user: AdminUserRow
+  onPatch: (
+    userId: string,
+    body: { trialAmount?: number; trialUnit?: TrialUnit; clearTrial?: boolean }
+  ) => Promise<void>
+}) {
+  const [amount, setAmount] = useState("7")
+  const [unit, setUnit] = useState<TrialUnit>("days")
+  return (
+    <div className="min-w-[10rem] space-y-1.5">
+      <p className="text-[11px] text-muted-foreground">{formatTrial(user.trialEndsAt)}</p>
+      <div className="flex flex-wrap items-center gap-1">
+        <input
+          type="number"
+          min={1}
+          className="h-8 w-14 rounded-lg border bg-transparent px-1.5 text-xs"
+          value={amount}
+          onChange={(event) => setAmount(event.target.value)}
+          aria-label={`Trial length for ${user.name}`}
+        />
+        <select
+          className="h-8 rounded-lg border bg-transparent px-1 text-xs"
+          value={unit}
+          onChange={(event) => setUnit(event.target.value as TrialUnit)}
+          aria-label={`Trial unit for ${user.name}`}
+        >
+          <option value="hours">hours</option>
+          <option value="days">days</option>
+        </select>
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          onClick={() => onPatch(user.id, { trialAmount: Number(amount), trialUnit: unit })}
+        >
+          Set
+        </Button>
+        {user.trialEndsAt ? (
+          <Button type="button" size="xs" variant="ghost" onClick={() => onPatch(user.id, { clearTrial: true })}>
+            Clear
+          </Button>
+        ) : null}
+      </div>
     </div>
   )
 }

@@ -66,5 +66,5 @@ function explanation(status: string, hasCustomer: boolean) {
   if (hasCustomer) {
     return "GridPins needs an active subscription before you can open the tracker, run ranking scans, or change workspace campaigns. Subscribe or open the billing portal to fix payment."
   }
-  return "An active plan is required to run grids. Subscribe below to unlock the tracker, ranking scans, and workspace campaigns. There is no trial — you stay signed in so you can pay and come back."
+  return "An active plan is required to run grids. Subscribe below to unlock the tracker, ranking scans, and workspace campaigns. You stay signed in so you can pay and come back. Timed access is only granted by an administrator."
 }

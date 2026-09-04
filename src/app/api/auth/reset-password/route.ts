@@ -48,6 +48,7 @@ export async function POST(request: Request) {
     const consumed = consumeToken(db, token, "reset")
     if (consumed.status !== "ok" || !consumed.user) return consumed
     consumed.user.passwordHash = hashPassword(password)
+    if (consumed.user.status === "pending") consumed.user.status = "active"
     return consumed
   })
 

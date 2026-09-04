@@ -52,7 +52,7 @@ export function SettingsDialog({
           <DialogTitle>DataForSEO API keys</DialogTitle>
           <DialogDescription>
             Paste the API login and password from app.dataforseo.com. Keys save to your
-            GridPins account and are used for live Maps search and scans — not the Austin demo.
+            GridPins account and are used for live Maps search and scans — not sample rankings.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

@@ -2,12 +2,13 @@ import assert from "node:assert/strict"
 
 import {
   billingPathForUser,
+  computeTrialEndsAt,
   hasComplimentarySoftwareAccess,
-  isDemoAccount,
   pickAccessSubscription,
   postLoginPath,
   subscriptionGrantsAccess,
   subscriptionRevokesAccess,
+  trialStillOpen,
   userHasSoftwareAccess,
 } from "../src/lib/paddle-access.ts"
 import { usableCampaignLimit } from "../src/lib/plans.ts"
@@ -48,6 +49,7 @@ function user(partial: Partial<User>): User {
     lastLoginAt: null,
     dfsLogin: "",
     dfsPassword: "",
+    trialEndsAt: null,
     ...partial,
   }
 }
@@ -97,9 +99,24 @@ const paidMirror = {
 }
 assert.equal(userHasSoftwareAccess(paidUser, paidMirror), true)
 
-const demo = user({ id: "user_demo", email: "demo@gridpin.app", plan: "enterprise" })
-assert.equal(isDemoAccount(demo), true)
-assert.equal(userHasSoftwareAccess(demo, emptyMirror), true)
+const futureTrial = user({
+  email: "tester@example.com",
+  trialEndsAt: computeTrialEndsAt(2, "hours"),
+})
+assert.equal(trialStillOpen(futureTrial), true)
+assert.equal(userHasSoftwareAccess(futureTrial, emptyMirror), true)
+assert.equal(billingPathForUser(futureTrial, emptyMirror), "/dashboard")
+
+const expiredTrial = user({
+  email: "expired@example.com",
+  trialEndsAt: "2020-01-01T00:00:00.000Z",
+})
+assert.equal(trialStillOpen(expiredTrial), false)
+assert.equal(userHasSoftwareAccess(expiredTrial, emptyMirror), false)
+assert.equal(billingPathForUser(expiredTrial, emptyMirror), "/pricing?billing=required")
+
+const signup = user({ email: "selfserve@example.com", trialEndsAt: null })
+assert.equal(userHasSoftwareAccess(signup, emptyMirror), false)
 
 const admin = user({ email: "tmrapp1995@gmail.com", role: "admin" })
 assert.equal(hasComplimentarySoftwareAccess(admin), true)

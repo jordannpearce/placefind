@@ -2,7 +2,7 @@
 
 SaaS Google Maps grid rank tracker. Agencies and brands create a workspace, confirm a listing, and scan an N×N GPS lattice through the DataForSEO Maps SERP API.
 
-The marketing site, login, dashboard, and admin live in this same Next.js app. Without DataForSEO or Resend keys it still runs: rankings use the Austin coffee demo, and emails land in a local inbox.
+The marketing site, login, dashboard, and admin live in this same Next.js app. Without DataForSEO or Resend keys it still runs: accounts with access can use sample Austin coffee rankings, and emails land in a local inbox.
 
 ## Run it locally
 
@@ -18,8 +18,9 @@ Open [http://127.0.0.1:43127](http://127.0.0.1:43127).
 
 | Role | Email | Password |
 | --- | --- | --- |
-| Demo user | demo@gridpin.app | demo1234 |
 | Admin | tmrapp1995@gmail.com | (the password you set when the project was created) |
+
+There is no public demo account. Self-serve signups stay unpaid with no tracker access until they subscribe. To let someone try the product, create them in Admin and set a trial length (hours or days). That stores `trial_ends_at` on the user. When it expires and they have no active Paddle subscription, they get the same paywall as unpaid accounts.
 
 Without `DATABASE_URL`, accounts live in `.data/gridpin.json` (gitignored). Delete that file to reseed.
 
@@ -31,7 +32,7 @@ Paste a Resend API key and from-address in **Admin → Emails**, or set `RESEND_
 
 From Admin you can:
 
-- Add users and agencies by hand
+- Add users and agencies by hand, including a trial timer for testers
 - Open a user’s workspace as if you were them
 - Check which accounts receive marketing, product updates, and notifications
 

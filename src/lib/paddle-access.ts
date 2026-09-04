@@ -1,9 +1,43 @@
 import type { PaddleCustomer, PaddleSubscription, User, UserRole } from "./types"
 
-export const DEMO_EMAIL = "demo@gridpin.app"
-export const DEMO_USER_ID = "user_demo"
-
 export const BILLING_REQUIRED_CODE = "billing_required"
+
+export type TrialUnit = "hours" | "days"
+
+export function isTrialUnit(value: unknown): value is TrialUnit {
+  return value === "hours" || value === "days"
+}
+
+/** Compute `trial_ends_at` from a duration starting at `from` (default now). 0 or invalid → null. */
+export function computeTrialEndsAt(
+  amount: number,
+  unit: TrialUnit,
+  from: Date = new Date()
+): string | null {
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  const ms = unit === "hours" ? amount * 3_600_000 : amount * 86_400_000
+  return new Date(from.getTime() + ms).toISOString()
+}
+
+export function parseTrialEndsAt(value: unknown): string | null {
+  if (value == null || value === "") return null
+  if (typeof value !== "string") return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const ends = Date.parse(trimmed)
+  return Number.isFinite(ends) ? new Date(ends).toISOString() : null
+}
+
+/** True when an admin-granted `trialEndsAt` is still in the future. */
+export function trialStillOpen(
+  user: Pick<User, "trialEndsAt"> | { trialEndsAt?: string | null },
+  now: number = Date.now()
+): boolean {
+  const raw = user.trialEndsAt
+  if (!raw) return false
+  const ends = Date.parse(raw)
+  return Number.isFinite(ends) && ends > now
+}
 
 /**
  * Whether a mirrored Paddle subscription currently grants paid GridPins access.
@@ -46,15 +80,12 @@ export function pickAccessSubscription(subscriptions: PaddleSubscription[]): Pad
   return latest[0] ?? null
 }
 
-export function isDemoAccount(user: Pick<User, "id" | "email"> | { id?: string; email: string }): boolean {
-  if (user.id === DEMO_USER_ID) return true
-  return user.email.trim().toLowerCase() === DEMO_EMAIL
-}
-
 export function hasComplimentarySoftwareAccess(
-  user: Pick<User, "id" | "email" | "role"> | { id?: string; email: string; role: UserRole | string }
+  user:
+    | Pick<User, "id" | "email" | "role" | "trialEndsAt">
+    | { id?: string; email: string; role: UserRole | string; trialEndsAt?: string | null }
 ): boolean {
-  return user.role === "admin" || isDemoAccount(user)
+  return user.role === "admin" || trialStillOpen(user)
 }
 
 export function findCustomerIdForUser(
@@ -82,7 +113,7 @@ export function subscriptionsForUser(
 
 /** True when this account may use the tracker, scans, and workspace product. */
 export function userHasSoftwareAccess(
-  user: Pick<User, "id" | "email" | "role" | "paddleCustomerId">,
+  user: Pick<User, "id" | "email" | "role" | "paddleCustomerId" | "trialEndsAt">,
   mirror: BillingMirror
 ): boolean {
   if (hasComplimentarySoftwareAccess(user)) return true
@@ -94,7 +125,7 @@ export function userHasSoftwareAccess(
  * Never-subscribed → pricing. Existing Paddle customer → account (portal).
  */
 export function billingPathForUser(
-  user: Pick<User, "id" | "email" | "role" | "paddleCustomerId">,
+  user: Pick<User, "id" | "email" | "role" | "paddleCustomerId" | "trialEndsAt">,
   mirror: BillingMirror
 ): string {
   if (hasComplimentarySoftwareAccess(user)) return "/dashboard"
@@ -144,7 +175,7 @@ export function postLoginPath(input: {
 }
 
 export function billingRequiredPayload(
-  user: Pick<User, "id" | "email" | "role" | "paddleCustomerId">,
+  user: Pick<User, "id" | "email" | "role" | "paddleCustomerId" | "trialEndsAt">,
   mirror: BillingMirror
 ) {
   return {

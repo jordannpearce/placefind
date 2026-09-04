@@ -42,6 +42,8 @@ export default async function AccountPage({
           subscription={subscription}
           plan={auth.user.plan}
           missing={missing}
+          softwareAccess={current}
+          trialEndsAt={auth.user.trialEndsAt}
         />
         <AccountForm user={publicUser(auth.user)} />
       </div>

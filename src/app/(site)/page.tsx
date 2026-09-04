@@ -29,7 +29,8 @@ export default function HomePage() {
             </Link>
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            Demo workspace: demo@gridpin.app / demo1234
+            New workspaces stay locked until you subscribe. Testers get a timed window from an
+            administrator.
           </p>
         </div>
         <MiniGrid />
@@ -81,7 +82,7 @@ export default function HomePage() {
             },
             {
               title: "Your DataForSEO key",
-              body: "Agencies paste their own API login. Without a key, GridPins still runs a realistic Austin coffee demo so you can learn the product.",
+              body: "Agencies paste their own API login. Without a key, paid and tester accounts can run sample Austin coffee rankings so you can learn the workflow.",
             },
           ].map((item) => (
             <div key={item.title}>

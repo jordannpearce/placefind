@@ -125,7 +125,7 @@ export type BusinessCandidate = {
   lng: number
   placeId: string | null
   mapsUrl: string
-  source: "maps" | "directory" | "demo"
+  source: "maps" | "directory" | "sample"
 }
 
 export type Campaign = {
@@ -234,6 +234,8 @@ export type User = {
   lastLoginAt: string | null
   dfsLogin: string
   dfsPassword: string
+  /** App-side access window set by an admin. Null means no complimentary access. */
+  trialEndsAt: string | null
 }
 
 export type SessionPayload = {

@@ -291,7 +291,7 @@ export function ScanForm({
                 setSearchError(
                   liveConfigured
                     ? "No listings came back from Maps for that name and city. Check spelling, or try the city only."
-                    : "No listings found. Save your DataForSEO keys in Settings, then search again — demo search only knows Austin coffee shops."
+                    : "No listings found. Save your DataForSEO keys in Settings, then search again — sample search only knows Austin coffee shops."
                 )
               }
             } catch (error) {
@@ -451,7 +451,7 @@ export function ScanForm({
           onChange={(event) => onChange({ forceMock: event.target.checked })}
         />
         <span>
-          <span className="font-medium text-foreground">Use demo data</span>
+          <span className="font-medium text-foreground">Use sample data</span>
           <span className="mt-0.5 block text-muted-foreground">
             {liveConfigured
               ? "Skip DataForSEO and run the mock engine."

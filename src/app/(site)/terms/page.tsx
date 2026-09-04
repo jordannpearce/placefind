@@ -30,7 +30,7 @@ export default function TermsPage() {
         <P>
           A workspace lets you create campaigns, confirm a listing, choose a grid size and radius,
           and run scans. Each pin is one Maps SERP lookup. Without your DataForSEO login, GridPins
-          may show a demonstration ranking set so you can learn the product. Demo ranks are not a
+          may show a sample ranking set so you can learn the product. Sample ranks are not a
           substitute for live market data and must not be sold to clients as live results.
         </P>
         <P>

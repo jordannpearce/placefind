@@ -116,7 +116,7 @@ export function hasDataForSeoCredentials(user?: Partial<DataForSeoAuth> | null):
   return Boolean(resolveDataForSeoAuth(user))
 }
 
-/** Live only when THIS user has keys. Demo checkbox must not mock a user who has keys. */
+/** Live only when THIS user has keys. Sample-data checkbox must not mock a user who has keys. */
 export function getScanMode(
   _forceMock?: boolean,
   user?: Partial<DataForSeoAuth> | null

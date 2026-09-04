@@ -43,6 +43,7 @@ export async function POST(request: Request) {
       lastLoginAt: null,
       dfsLogin: "",
       dfsPassword: "",
+      trialEndsAt: null,
     }
     db.users.push(created)
     db.workspaces[created.id] = emptyWorkspace()

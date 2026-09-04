@@ -13,7 +13,7 @@ export async function GET() {
     mode: live ? "live" : "mock",
     message: live
       ? "DataForSEO credentials found."
-      : "Add your DataForSEO login and password in Settings, or use demo data.",
+      : "Add your DataForSEO login and password in Settings, or use sample data.",
   })
 }
 
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       live: false,
       mode: "mock",
       ok: false,
-      message: "No DataForSEO credentials. Scans will use demo data.",
+      message: "No DataForSEO credentials. Scans will use sample data.",
     })
   }
 

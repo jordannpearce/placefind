@@ -127,7 +127,7 @@ export function PricingCheckout({
       setCheckoutError("Checkout is not ready yet.")
       return
     }
-    // Do not pass trialPeriod — there is no free trial. Signup already seeds demo data.
+    // Do not pass trialPeriod — trials are app-side only, set by an admin.
     paddle.Checkout.open({
       items: [{ priceId, quantity: 1 }],
       ...checkoutCustomer(email, country),

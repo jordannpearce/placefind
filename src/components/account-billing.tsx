@@ -10,6 +10,8 @@ export type AccountBillingProps = {
   subscription: PaddleSubscription | null
   plan: PlanId
   missing: boolean
+  softwareAccess?: boolean
+  trialEndsAt?: string | null
 }
 
 function statusLabel(status: string) {
@@ -29,8 +31,17 @@ function statusLabel(status: string) {
   }
 }
 
-export function AccountBilling({ customerId, subscription, plan, missing }: AccountBillingProps) {
+export function AccountBilling({
+  customerId,
+  subscription,
+  plan,
+  missing,
+  softwareAccess,
+  trialEndsAt,
+}: AccountBillingProps) {
   const paid = subscriptionGrantsAccess(subscription)
+  const current = softwareAccess ?? paid
+  const trialOpen = Boolean(trialEndsAt && Date.parse(trialEndsAt) > Date.now())
   const scheduled =
     subscription?.scheduledChangeAction && subscription.scheduledChangeAt
       ? `${subscription.scheduledChangeAction} on ${new Date(subscription.scheduledChangeAt).toLocaleDateString()}`
@@ -42,13 +53,18 @@ export function AccountBilling({ customerId, subscription, plan, missing }: Acco
       <p className="text-sm text-muted-foreground">
         Payment method, invoices, and cancellation are handled by Paddle, our payment processor.
         You stay signed in here even if a subscription is paused or canceled. The tracker and
-        ranking scans stay locked until Paddle shows an active subscription.
+        ranking scans stay locked until Paddle shows an active subscription, unless an
+        administrator has granted a timed access window.
       </p>
       <p className="text-sm">
         Current plan: <span className="font-medium">{PLANS[plan].name}</span>
         {subscription ? ` · ${statusLabel(subscription.status)}` : ""}
         {scheduled ? ` · Scheduled ${scheduled}` : ""}
-        {paid ? "" : " · Tracker locked until billing is current"}
+        {trialOpen && !paid
+          ? ` · Timed access until ${new Date(trialEndsAt!).toLocaleString()}`
+          : current
+            ? ""
+            : " · Tracker locked until billing is current"}
       </p>
       {missing || !customerId ? (
         <div className="rounded-xl border bg-background p-4">
