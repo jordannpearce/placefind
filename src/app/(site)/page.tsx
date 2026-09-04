@@ -73,7 +73,7 @@ export default function HomePage() {
           {[
             {
               title: "Campaigns per location",
-              body: "One campaign is a brand plus a Maps listing. Entry is one location. Growth runs five to ten. Agency covers fifty.",
+              body: "One campaign is a brand plus a Maps listing. Starter is one location. Pro runs five to ten. Advanced covers fifty.",
             },
             {
               title: "Multiple keywords",

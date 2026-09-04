@@ -20,7 +20,7 @@ export const PLANS: Record<
 > = {
   starter: {
     id: "starter",
-    name: "Entry",
+    name: "Starter",
     price: 20,
     blurb: "One brand, one location. A single campaign to prove Maps rankings on a grid.",
     campaigns: 1,
@@ -39,7 +39,7 @@ export const PLANS: Record<
   },
   agency: {
     id: "agency",
-    name: "Growth",
+    name: "Pro",
     price: 50,
     blurb: "Five campaigns included. Add extra slots at $5 each, up to ten campaigns.",
     campaigns: 5,
@@ -58,9 +58,9 @@ export const PLANS: Record<
   },
   enterprise: {
     id: "enterprise",
-    name: "Agency",
+    name: "Advanced",
     price: 250,
-    blurb: "Fifty campaigns for agencies that run many brands and locations. No per-slot add-on.",
+    blurb: "Fifty campaigns for shops that run many brands and locations. No per-slot add-on.",
     campaigns: 50,
     maxCampaigns: 50,
     extraSlotPrice: 0,
@@ -107,10 +107,10 @@ export function canAddCampaign(plan: PlanId, extras: number, currentCount: numbe
 export function campaignLimitMessage(plan: PlanId, extras = 0): string {
   const limit = campaignLimit(plan, extras)
   if (plan === "starter") {
-    return "The Entry plan includes 1 campaign (one brand and one location). Upgrade to Growth to add another."
+    return "The Starter plan includes 1 campaign (one brand and one location). Upgrade to Pro to add another."
   }
   if (plan === "agency") {
-    return `The Growth plan allows ${limit} campaigns (${PLANS.agency.campaigns} included plus extras, hard cap ${PLANS.agency.maxCampaigns}). Remove a campaign or add extra slots on Account.`
+    return `The Pro plan allows ${limit} campaigns (${PLANS.agency.campaigns} included plus extras, hard cap ${PLANS.agency.maxCampaigns}). Remove a campaign or add extra slots on Account.`
   }
-  return `The Agency plan allows ${limit} campaigns.`
+  return `The Advanced plan allows ${limit} campaigns.`
 }

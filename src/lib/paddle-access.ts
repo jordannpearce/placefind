@@ -17,7 +17,7 @@ import type { PaddleSubscription } from "./types"
  * `active` until the change date; only then does Paddle flip status to `canceled`
  * or `paused`. Revoke only when `status` is actually `canceled` or `paused`.
  *
- * Unpaid GridPins users stay on the Entry (`starter`) plan so they can still sign
+ * Unpaid GridPins users stay on the Starter (`starter`) plan so they can still sign
  * in and reach Account / billing. Campaign limits follow `users.plan`.
  */
 export function subscriptionGrantsAccess(

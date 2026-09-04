@@ -45,6 +45,7 @@ export const TIER_PRICE_ENV: Record<PlanId, { month: string[]; year: string[] }>
   agency: {
     month: [
       "NEXT_PUBLIC_PADDLE_PRICE_PRO_MONTH",
+      "NEXT_PUBLIC_PADDLE_PRICE_PRO_MONTHLY",
       "NEXT_PUBLIC_PADDLE_PRICE_AGENCY_MONTHLY",
       "NEXT_PUBLIC_PADDLE_PRICE_GROWTH_MONTH",
       "NEXT_PUBLIC_PADDLE_PRICE_GROWTH_MONTHLY",
@@ -53,6 +54,7 @@ export const TIER_PRICE_ENV: Record<PlanId, { month: string[]; year: string[] }>
     ],
     year: [
       "NEXT_PUBLIC_PADDLE_PRICE_PRO_YEAR",
+      "NEXT_PUBLIC_PADDLE_PRICE_PRO_ANNUAL",
       "NEXT_PUBLIC_PADDLE_PRICE_AGENCY_ANNUAL",
       "NEXT_PUBLIC_PADDLE_PRICE_GROWTH_YEAR",
       "NEXT_PUBLIC_PADDLE_PRICE_GROWTH_ANNUAL",
@@ -63,12 +65,14 @@ export const TIER_PRICE_ENV: Record<PlanId, { month: string[]; year: string[] }>
   enterprise: {
     month: [
       "NEXT_PUBLIC_PADDLE_PRICE_ADVANCED_MONTH",
+      "NEXT_PUBLIC_PADDLE_PRICE_ADVANCED_MONTHLY",
       "NEXT_PUBLIC_PADDLE_PRICE_ENTERPRISE_MONTHLY",
       "PADDLE_PRICE_ADVANCED_MONTH",
       "PADDLE_PRICE_ENTERPRISE_MONTHLY",
     ],
     year: [
       "NEXT_PUBLIC_PADDLE_PRICE_ADVANCED_YEAR",
+      "NEXT_PUBLIC_PADDLE_PRICE_ADVANCED_ANNUAL",
       "NEXT_PUBLIC_PADDLE_PRICE_ENTERPRISE_ANNUAL",
       "PADDLE_PRICE_ADVANCED_YEAR",
       "PADDLE_PRICE_ENTERPRISE_ANNUAL",
@@ -131,16 +135,30 @@ export function catalogProductEnv(): Array<[PlanId, string[]]> {
   return (Object.keys(TIER_PRODUCT_ENV) as PlanId[]).map((plan) => [plan, TIER_PRODUCT_ENV[plan]])
 }
 
+/** Public live price IDs already in the Paddle catalog. Env vars override these. */
+export const LIVE_TIER_PRICE_IDS: Record<PlanId, { month: string; year: string }> = {
+  starter: { month: "pri_01m1ht34q60f3knaynzgyd1a8k", year: "pri_01m1pnbv278gjjt76kzcmy1nt6" },
+  agency: { month: "pri_01m1ht429v9as1gen5xhqdyymn", year: "pri_01m1pnbv4j83wpxseqtzwst2ax" },
+  enterprise: { month: "pri_01m1ht4rpb48x49wrwspd9s5g9", year: "pri_01m1pnbv6marzjgt57jf2g1963" },
+}
+
+export const LIVE_TIER_PRODUCT_IDS: Record<PlanId, string> = {
+  starter: "pro_01m1ht1bscp7wyjnnp8azj71qj",
+  agency: "pro_01m1ht1xyrx1p1wmbjez5bddyy",
+  enterprise: "pro_01m1ht2epjc5pzwcn1z66e4m11",
+}
+
 export function getPricingTiers(): Tier[] {
   return TIER_ORDER.map((name) => {
     const plan = TIER_TO_PLAN[name]
+    const live = LIVE_TIER_PRICE_IDS[plan]
     return {
       name,
       description: TIER_COPY[name].description,
       features: TIER_COPY[name].features,
       priceId: {
-        month: firstEnv(TIER_PRICE_ENV[plan].month),
-        year: firstEnv(TIER_PRICE_ENV[plan].year),
+        month: firstEnv(TIER_PRICE_ENV[plan].month) || live.month,
+        year: firstEnv(TIER_PRICE_ENV[plan].year) || live.year,
       },
     }
   })

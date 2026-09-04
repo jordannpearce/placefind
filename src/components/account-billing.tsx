@@ -47,7 +47,7 @@ export function AccountBilling({ customerId, subscription, plan, missing }: Acco
         Current plan: <span className="font-medium">{PLANS[plan].name}</span>
         {subscription ? ` · ${statusLabel(subscription.status)}` : ""}
         {scheduled ? ` · Scheduled ${scheduled}` : ""}
-        {paid ? "" : " · Entry limits apply until a subscription is active"}
+        {paid ? "" : " · Starter limits apply until a subscription is active"}
       </p>
       {missing || !customerId ? (
         <div className="rounded-xl border bg-background p-4">

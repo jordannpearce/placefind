@@ -16,7 +16,7 @@ import {
   subscriptionGrantsAccess,
   subscriptionRevokesAccess,
 } from "./paddle-access"
-import { planFromPriceId, resolvePlanFromCatalog } from "./paddle-catalog"
+import { resolvePlanFromCatalog } from "./paddle-catalog"
 import { clampExtraCampaigns } from "./plans"
 import type { PaddleCustomer, PaddleSubscription, PlanId, User } from "./types"
 
@@ -115,7 +115,10 @@ function applySubscriptionToUser(db: Database, user: User) {
   const chosen = pickAccessSubscription(subs)
   if (!chosen) return
   if (subscriptionGrantsAccess(chosen)) {
-    const plan = planFromPriceId(chosen.priceId)
+    const plan = resolvePlanFromCatalog({
+      priceId: chosen.priceId,
+      productId: chosen.productId,
+    })
     if (plan) applyPlanToUser(user, plan)
     return
   }

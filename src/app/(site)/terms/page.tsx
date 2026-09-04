@@ -34,8 +34,8 @@ export default function TermsPage() {
           substitute for live market data and must not be sold to clients as live results.
         </P>
         <P>
-          Plan limits apply: Entry is one brand and one location (one campaign). Growth includes
-          five campaigns and may add extra slots up to ten. Agency includes fifty campaigns. We may
+          Plan limits apply: Starter is one brand and one location (one campaign). Pro includes
+          five campaigns and may add extra slots up to ten. Advanced includes fifty campaigns. We may
           refuse or throttle scans that abuse the service or your API provider.
         </P>
       </section>
@@ -58,7 +58,7 @@ export default function TermsPage() {
         <P>
           GridPins subscription fees are billed monthly or annually according to the plan you choose.
           Subscription payments are processed by Paddle, our payment processor. Changing plan or
-          Growth extra-campaign slots may generate a billing notice. Live Maps tasks are billed by
+          Pro extra-campaign slots may generate a billing notice. Live Maps tasks are billed by
           DataForSEO (or another provider you connect) to the credentials you enter. Those API
           charges are not included in the GridPins subscription and are not refundable by us.
         </P>

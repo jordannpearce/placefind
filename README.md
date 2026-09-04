@@ -52,7 +52,7 @@ Each pin is one live Maps task (~$0.002). A 7×7 scan is 49 tasks per keyword.
 - Email/password accounts with activation
 - Dashboard of campaigns per brand and location
 - Tracker with multiple keywords, grid size, radius, and schedules
-- Account billing via Paddle (webhooks + customer portal): Entry $20 (1 campaign), Growth $50 (5 campaigns, extra slots $5 each up to 10), Agency $250 (50 campaigns)
+- Account billing via Paddle (overlay checkout, webhooks, customer portal): Starter $20 (1 campaign), Pro $50 (5 campaigns, extra slots $5 each up to 10), Advanced $250 (50 campaigns)
 - Admin: users, agencies, impersonation, Resend, targeted mail
 
 ## How a grid scan works

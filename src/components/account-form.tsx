@@ -83,8 +83,8 @@ export function AccountForm({ user }: { user: PublicUser }) {
       <section className="space-y-3 rounded-2xl border bg-card p-5">
         <h2 className="font-heading text-2xl">Plan</h2>
         <p className="text-sm text-muted-foreground">
-          Changing plans or extra campaign slots sends a billing email through Resend (or the local
-          inbox).
+          Changing plans or extra campaign slots sends a billing email (or writes it to the local
+          inbox when mail is not configured).
         </p>
         <div className="grid gap-2 md:grid-cols-3">
           {PLAN_ORDER.map((id) => {
@@ -119,7 +119,7 @@ export function AccountForm({ user }: { user: PublicUser }) {
           <div className="rounded-xl border bg-background p-4">
             <p className="text-sm font-medium">Extra campaign slots</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Growth includes 5 campaigns. Each extra slot is ${EXTRA_SLOT_PRICE}/month, up to{" "}
+              Pro includes 5 campaigns. Each extra slot is ${EXTRA_SLOT_PRICE}/month, up to{" "}
               {MAX_EXTRA_CAMPAIGNS} extras (10 campaigns hard cap).
             </p>
             <div className="mt-3 flex items-center gap-3">
@@ -154,7 +154,7 @@ export function AccountForm({ user }: { user: PublicUser }) {
         ) : (
           <p className="text-xs text-muted-foreground">
             {PLANS[plan].name} covers {limit} campaign{limit === 1 ? "" : "s"} at ${total}/month.
-            Extra $5 slots are only on Growth.
+            Extra $5 slots are only on Pro.
           </p>
         )}
       </section>

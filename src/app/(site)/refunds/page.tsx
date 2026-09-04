@@ -39,7 +39,7 @@ export default function RefundsPage() {
         </P>
         <P>
           The following are also not refundable: DataForSEO or other API usage you incurred, extra
-          Growth campaign slots you added, scans you ran successfully, accounts suspended for
+          Pro campaign slots you added, scans you ran successfully, accounts suspended for
           abuse, or fees after you simply stopped using the workspace.
         </P>
       </section>

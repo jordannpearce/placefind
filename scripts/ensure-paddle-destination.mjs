@@ -30,18 +30,22 @@ const EVENTS = [
 ]
 
 const DESTINATION = "https://gridpins.com/api/paddle/webhook"
+const ENV_FILES = [".env", ".env.local"]
 
 function appendEnv(file, key, value) {
+  if (!value) return
   const current = existsSync(file) ? readFileSync(file, "utf8") : ""
   const line = `${key}=${value}`
-  if (current.includes(`${key}=`) && !current.match(new RegExp(`^${key}=\\s*$`, "m"))) {
-    return
-  }
   if (current.match(new RegExp(`^${key}=\\s*$`, "m"))) {
     writeFileSync(file, current.replace(new RegExp(`^${key}=\\s*$`, "m"), line))
     return
   }
+  if (current.match(new RegExp(`^${key}=`, "m"))) return
   writeFileSync(file, `${current.replace(/\s*$/, "")}\n${line}\n`)
+}
+
+function writeSecret(secret) {
+  for (const file of ENV_FILES) appendEnv(file, "PADDLE_WEBHOOK_SECRET", secret)
 }
 
 async function main() {
@@ -53,17 +57,22 @@ async function main() {
     process.exit(0)
   }
 
-  const env = (process.env.PADDLE_ENVIRONMENT || "production").toLowerCase() === "sandbox"
-    ? Environment.sandbox
-    : Environment.production
+  const rawEnv = process.env.PADDLE_ENVIRONMENT?.trim()
+  if (!rawEnv) {
+    console.error("PADDLE_ENVIRONMENT is not set. Use production or sandbox.")
+    process.exit(1)
+  }
+  const env = rawEnv.toLowerCase() === "sandbox" ? Environment.sandbox : Environment.production
   const paddle = new Paddle(apiKey, { environment: env })
   const existing = await paddle.notificationSettings.list()
   const match = existing.find((item) => item.destination === DESTINATION && item.type === "url")
   if (match) {
     console.log(`EXISTS: destination ${match.id} already points at ${DESTINATION}`)
+    console.log(`ACTIVE: ${match.active}`)
+    console.log(`EVENTS: ${(match.subscribedEvents || []).map((event) => event.name || event).join(", ")}`)
     if (match.endpointSecretKey) {
-      appendEnv(".env.local", "PADDLE_WEBHOOK_SECRET", match.endpointSecretKey)
-      console.log("Stored PADDLE_WEBHOOK_SECRET in .env.local (gitignored).")
+      writeSecret(match.endpointSecretKey)
+      console.log("Stored PADDLE_WEBHOOK_SECRET in gitignored .env files.")
     }
     process.exit(0)
   }
@@ -77,8 +86,8 @@ async function main() {
   })
   console.log(`CREATED: destination ${created.id} → ${DESTINATION}`)
   if (created.endpointSecretKey) {
-    appendEnv(".env.local", "PADDLE_WEBHOOK_SECRET", created.endpointSecretKey)
-    console.log("Stored PADDLE_WEBHOOK_SECRET in .env.local (gitignored). Set the same value on Railway.")
+    writeSecret(created.endpointSecretKey)
+    console.log("Stored PADDLE_WEBHOOK_SECRET in gitignored .env files.")
   }
 }
 

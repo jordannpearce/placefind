@@ -120,7 +120,7 @@ export default function WhyGridsPage() {
             who actually sits in the pack.
           </p>
           <p className="mt-4 text-[15px] leading-7 text-foreground/90">
-            Entry is one brand and one location. Growth covers five to ten campaigns. Agency is
+            Starter is one brand and one location. Pro covers five to ten campaigns. Advanced is
             fifty. Live tasks bill to your DataForSEO key. Without a key, the Austin coffee demo
             still teaches the workflow — it is not a live market report.
           </p>

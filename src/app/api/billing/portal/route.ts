@@ -24,12 +24,22 @@ async function mintPortalRedirect() {
     .filter((row) => row.customerId === customerId)
     .map((row) => row.subscriptionId)
 
-  const session = await getPaddle().customerPortalSessions.create(customerId, subscriptionIds)
-  const url = session.urls.general.overview
+  let url = ""
+  try {
+    const session = await getPaddle().customerPortalSessions.create(customerId, subscriptionIds)
+    url = session.urls.general.overview || ""
+  } catch (error) {
+    console.error("Paddle portal session failed:", error)
+    return NextResponse.json({ error: "Could not open the billing portal." }, { status: 502 })
+  }
   if (!url) {
     return NextResponse.json({ error: "Paddle did not return a portal URL." }, { status: 502 })
   }
   redirect(url)
+}
+
+export async function GET() {
+  return mintPortalRedirect()
 }
 
 export async function POST() {

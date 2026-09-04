@@ -8,12 +8,20 @@ export function paddleEnvironment(): Environment {
   return requirePaddleEnvironment() === "sandbox" ? Environment.sandbox : Environment.production
 }
 
+export function paddleJsEnvironment(): "production" | "sandbox" {
+  return requirePaddleEnvironment()
+}
+
 export function paddleApiKey() {
   return process.env.PADDLE_API_KEY?.trim() || ""
 }
 
 export function paddleWebhookSecret() {
   return process.env.PADDLE_WEBHOOK_SECRET?.trim() || ""
+}
+
+export function paddleClientToken() {
+  return (process.env.PADDLE_CLIENT_TOKEN || process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "").trim()
 }
 
 export function getPaddle(): Paddle {
