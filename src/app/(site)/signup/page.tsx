@@ -7,8 +7,9 @@ export default function SignupPage() {
     <div className="mx-auto max-w-md px-4 py-16">
       <h1 className="font-heading text-4xl">Create a workspace</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        We send an activation email through Resend. If no API key is set, GridPins stores the
-        message in the local inbox so you can still activate.
+        We send an activation email through Resend. After you activate, you are signed in and sent
+        to pricing — an active plan is required to run grids. If no API key is set, GridPins stores
+        the message in the local inbox so you can still activate.
       </p>
       <div className="mt-8 rounded-2xl border bg-card p-6">
         <AuthForm mode="signup" />

@@ -172,7 +172,32 @@ export function TrackerApp() {
   useEffect(() => {
     let cancelled = false
     fetch("/api/me/workspace")
-      .then((response) => (response.ok ? response.json() : null))
+      .then(async (response) => {
+        const data = (await response.json().catch(() => null)) as {
+          campaigns?: Campaign[]
+          settings?: ApiSettings
+          activeCampaignId?: string
+          scans?: KeywordResults
+          dfsLogin?: string
+          hasDfsPassword?: boolean
+          plan?: PlanId
+          extraCampaigns?: number
+          campaignLimit?: number
+          canBypassCampaignLimit?: boolean
+          softwareAccess?: boolean
+          billingUrl?: string
+          code?: string
+        } | null
+        if (response.status === 402 || data?.softwareAccess === false || data?.code === "billing_required") {
+          return {
+            ...data,
+            softwareAccess: false,
+            billingUrl: data?.billingUrl || "/pricing?billing=required",
+            campaigns: [],
+          }
+        }
+        return response.ok ? data : null
+      })
       .then(
         (data: {
           campaigns?: Campaign[]

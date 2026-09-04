@@ -2,11 +2,10 @@ import { NextResponse } from "next/server"
 
 import { requireAdmin, requireUser } from "@/lib/auth-guard"
 import { billingRequiredResponse } from "@/lib/billing-gate"
-import { readDb, updateDb } from "@/lib/db"
+import { emptyWorkspace, readDb, updateDb } from "@/lib/db"
 import { billingPathForUser, userHasSoftwareAccess } from "@/lib/paddle-access"
-import { campaignLimit, campaignLimitMessage } from "@/lib/plans"
+import { campaignLimitMessage, usableCampaignLimit } from "@/lib/plans"
 import { normalizeWorkspaceScans } from "@/lib/scan-results"
-import { defaultCampaign } from "@/lib/storage"
 
 export async function GET() {
   const auth = await requireUser()
@@ -17,14 +16,15 @@ export async function GET() {
   const extras = auth.user.extraCampaigns
   const login = workspace.settings.login || auth.user.dfsLogin || ""
   const password = workspace.settings.password || auth.user.dfsPassword || ""
+  const campaigns = current ? workspace.campaigns : []
   return NextResponse.json({
-    campaigns: workspace.campaigns,
+    campaigns,
     settings: { login, password },
-    activeCampaignId: workspace.activeCampaignId,
-    scans: workspace.scans,
+    activeCampaignId: current ? workspace.activeCampaignId : "",
+    scans: current ? workspace.scans : {},
     plan: auth.user.plan,
     extraCampaigns: extras,
-    campaignLimit: campaignLimit(auth.user.plan, extras),
+    campaignLimit: usableCampaignLimit(auth.user.plan, extras, current),
     dfsLogin: login,
     hasDfsPassword: Boolean(password),
     canBypassCampaignLimit: Boolean(await requireAdmin()),
@@ -53,15 +53,10 @@ export async function PUT(request: Request) {
   }
 
   const extras = auth.user.extraCampaigns
-  const limit = campaignLimit(auth.user.plan, extras)
+  const limit = usableCampaignLimit(auth.user.plan, extras, true)
   const admin = await requireAdmin()
   const result = await updateDb((db) => {
-    const current = db.workspaces[auth.user.id] ?? {
-      campaigns: [defaultCampaign()],
-      settings: { login: "", password: "" },
-      activeCampaignId: "",
-      scans: {},
-    }
+    const current = db.workspaces[auth.user.id] ?? emptyWorkspace()
     if (Array.isArray(body.campaigns)) {
       const incoming = body.campaigns as typeof current.campaigns
       if (!admin && incoming.length > limit && incoming.length > current.campaigns.length) {

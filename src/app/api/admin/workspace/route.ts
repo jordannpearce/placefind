@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { requireAdmin } from "@/lib/auth-guard"
-import { updateDb, readDb } from "@/lib/db"
-import type { Campaign, UserWorkspace } from "@/lib/types"
-
-function emptyWorkspace(): UserWorkspace {
-  return {
-    campaigns: [],
-    settings: { login: "", password: "" },
-    activeCampaignId: "",
-    scans: {},
-  }
-}
+import { emptyWorkspace, updateDb, readDb } from "@/lib/db"
+import type { Campaign } from "@/lib/types"
 
 export async function GET(request: NextRequest) {
   const admin = await requireAdmin()

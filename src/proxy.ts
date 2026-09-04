@@ -6,7 +6,7 @@ import { billingPathForUser, userHasSoftwareAccess } from "@/lib/paddle-access"
 import { IMPERSONATE_COOKIE, verifySessionToken } from "@/lib/session-token"
 
 const PROTECTED = ["/dashboard", "/track", "/account", "/admin"]
-const PRODUCT = ["/dashboard"]
+const PRODUCT = ["/dashboard", "/track"]
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl

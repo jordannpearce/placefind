@@ -1,7 +1,10 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { redirect } from "next/navigation"
 
 import { buttonVariants } from "@/components/ui/button"
+import { readDb } from "@/lib/db"
+import { billingPathForUser, userHasSoftwareAccess } from "@/lib/paddle-access"
 import { readSession } from "@/lib/session"
 
 export const metadata: Metadata = {
@@ -11,6 +14,14 @@ export const metadata: Metadata = {
 
 export default async function WelcomePage() {
   const session = await readSession()
+  if (session) {
+    const db = await readDb()
+    const user = db.users.find((item) => item.id === session.uid)
+    if (user && !userHasSoftwareAccess(user, db)) {
+      redirect(billingPathForUser(user, db))
+    }
+  }
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-20">
       <p className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">

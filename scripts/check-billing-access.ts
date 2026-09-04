@@ -10,6 +10,7 @@ import {
   subscriptionRevokesAccess,
   userHasSoftwareAccess,
 } from "../src/lib/paddle-access.ts"
+import { usableCampaignLimit } from "../src/lib/plans.ts"
 import type { PaddleSubscription, User } from "../src/lib/types.ts"
 
 const now = "2026-09-04T00:00:00.000Z"
@@ -113,5 +114,7 @@ assert.equal(
   "/account"
 )
 assert.equal(postLoginPath({ next: null, current: true, role: "admin", billingPath: "/pricing" }), "/admin")
+assert.equal(usableCampaignLimit("starter", 0, false), 0)
+assert.equal(usableCampaignLimit("starter", 0, true), 1)
 
 console.log("billing access checks passed")

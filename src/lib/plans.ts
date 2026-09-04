@@ -96,6 +96,12 @@ export function campaignLimit(plan: PlanId, extras = 0): number {
   return Math.min(item.campaigns + clampExtraCampaigns(plan, extras), item.maxCampaigns)
 }
 
+/** Unpaid accounts cannot occupy a Starter slot. Limits apply only after billing is current. */
+export function usableCampaignLimit(plan: PlanId, extras: number, current: boolean): number {
+  if (!current) return 0
+  return campaignLimit(plan, extras)
+}
+
 export function monthlyTotal(plan: PlanId, extras = 0): number {
   return PLANS[plan].price + clampExtraCampaigns(plan, extras) * EXTRA_SLOT_PRICE
 }

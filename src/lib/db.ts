@@ -3,8 +3,9 @@ import { join } from "path"
 import { Pool, type QueryResultRow } from "pg"
 
 import { hashPassword, verifyPassword } from "./password"
+import { isDemoAccount } from "./paddle-access"
 import { clampExtraCampaigns, isPlanId } from "./plans"
-import { defaultCampaign, defaultCampaigns } from "./storage"
+import { defaultCampaigns } from "./storage"
 import type {
   Agency,
   AppSettings,
@@ -137,15 +138,31 @@ function normalizeUser(raw: Partial<User> & { email: string }): User {
   }
 }
 
-export function findOrCreateWorkspace(db: Database, userId: string) {
-  if (!db.workspaces[userId]) {
-    const campaigns = [defaultCampaign()]
-    db.workspaces[userId] = {
-      campaigns,
+export function emptyWorkspace(): UserWorkspace {
+  return {
+    campaigns: [],
+    settings: { login: "", password: "" },
+    activeCampaignId: "",
+    scans: {},
+  }
+}
+
+function seedWorkspaceForAccount(user: Pick<User, "id" | "email" | "role">): UserWorkspace {
+  if (user.role === "admin" || isDemoAccount(user)) {
+    return {
+      campaigns: defaultCampaigns(),
       settings: { login: "", password: "" },
-      activeCampaignId: campaigns[0]?.id ?? "",
+      activeCampaignId: "camp_houndstooth_austin",
       scans: {},
     }
+  }
+  return emptyWorkspace()
+}
+
+export function findOrCreateWorkspace(db: Database, userId: string) {
+  if (!db.workspaces[userId]) {
+    const user = db.users.find((item) => item.id === userId)
+    db.workspaces[userId] = user ? seedWorkspaceForAccount(user) : emptyWorkspace()
   }
   return db.workspaces[userId]
 }
@@ -162,6 +179,8 @@ export function findOrCreateAgency(db: Database, name: string): Agency {
   db.agencies.push(agency)
   return agency
 }
+
+export { purgeUserAccount, type PurgeUserResult } from "./purge-user"
 
 function seedDb(db: Database): Database {
   const now = new Date().toISOString()

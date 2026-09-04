@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server"
 
 import { ACTIVATION_TOKEN_TTL_MS, createHashedToken } from "@/lib/auth-tokens"
-import { findOrCreateAgency, updateDb } from "@/lib/db"
+import { emptyWorkspace, findOrCreateAgency, updateDb } from "@/lib/db"
 import { activationEmail, appUrl } from "@/lib/email-templates"
 import { previewUrl, sendAuthMail } from "@/lib/mail"
 import { hashPassword } from "@/lib/password"
 import { provisionUserFromPaddle } from "@/lib/paddle-fulfillment"
-import { defaultCampaign } from "@/lib/storage"
 
 export async function POST(request: Request) {
   let body: { name?: string; email?: string; password?: string; company?: string; marketingOptIn?: boolean }
@@ -46,13 +45,7 @@ export async function POST(request: Request) {
       dfsPassword: "",
     }
     db.users.push(created)
-    const campaigns = [defaultCampaign()]
-    db.workspaces[created.id] = {
-      campaigns,
-      settings: { login: "", password: "" },
-      activeCampaignId: campaigns[0]?.id ?? "",
-      scans: {},
-    }
+    db.workspaces[created.id] = emptyWorkspace()
     token = createHashedToken(db, created.id, "activation", ACTIVATION_TOKEN_TTL_MS)
     provisionUserFromPaddle(db, created)
     return created

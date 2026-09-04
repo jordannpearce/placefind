@@ -83,7 +83,8 @@ export function SettingsDialog({
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Leave blank to use demo rankings, or a server `.env.local` if one is set.
+              Leave blank to use the mock engine for this account. Other accounts never share
+              these keys.
             </p>
           )}
           <div className="flex gap-2">

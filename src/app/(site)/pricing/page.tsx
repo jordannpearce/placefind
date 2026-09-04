@@ -55,8 +55,8 @@ export default async function PricingPage({
         <div className="mt-6 max-w-2xl rounded-2xl border bg-card px-4 py-3 text-sm">
           <p className="font-medium">The tracker is locked until billing is current.</p>
           <p className="mt-1 text-muted-foreground">
-            Subscribe below to run ranking scans and workspace campaigns. If you already have a
-            payment method on file, open{" "}
+            An active plan is required to run grids. Subscribe below to unlock ranking scans and
+            workspace campaigns. If you already have a payment method on file, open{" "}
             <Link href="/account" className="text-primary hover:underline">
               Account
             </Link>{" "}

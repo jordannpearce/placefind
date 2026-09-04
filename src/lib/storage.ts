@@ -266,21 +266,17 @@ export function saveSettings(settings: ApiSettings) {
 }
 
 export function loadCampaigns(): Campaign[] {
-  if (typeof window === "undefined") return defaultCampaigns()
+  if (typeof window === "undefined") return []
   try {
     const raw = window.localStorage.getItem(CAMPAIGNS_KEY)
-    if (!raw) {
-      const seed = defaultCampaigns()
-      window.localStorage.setItem(CAMPAIGNS_KEY, JSON.stringify(seed))
-      return seed
-    }
+    if (!raw) return []
     const parsed = JSON.parse(raw) as LegacyCampaign[]
-    if (!Array.isArray(parsed)) return defaultCampaigns()
+    if (!Array.isArray(parsed)) return []
     // A stored empty list is intentional (last campaign deleted). Do not re-seed.
     if (parsed.length === 0) return []
     return parsed.map(migrateCampaign).filter((campaign) => Boolean(campaign.id))
   } catch {
-    return defaultCampaigns()
+    return []
   }
 }
 

@@ -9,7 +9,6 @@ import { hashPassword } from "@/lib/password"
 import { provisionUserFromPaddle } from "@/lib/paddle-fulfillment"
 import { clampExtraCampaigns, isPlanId, PLANS } from "@/lib/plans"
 import { publicUser } from "@/lib/session"
-import { defaultCampaign } from "@/lib/storage"
 import type { PlanId, UserRole, UserStatus } from "@/lib/types"
 
 function serializeUsers(
@@ -92,11 +91,6 @@ export async function POST(request: Request) {
     db.users.push(created)
     provisionUserFromPaddle(db, created)
     findOrCreateWorkspace(db, created.id)
-    const workspace = db.workspaces[created.id]
-    if (workspace && workspace.campaigns.length === 0) {
-      workspace.campaigns = [defaultCampaign()]
-      workspace.activeCampaignId = workspace.campaigns[0]?.id ?? ""
-    }
     if (status === "pending") {
       token = createHashedToken(db, created.id, "activation", ACTIVATION_TOKEN_TTL_MS)
     }

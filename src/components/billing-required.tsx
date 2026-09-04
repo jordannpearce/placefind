@@ -66,5 +66,5 @@ function explanation(status: string, hasCustomer: boolean) {
   if (hasCustomer) {
     return "GridPins needs an active subscription before you can open the tracker, run ranking scans, or change workspace campaigns. Subscribe or open the billing portal to fix payment."
   }
-  return "You can sign in and keep your workspace, including any starter campaign data. The map, scans, and live ranking checks stay locked until Paddle shows an active subscription. There is no trial."
+  return "An active plan is required to run grids. Subscribe below to unlock the tracker, ranking scans, and workspace campaigns. There is no trial — you stay signed in so you can pay and come back."
 }

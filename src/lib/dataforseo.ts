@@ -62,6 +62,7 @@ export type DataForSeoAuth = {
   password: string
 }
 
+/** Process env keys. Only the admin account (acting as itself) may use these. */
 export function envDataForSeoAuth(): DataForSeoAuth | null {
   const login = process.env.DATAFORSEO_LOGIN?.trim()
   const password = process.env.DATAFORSEO_PASSWORD?.trim()
@@ -69,14 +70,22 @@ export function envDataForSeoAuth(): DataForSeoAuth | null {
   return { login, password }
 }
 
+/** That account's saved login+password only. Never env, admin, or global keys. */
 export function resolveDataForSeoAuth(user?: Partial<DataForSeoAuth> | null): DataForSeoAuth | null {
   const login = user?.login?.trim()
   const password = user?.password?.trim()
   if (login && password) return { login, password }
-  return envDataForSeoAuth()
+  return null
 }
 
-/** Prefer keys from the request, then the signed-in account, then server env. */
+/**
+ * Keys for this request:
+ * 1. Complete login+password on the request (the caller is saving/testing their own).
+ * 2. The viewed account's saved keys (impersonation uses the viewed user only).
+ * 3. Env keys only when the viewed user is the admin acting as themselves.
+ *
+ * Regular users never inherit admin or DATAFORSEO_* env credentials.
+ */
 export async function resolveRequestAuth(input?: {
   login?: string
   password?: string
@@ -84,15 +93,22 @@ export async function resolveRequestAuth(input?: {
   const fromBody = resolveDataForSeoAuth(input)
   if (fromBody) return fromBody
   try {
-    const { requireUser } = await import("@/lib/auth-guard")
+    const { requireAdmin, requireUser } = await import("@/lib/auth-guard")
     const session = await requireUser()
-    if (!session) return envDataForSeoAuth()
-    return resolveDataForSeoAuth({
+    if (!session) return null
+    const fromUser = resolveDataForSeoAuth({
       login: session.user.dfsLogin || session.workspace.settings.login,
       password: session.user.dfsPassword || session.workspace.settings.password,
     })
+    if (fromUser) return fromUser
+    const admin = await requireAdmin()
+    const impersonating = Boolean(admin && admin.user.id !== session.user.id)
+    if (admin && !impersonating && session.user.role === "admin") {
+      return envDataForSeoAuth()
+    }
+    return null
   } catch {
-    return envDataForSeoAuth()
+    return null
   }
 }
 
@@ -100,12 +116,13 @@ export function hasDataForSeoCredentials(user?: Partial<DataForSeoAuth> | null):
   return Boolean(resolveDataForSeoAuth(user))
 }
 
+/** Live only when THIS user has keys. Demo checkbox must not mock a user who has keys. */
 export function getScanMode(
-  forceMock?: boolean,
+  _forceMock?: boolean,
   user?: Partial<DataForSeoAuth> | null
 ): ScanMode {
-  if (forceMock || !hasDataForSeoCredentials(user)) return "mock"
-  return "live"
+  if (hasDataForSeoCredentials(user)) return "live"
+  return "mock"
 }
 
 export async function verifyDataForSeoAuth(auth: DataForSeoAuth): Promise<{ ok: boolean; message: string }> {

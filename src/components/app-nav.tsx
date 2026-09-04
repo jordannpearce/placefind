@@ -16,7 +16,6 @@ const PRODUCT_LINKS = [
 const BILLING_LINKS = [
   { href: "/account", label: "Account" },
   { href: "/pricing", label: "Subscribe" },
-  { href: "/track", label: "Tracker" },
 ]
 
 export function AppNav({

@@ -5,7 +5,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { requireUser } from "@/lib/auth-guard"
 import { readDb } from "@/lib/db"
 import { billingPathForUser, userHasSoftwareAccess } from "@/lib/paddle-access"
-import { campaignLimit, PLANS } from "@/lib/plans"
+import { usableCampaignLimit, PLANS } from "@/lib/plans"
 import { formatWhen, isCampaignDue } from "@/lib/storage"
 
 export default async function DashboardPage() {
@@ -17,7 +17,7 @@ export default async function DashboardPage() {
   }
   const { user, workspace } = auth
   const plan = PLANS[user.plan]
-  const limit = campaignLimit(user.plan, user.extraCampaigns)
+  const limit = usableCampaignLimit(user.plan, user.extraCampaigns, true)
   const due = workspace.campaigns.filter((campaign) => isCampaignDue(campaign))
 
   return (
