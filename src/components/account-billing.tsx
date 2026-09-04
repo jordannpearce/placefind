@@ -41,13 +41,14 @@ export function AccountBilling({ customerId, subscription, plan, missing }: Acco
       <h2 className="font-heading text-2xl">Billing</h2>
       <p className="text-sm text-muted-foreground">
         Payment method, invoices, and cancellation are handled by Paddle, our payment processor.
-        You stay signed in here even if a subscription is paused or canceled.
+        You stay signed in here even if a subscription is paused or canceled. The tracker and
+        ranking scans stay locked until Paddle shows an active subscription.
       </p>
       <p className="text-sm">
         Current plan: <span className="font-medium">{PLANS[plan].name}</span>
         {subscription ? ` · ${statusLabel(subscription.status)}` : ""}
         {scheduled ? ` · Scheduled ${scheduled}` : ""}
-        {paid ? "" : " · Starter limits apply until a subscription is active"}
+        {paid ? "" : " · Tracker locked until billing is current"}
       </p>
       {missing || !customerId ? (
         <div className="rounded-xl border bg-background p-4">

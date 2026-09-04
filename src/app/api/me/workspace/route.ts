@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server"
 
 import { requireAdmin, requireUser } from "@/lib/auth-guard"
-import { updateDb } from "@/lib/db"
+import { billingRequiredResponse } from "@/lib/billing-gate"
+import { readDb, updateDb } from "@/lib/db"
+import { billingPathForUser, userHasSoftwareAccess } from "@/lib/paddle-access"
 import { campaignLimit, campaignLimitMessage } from "@/lib/plans"
 import { defaultCampaign } from "@/lib/storage"
 
 export async function GET() {
   const auth = await requireUser()
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const db = await readDb()
+  const current = userHasSoftwareAccess(auth.user, db)
   const workspace = auth.workspace
   const extras = auth.user.extraCampaigns
   const login = workspace.settings.login || auth.user.dfsLogin || ""
@@ -23,12 +27,18 @@ export async function GET() {
     dfsLogin: login,
     hasDfsPassword: Boolean(password),
     canBypassCampaignLimit: Boolean(await requireAdmin()),
+    softwareAccess: current,
+    billingUrl: current ? "/dashboard" : billingPathForUser(auth.user, db),
   })
 }
 
 export async function PUT(request: Request) {
   const auth = await requireUser()
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const db = await readDb()
+  if (!userHasSoftwareAccess(auth.user, db)) {
+    return billingRequiredResponse(auth.user, db)
+  }
   let body: {
     campaigns?: unknown
     settings?: { login?: string; password?: string }

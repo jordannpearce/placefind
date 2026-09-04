@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server"
 
-import { updateDb } from "@/lib/db"
+import { readDb, updateDb } from "@/lib/db"
+import { billingPathForUser, postLoginPath, userHasSoftwareAccess } from "@/lib/paddle-access"
 import { verifyPassword } from "@/lib/password"
 import { clearImpersonation, writeSession } from "@/lib/session"
 
 export async function POST(request: Request) {
-  let body: { email?: string; password?: string }
+  let body: { email?: string; password?: string; next?: string }
   try {
     body = (await request.json()) as typeof body
   } catch {
@@ -34,5 +35,19 @@ export async function POST(request: Request) {
   })
   await clearImpersonation()
   await writeSession(user)
-  return NextResponse.json({ ok: true, role: user.role })
+  const db = await readDb()
+  const current = userHasSoftwareAccess(user, db)
+  const billingUrl = billingPathForUser(user, db)
+  return NextResponse.json({
+    ok: true,
+    role: user.role,
+    softwareAccess: current,
+    billingUrl,
+    next: postLoginPath({
+      next: body.next,
+      current,
+      role: user.role,
+      billingPath: billingUrl,
+    }),
+  })
 }

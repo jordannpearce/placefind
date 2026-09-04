@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto"
 import type { SessionPayload, User } from "./types"
 
 export const SESSION_COOKIE = "gridpin_session"
+export const IMPERSONATE_COOKIE = "gridpin_as"
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
 function secret() {

@@ -1,3 +1,4 @@
+import { rejectUnlessSoftwareAccess } from "@/lib/billing-gate"
 import { resolveRequestAuth } from "@/lib/dataforseo"
 import { googleMapsUrl } from "@/lib/grid"
 import { searchMockBusinesses } from "@/lib/mock-scan"
@@ -17,6 +18,9 @@ type Body = {
 }
 
 export async function POST(request: Request) {
+  const blocked = await rejectUnlessSoftwareAccess()
+  if (blocked) return blocked
+
   let body: Body
   try {
     body = (await request.json()) as Body

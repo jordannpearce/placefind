@@ -1,6 +1,10 @@
+import { rejectUnlessSoftwareAccess } from "@/lib/billing-gate"
 import { resolveRequestAuth, verifyDataForSeoAuth } from "@/lib/dataforseo"
 
 export async function GET() {
+  const blocked = await rejectUnlessSoftwareAccess()
+  if (blocked) return blocked
+
   const auth = await resolveRequestAuth(null)
   const live = Boolean(auth)
   return Response.json({
@@ -14,6 +18,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const blocked = await rejectUnlessSoftwareAccess()
+  if (blocked) return blocked
+
   let body: { apiLogin?: string; apiPassword?: string }
   try {
     body = (await request.json()) as { apiLogin?: string; apiPassword?: string }

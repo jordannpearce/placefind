@@ -1,9 +1,13 @@
+import { rejectUnlessSoftwareAccess } from "@/lib/billing-gate"
 import type { GeocodeHit } from "@/lib/types"
 
 const NOMINATIM = "https://nominatim.openstreetmap.org"
 const USER_AGENT = "GridPin/1.0 (Google Maps grid rank tracker)"
 
 export async function GET(request: Request) {
+  const blocked = await rejectUnlessSoftwareAccess()
+  if (blocked) return blocked
+
   const { searchParams } = new URL(request.url)
   const query = searchParams.get("q")?.trim()
   const lat = searchParams.get("lat")

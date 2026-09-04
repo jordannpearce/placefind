@@ -1,11 +1,9 @@
 import { cookies } from "next/headers"
 
-import { SESSION_COOKIE, signSession, verifySessionToken } from "./session-token"
+import { IMPERSONATE_COOKIE, SESSION_COOKIE, signSession, verifySessionToken } from "./session-token"
 import type { User } from "./types"
 
-export { SESSION_COOKIE, signSession, verifySessionToken } from "./session-token"
-
-export const IMPERSONATE_COOKIE = "gridpin_as"
+export { IMPERSONATE_COOKIE, SESSION_COOKIE, signSession, verifySessionToken } from "./session-token"
 
 export async function readSession() {
   const store = await cookies()

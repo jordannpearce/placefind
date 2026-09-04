@@ -12,6 +12,7 @@ import { EventName } from "@paddle/paddle-node-sdk"
 import type { Database } from "./db"
 import { getPaddle } from "./paddle"
 import {
+  findCustomerIdForUser,
   pickAccessSubscription,
   subscriptionGrantsAccess,
   subscriptionRevokesAccess,
@@ -83,9 +84,7 @@ function upsertSubscription(db: Database, next: Omit<PaddleSubscription, "create
 }
 
 export function findPaddleCustomerId(db: Database, user: Pick<User, "email" | "paddleCustomerId">) {
-  if (user.paddleCustomerId) return user.paddleCustomerId
-  const email = user.email.trim().toLowerCase()
-  return db.customers.find((row) => row.email === email)?.customerId || ""
+  return findCustomerIdForUser(user, db.customers)
 }
 
 export function linkUserToPaddleCustomer(db: Database, customerId: string, email: string): User | null {

@@ -30,14 +30,24 @@ export function AuthForm({ mode }: { mode: Mode }) {
     setPreviewUrl(null)
     try {
       if (mode === "login") {
+        const next =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("next") || ""
+            : ""
         const response = await fetch("/api/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email, password, next }),
         })
-        const data = (await response.json()) as { error?: string; role?: string }
+        const data = (await response.json()) as {
+          error?: string
+          role?: string
+          next?: string
+          softwareAccess?: boolean
+          billingUrl?: string
+        }
         if (!response.ok) throw new Error(data.error || "Could not sign in")
-        router.push(data.role === "admin" ? "/admin" : "/dashboard")
+        router.push(data.next || (data.role === "admin" ? "/admin" : "/dashboard"))
         router.refresh()
         return
       }

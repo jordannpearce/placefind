@@ -306,6 +306,8 @@ function hydrate(raw: Partial<Database>): Database {
   if (demo) {
     demo.plan = "enterprise"
     demo.extraCampaigns = 0
+    // Advertised public demo stays usable without a Paddle customer.
+    // Software access is granted via isDemoAccount(), not a invented subscription.
   }
   ensureAdmin(db)
   return db

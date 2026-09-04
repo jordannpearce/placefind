@@ -21,11 +21,20 @@ export function VerifyClient() {
       body: JSON.stringify({ token }),
     })
       .then(async (response) => {
-        const data = (await response.json()) as { error?: string }
+        const data = (await response.json()) as {
+          error?: string
+          softwareAccess?: boolean
+          billingUrl?: string
+        }
         if (!response.ok) throw new Error(data.error || "Could not activate")
         setStatus("ok")
-        setMessage("Account activated. Opening your dashboard…")
-        router.push("/dashboard")
+        const destination = data.softwareAccess ? "/dashboard" : data.billingUrl || "/pricing?billing=required"
+        setMessage(
+          data.softwareAccess
+            ? "Account activated. Opening your dashboard…"
+            : "Account activated. Subscribe to open the tracker — you are signed in."
+        )
+        router.push(destination)
         router.refresh()
       })
       .catch((error: unknown) => {

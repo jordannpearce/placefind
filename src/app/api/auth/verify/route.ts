@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 
 import { consumeToken } from "@/lib/auth-tokens"
-import { updateDb } from "@/lib/db"
+import { readDb, updateDb } from "@/lib/db"
+import { billingPathForUser, userHasSoftwareAccess } from "@/lib/paddle-access"
 import { writeSession } from "@/lib/session"
 
 export async function POST(request: Request) {
@@ -26,5 +27,11 @@ export async function POST(request: Request) {
   }
 
   await writeSession(user)
-  return NextResponse.json({ ok: true })
+  const db = await readDb()
+  const current = userHasSoftwareAccess(user, db)
+  return NextResponse.json({
+    ok: true,
+    softwareAccess: current,
+    billingUrl: current ? "/dashboard" : billingPathForUser(user, db),
+  })
 }

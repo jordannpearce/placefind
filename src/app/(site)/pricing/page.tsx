@@ -17,7 +17,13 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic"
 
-export default async function PricingPage() {
+export default async function PricingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ billing?: string }>
+}) {
+  const params = await searchParams
+  const locked = params.billing === "required"
   const session = await readSession()
   const country = detectCheckoutCountry(await headers())
   const tiers = getPricingTiers()
@@ -45,6 +51,19 @@ export default async function PricingPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-16">
       <h1 className="font-heading text-4xl tracking-tight md:text-5xl">Pricing</h1>
+      {locked ? (
+        <div className="mt-6 max-w-2xl rounded-2xl border bg-card px-4 py-3 text-sm">
+          <p className="font-medium">The tracker is locked until billing is current.</p>
+          <p className="mt-1 text-muted-foreground">
+            Subscribe below to run ranking scans and workspace campaigns. If you already have a
+            payment method on file, open{" "}
+            <Link href="/account" className="text-primary hover:underline">
+              Account
+            </Link>{" "}
+            and manage billing to update your card. You stay signed in either way.
+          </p>
+        </div>
+      ) : null}
       <p className="mt-3 max-w-2xl text-muted-foreground">
         Three plans. Same grid tracker. Starter is one brand and one location. Pro is five campaigns
         with optional extra slots. Advanced is fifty campaigns for shops that run many listings.

@@ -1,13 +1,20 @@
 import Link from "next/link"
+import { redirect } from "next/navigation"
 
 import { buttonVariants } from "@/components/ui/button"
 import { requireUser } from "@/lib/auth-guard"
-import { formatWhen, isCampaignDue } from "@/lib/storage"
+import { readDb } from "@/lib/db"
+import { billingPathForUser, userHasSoftwareAccess } from "@/lib/paddle-access"
 import { campaignLimit, PLANS } from "@/lib/plans"
+import { formatWhen, isCampaignDue } from "@/lib/storage"
 
 export default async function DashboardPage() {
   const auth = await requireUser()
   if (!auth) return null
+  const db = await readDb()
+  if (!userHasSoftwareAccess(auth.user, db)) {
+    redirect(billingPathForUser(auth.user, db))
+  }
   const { user, workspace } = auth
   const plan = PLANS[user.plan]
   const limit = campaignLimit(user.plan, user.extraCampaigns)

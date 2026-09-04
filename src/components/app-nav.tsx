@@ -7,19 +7,27 @@ import { Button } from "@/components/ui/button"
 import { Wordmark } from "@/components/wordmark"
 import { cn } from "@/lib/utils"
 
-const LINKS = [
+const PRODUCT_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/track", label: "Tracker" },
   { href: "/account", label: "Account" },
 ]
 
+const BILLING_LINKS = [
+  { href: "/account", label: "Account" },
+  { href: "/pricing", label: "Subscribe" },
+  { href: "/track", label: "Tracker" },
+]
+
 export function AppNav({
   name,
   isAdmin,
+  softwareAccess = true,
   impersonating,
 }: {
   name: string
   isAdmin: boolean
+  softwareAccess?: boolean
   impersonating: { name: string; email: string } | null
 }) {
   const pathname = usePathname()
@@ -54,11 +62,11 @@ export function AppNav({
       ) : null}
       <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between gap-3 px-4">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="inline-flex items-center">
+          <Link href={softwareAccess ? "/dashboard" : "/account"} className="inline-flex items-center">
             <Wordmark className="text-xl leading-none" />
           </Link>
           <nav className="hidden items-center gap-1 text-sm sm:flex">
-            {LINKS.map((link) => (
+            {(softwareAccess ? PRODUCT_LINKS : BILLING_LINKS).map((link) => (
               <Link
                 key={link.href}
                 href={link.href}

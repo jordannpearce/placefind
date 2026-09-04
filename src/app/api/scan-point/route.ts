@@ -1,3 +1,4 @@
+import { rejectUnlessSoftwareAccess } from "@/lib/billing-gate"
 import { fetchMapsPoint, getScanMode, resolveRequestAuth } from "@/lib/dataforseo"
 import { mockDelayMs, mockScanPoint } from "@/lib/mock-scan"
 import type { DeviceType, ScanPointResponse } from "@/lib/types"
@@ -21,6 +22,9 @@ type Body = {
 }
 
 export async function POST(request: Request) {
+  const blocked = await rejectUnlessSoftwareAccess()
+  if (blocked) return blocked
+
   let body: Body
   try {
     body = (await request.json()) as Body

@@ -1,6 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
+import Link from "next/link"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Info, Menu, PanelRight, Settings, X } from "lucide-react"
 
@@ -8,7 +9,7 @@ import { ScanForm } from "@/components/scan-form"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { ResultsPanel } from "@/components/results-panel"
 import { Wordmark } from "@/components/wordmark"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -115,6 +116,7 @@ export function TrackerApp() {
     campaignLimit: 50,
   })
   const [canBypassCampaignLimit, setCanBypassCampaignLimit] = useState(false)
+  const [billingLock, setBillingLock] = useState<{ locked: boolean; billingUrl: string } | null>(null)
   const abortRef = useRef(false)
 
   const points = useMemo(
@@ -178,10 +180,15 @@ export function TrackerApp() {
           extraCampaigns?: number
           campaignLimit?: number
           canBypassCampaignLimit?: boolean
+          softwareAccess?: boolean
+          billingUrl?: string
         } | null) => {
           if (cancelled || !data) {
             setHydratedFromServer(true)
             return
+          }
+          if (data.softwareAccess === false) {
+            setBillingLock({ locked: true, billingUrl: data.billingUrl || "/pricing?billing=required" })
           }
           if (typeof data.canBypassCampaignLimit === "boolean") {
             setCanBypassCampaignLimit(data.canBypassCampaignLimit)
@@ -243,7 +250,7 @@ export function TrackerApp() {
   }, [])
 
   useEffect(() => {
-    if (!hydratedFromServer) return
+    if (!hydratedFromServer || billingLock?.locked) return
     let cancelled = false
     fetch("/api/me/workspace", {
       method: "PUT",
@@ -278,7 +285,7 @@ export function TrackerApp() {
     return () => {
       cancelled = true
     }
-  }, [activeCampaignId, campaigns, hydratedFromServer, scansByKeyword, settings])
+  }, [activeCampaignId, billingLock?.locked, campaigns, hydratedFromServer, scansByKeyword, settings])
 
   const persistScans = useCallback(
     (campaignId: string, scans: KeywordResults) => {
@@ -605,6 +612,31 @@ export function TrackerApp() {
       onSelectKeyword={(keyword) => patchConfig({ activeKeyword: keyword })}
     />
   )
+
+  if (billingLock?.locked) {
+    return (
+      <div className="mx-auto flex max-w-2xl flex-col justify-center px-4 py-16">
+        <section className="space-y-4 rounded-2xl border bg-card p-6">
+          <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+            Billing
+          </p>
+          <h1 className="font-heading text-3xl tracking-tight">Subscribe to use the tracker</h1>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Ranking scans and workspace campaigns stay locked until GridPins has an active
+            subscription for this account. Subscribe or open billing to update your payment method.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/pricing" className={buttonVariants({ size: "lg" })}>
+              Subscribe
+            </Link>
+            <Link href={billingLock.billingUrl} className={buttonVariants({ variant: "outline", size: "lg" })}>
+              Manage billing
+            </Link>
+          </div>
+        </section>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-svh flex-col bg-background">
