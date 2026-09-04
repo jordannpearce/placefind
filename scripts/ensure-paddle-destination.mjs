@@ -1,9 +1,11 @@
 /**
- * Creates the live GridPins webhook destination if PADDLE_API_KEY is set
- * and no destination already points at /api/paddle/webhook.
- * Never deletes existing destinations, products, prices, customers, or subscriptions.
+ * Read-only check for the existing live GridPins webhook destination.
+ * Never creates a second destination. Never deletes products, prices,
+ * webhooks, customers, or subscriptions.
+ *
+ * The live destination is ntfset_01m1pnfb99jrchbdakztt5tb3v.
  */
-import { writeFileSync, readFileSync, existsSync } from "node:fs"
+import { readFileSync, existsSync } from "node:fs"
 import { Paddle, Environment } from "@paddle/paddle-node-sdk"
 
 function loadEnvFile(file) {
@@ -30,28 +32,13 @@ const EVENTS = [
 ]
 
 const DESTINATION = "https://gridpins.com/api/paddle/webhook"
-const ENV_FILES = [".env", ".env.local"]
-
-function appendEnv(file, key, value) {
-  if (!value) return
-  const current = existsSync(file) ? readFileSync(file, "utf8") : ""
-  const line = `${key}=${value}`
-  if (current.match(new RegExp(`^${key}=\\s*$`, "m"))) {
-    writeFileSync(file, current.replace(new RegExp(`^${key}=\\s*$`, "m"), line))
-    return
-  }
-  if (current.match(new RegExp(`^${key}=`, "m"))) return
-  writeFileSync(file, `${current.replace(/\s*$/, "")}\n${line}\n`)
-}
-
-function writeSecret(secret) {
-  for (const file of ENV_FILES) appendEnv(file, "PADDLE_WEBHOOK_SECRET", secret)
-}
+const EXISTING_DESTINATION_ID = "ntfset_01m1pnfb99jrchbdakztt5tb3v"
 
 async function main() {
   const apiKey = process.env.PADDLE_API_KEY?.trim()
   if (!apiKey) {
-    console.log("SKIP: PADDLE_API_KEY is not set. Create the destination in Paddle → Developer tools → Notifications.")
+    console.log("SKIP: PADDLE_API_KEY is not set. Reuse the existing destination in Paddle → Developer tools → Notifications.")
+    console.log(`ID: ${EXISTING_DESTINATION_ID}`)
     console.log(`URL: ${DESTINATION}`)
     console.log(`Events: ${EVENTS.join(", ")}`)
     process.exit(0)
@@ -65,34 +52,25 @@ async function main() {
   const env = rawEnv.toLowerCase() === "sandbox" ? Environment.sandbox : Environment.production
   const paddle = new Paddle(apiKey, { environment: env })
   const existing = await paddle.notificationSettings.list()
-  const match = existing.find((item) => item.destination === DESTINATION && item.type === "url")
+  const match =
+    existing.find((item) => item.id === EXISTING_DESTINATION_ID) ||
+    existing.find((item) => item.destination === DESTINATION && item.type === "url")
+
   if (match) {
-    console.log(`EXISTS: destination ${match.id} already points at ${DESTINATION}`)
+    console.log(`EXISTS: destination ${match.id} already points at ${match.destination}`)
     console.log(`ACTIVE: ${match.active}`)
     console.log(`EVENTS: ${(match.subscribedEvents || []).map((event) => event.name || event).join(", ")}`)
-    if (match.endpointSecretKey) {
-      writeSecret(match.endpointSecretKey)
-      console.log("Stored PADDLE_WEBHOOK_SECRET in gitignored .env files.")
-    }
     process.exit(0)
   }
 
-  const created = await paddle.notificationSettings.create({
-    description: "GridPins production webhooks",
-    destination: DESTINATION,
-    type: "url",
-    subscribedEvents: EVENTS,
-    includeSensitiveFields: false,
-  })
-  console.log(`CREATED: destination ${created.id} → ${DESTINATION}`)
-  if (created.endpointSecretKey) {
-    writeSecret(created.endpointSecretKey)
-    console.log("Stored PADDLE_WEBHOOK_SECRET in gitignored .env files.")
-  }
+  console.error("The existing GridPins webhook destination was not found.")
+  console.error(`Expected id ${EXISTING_DESTINATION_ID} or URL ${DESTINATION}.`)
+  console.error("Refusing to create a second destination. Reuse the live notification in the Paddle dashboard.")
+  process.exit(1)
 }
 
 main().catch((error) => {
-  console.error("Could not create or read the Paddle notification destination.")
+  console.error("Could not read the Paddle notification destination.")
   console.error(error?.message || error)
   process.exit(1)
 })

@@ -26,6 +26,16 @@ function overlaySettings(successUrl: string) {
   }
 }
 
+function checkoutCustomer(email: string, country: string | null) {
+  if (!email) return {}
+  return {
+    customer: {
+      email,
+      ...(country ? { address: { countryCode: country } } : {}),
+    },
+  }
+}
+
 export function PricingCheckout({
   tiers,
   email,
@@ -78,10 +88,18 @@ export function PricingCheckout({
   useEffect(() => {
     if (!paddle || items.length === 0) return
     let cancelled = false
-    const params: Parameters<Paddle["PricePreview"]>[0] = { items }
-    if (country) params.address = { countryCode: country }
-    paddle
-      .PricePreview(params)
+
+    function preview(withCountry: boolean) {
+      const params: Parameters<Paddle["PricePreview"]>[0] = { items }
+      if (withCountry && country) params.address = { countryCode: country }
+      return paddle!.PricePreview(params)
+    }
+
+    preview(true)
+      .catch((error: unknown) => {
+        if (country) return preview(false)
+        throw error
+      })
       .then((response) => {
         if (cancelled) return
         const next: Record<string, string> = {}
@@ -109,9 +127,10 @@ export function PricingCheckout({
       setCheckoutError("Checkout is not ready yet.")
       return
     }
+    // Do not pass trialPeriod — there is no free trial. Signup already seeds demo data.
     paddle.Checkout.open({
       items: [{ priceId, quantity: 1 }],
-      ...(email ? { customer: { email } } : {}),
+      ...checkoutCustomer(email, country),
       customData: { plan: TIER_TO_PLAN[tier.name] },
       settings: overlaySettings(successUrl),
     })
@@ -126,7 +145,7 @@ export function PricingCheckout({
         >
           <TabsList>
             <TabsTrigger value="month">Monthly</TabsTrigger>
-            <TabsTrigger value="year">Yearly</TabsTrigger>
+            <TabsTrigger value="year">Annual</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>

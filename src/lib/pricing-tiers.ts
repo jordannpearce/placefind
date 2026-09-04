@@ -1,6 +1,7 @@
 import { PLANS } from "./plans"
 import type { PlanId } from "./types"
 
+/** Display names. Mapped onto the live catalog: Starter=Entry, Pro=Growth, Advanced=Agency. */
 export interface Tier {
   name: "Starter" | "Pro" | "Advanced"
   description: string
