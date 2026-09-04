@@ -34,7 +34,7 @@ export function BillingRequired({
                 Manage billing
               </button>
             </form>
-          ) : (
+          ) : compact ? null : (
             <Link href="/account" className={buttonVariants({ variant: "outline", size: "lg" })}>
               Account
             </Link>
