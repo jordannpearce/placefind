@@ -6,6 +6,20 @@
 import { writeFileSync, readFileSync, existsSync } from "node:fs"
 import { Paddle, Environment } from "@paddle/paddle-node-sdk"
 
+function loadEnvFile(file) {
+  if (!existsSync(file)) return
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    if (!line || line.trim().startsWith("#") || !line.includes("=")) continue
+    const i = line.indexOf("=")
+    const key = line.slice(0, i).trim()
+    const value = line.slice(i + 1).trim()
+    if (key && !(key in process.env)) process.env[key] = value
+  }
+}
+
+loadEnvFile(".env.local")
+loadEnvFile(".env")
+
 const EVENTS = [
   "subscription.created",
   "subscription.updated",

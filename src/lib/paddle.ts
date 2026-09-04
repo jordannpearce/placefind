@@ -1,10 +1,11 @@
 import { Environment, LogLevel, Paddle } from "@paddle/paddle-node-sdk"
 
+import { requirePaddleEnvironment } from "./paddle-env"
+
 const globalForPaddle = globalThis as unknown as { gridpinPaddle?: Paddle }
 
 export function paddleEnvironment(): Environment {
-  const raw = (process.env.PADDLE_ENVIRONMENT || "production").trim().toLowerCase()
-  return raw === "sandbox" ? Environment.sandbox : Environment.production
+  return requirePaddleEnvironment() === "sandbox" ? Environment.sandbox : Environment.production
 }
 
 export function paddleApiKey() {

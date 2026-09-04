@@ -1,52 +1,29 @@
+import { catalogPriceEnv, catalogProductEnv } from "./pricing-tiers"
 import { isPlanId } from "./plans"
 import type { PlanId } from "./types"
 
 /**
  * Maps existing Paddle price/product IDs (the live 3-tier catalog) onto GridPins plans.
- * Does not create products or prices. Fill the env vars with the IDs already used by checkout.
+ * Price ID env names live in pricing-tiers.ts so checkout and fulfillment share one list.
  */
-const PRICE_ENV: Array<[PlanId, string[]]> = [
-  [
-    "starter",
-    [
-      "NEXT_PUBLIC_PADDLE_PRICE_STARTER_MONTHLY",
-      "NEXT_PUBLIC_PADDLE_PRICE_STARTER_ANNUAL",
-      "NEXT_PUBLIC_PADDLE_PRICE_ENTRY_MONTHLY",
-      "NEXT_PUBLIC_PADDLE_PRICE_ENTRY_ANNUAL",
-      "PADDLE_PRICE_STARTER_MONTHLY",
-      "PADDLE_PRICE_STARTER_ANNUAL",
-    ],
-  ],
-  [
-    "agency",
-    [
-      "NEXT_PUBLIC_PADDLE_PRICE_AGENCY_MONTHLY",
-      "NEXT_PUBLIC_PADDLE_PRICE_AGENCY_ANNUAL",
-      "NEXT_PUBLIC_PADDLE_PRICE_GROWTH_MONTHLY",
-      "NEXT_PUBLIC_PADDLE_PRICE_GROWTH_ANNUAL",
-      "PADDLE_PRICE_AGENCY_MONTHLY",
-      "PADDLE_PRICE_AGENCY_ANNUAL",
-    ],
-  ],
-  [
-    "enterprise",
-    [
-      "NEXT_PUBLIC_PADDLE_PRICE_ENTERPRISE_MONTHLY",
-      "NEXT_PUBLIC_PADDLE_PRICE_ENTERPRISE_ANNUAL",
-      "PADDLE_PRICE_ENTERPRISE_MONTHLY",
-      "PADDLE_PRICE_ENTERPRISE_ANNUAL",
-    ],
-  ],
-]
+const PRICE_ENV: Array<[PlanId, string[]]> = catalogPriceEnv()
+const PRODUCT_ENV: Array<[PlanId, string[]]> = catalogProductEnv()
 
-const PRODUCT_ENV: Array<[PlanId, string[]]> = [
-  ["starter", ["NEXT_PUBLIC_PADDLE_PRODUCT_STARTER", "NEXT_PUBLIC_PADDLE_PRODUCT_ENTRY", "PADDLE_PRODUCT_STARTER"]],
-  ["agency", ["NEXT_PUBLIC_PADDLE_PRODUCT_AGENCY", "NEXT_PUBLIC_PADDLE_PRODUCT_GROWTH", "PADDLE_PRODUCT_AGENCY"]],
-  [
-    "enterprise",
-    ["NEXT_PUBLIC_PADDLE_PRODUCT_ENTERPRISE", "PADDLE_PRODUCT_ENTERPRISE"],
-  ],
-]
+/** Public IDs from the existing live 3-tier catalog. Env vars override when set. */
+const LIVE_PRICE_IDS: Record<string, PlanId> = {
+  pri_01m1ht34q60f3knaynzgyd1a8k: "starter",
+  pri_01m1pnbv278gjjt76kzcmy1nt6: "starter",
+  pri_01m1ht429v9as1gen5xhqdyymn: "agency",
+  pri_01m1pnbv4j83wpxseqtzwst2ax: "agency",
+  pri_01m1ht4rpb48x49wrwspd9s5g9: "enterprise",
+  pri_01m1pnbv6marzjgt57jf2g1963: "enterprise",
+}
+
+const LIVE_PRODUCT_IDS: Record<string, PlanId> = {
+  pro_01m1ht1bscp7wyjnnp8azj71qj: "starter",
+  pro_01m1ht1xyrx1p1wmbjez5bddyy: "agency",
+  pro_01m1ht2epjc5pzwcn1z66e4m11: "enterprise",
+}
 
 function envValue(name: string) {
   return process.env[name]?.trim() || ""
@@ -62,7 +39,7 @@ export function planFromPriceId(priceId: string | null | undefined): PlanId | nu
   for (const [plan, names] of PRICE_ENV) {
     if (idsFromEnv(names).includes(id)) return plan
   }
-  return null
+  return LIVE_PRICE_IDS[id] ?? null
 }
 
 export function planFromProductId(productId: string | null | undefined): PlanId | null {
@@ -71,7 +48,7 @@ export function planFromProductId(productId: string | null | undefined): PlanId 
   for (const [plan, names] of PRODUCT_ENV) {
     if (idsFromEnv(names).includes(id)) return plan
   }
-  return null
+  return LIVE_PRODUCT_IDS[id] ?? null
 }
 
 export function planFromCustomData(data: unknown): PlanId | null {
@@ -87,7 +64,7 @@ export function planFromCatalogName(name: string | null | undefined): PlanId | n
   if (!n) return null
   if (n.includes("entry") || n.includes("starter")) return "starter"
   if (n.includes("growth")) return "agency"
-  if (n.includes("enterprise")) return "enterprise"
+  if (n.includes("enterprise") || n.includes("advanced")) return "enterprise"
   if (/(^|[^a-z])agency([^a-z]|$)/.test(n)) return "enterprise"
   return null
 }
