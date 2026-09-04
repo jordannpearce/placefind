@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { Pool, type QueryResultRow } from "pg"
 
+import { findCustomerIdForUser } from "./paddle-access"
 import { hashPassword, verifyPassword } from "./password"
 import { isDemoAccount } from "./paddle-access"
 import { clampExtraCampaigns, isPlanId } from "./plans"
@@ -180,7 +181,55 @@ export function findOrCreateAgency(db: Database, name: string): Agency {
   return agency
 }
 
-export { purgeUserAccount, type PurgeUserResult } from "./purge-user"
+export type PurgeUserResult =
+  | { ok: true; email: string; userId: string }
+  | { ok: false; error: string; status: 400 | 404 }
+
+/**
+ * Fully remove one account so the same email can sign up again.
+ * Drops that user's workspace, tokens, and local Paddle mirror rows for their
+ * customer id only. Leaves other users, agencies, mail, and app_settings.
+ */
+export function purgeUserAccount(db: Database, userId: string, actorUserId: string): PurgeUserResult {
+  const id = userId.trim()
+  if (!id) return { ok: false, error: "userId is required", status: 400 }
+  if (id === actorUserId) {
+    return { ok: false, error: "You cannot delete your own account.", status: 400 }
+  }
+
+  const user = db.users.find((item) => item.id === id)
+  if (!user) return { ok: false, error: "User not found", status: 404 }
+
+  if (user.role === "admin") {
+    const remainingActiveAdmins = db.users.filter(
+      (item) => item.id !== id && item.role === "admin" && item.status === "active"
+    )
+    if (remainingActiveAdmins.length === 0) {
+      return { ok: false, error: "Cannot delete the last admin.", status: 400 }
+    }
+  }
+
+  const customerIds = new Set<string>()
+  const linkedId = findCustomerIdForUser(user, db.customers).trim()
+  if (linkedId) customerIds.add(linkedId)
+  const ownPaddleId = user.paddleCustomerId.trim()
+  if (ownPaddleId) customerIds.add(ownPaddleId)
+  for (const customer of db.customers) {
+    if (customer.email !== user.email) continue
+    const claimedByOther = db.users.some(
+      (item) => item.id !== id && item.paddleCustomerId === customer.customerId
+    )
+    if (!claimedByOther) customerIds.add(customer.customerId)
+  }
+
+  db.subscriptions = db.subscriptions.filter((row) => !customerIds.has(row.customerId))
+  db.customers = db.customers.filter((row) => !customerIds.has(row.customerId))
+  db.tokens = db.tokens.filter((token) => token.userId !== id)
+  delete db.workspaces[id]
+  db.users = db.users.filter((item) => item.id !== id)
+
+  return { ok: true, email: user.email, userId: id }
+}
 
 function seedDb(db: Database): Database {
   const now = new Date().toISOString()

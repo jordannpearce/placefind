@@ -40,7 +40,7 @@ export default async function AdminPage() {
         <AdminAgencies agencies={agencies} />
       </div>
       <div className="mt-8">
-        <AdminUsers users={users} agencies={db.agencies} />
+        <AdminUsers users={users} agencies={db.agencies} currentUserId={admin.user.id} />
       </div>
     </div>
   )

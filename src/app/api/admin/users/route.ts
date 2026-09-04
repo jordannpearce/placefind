@@ -1,14 +1,14 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 
 import { requireAdmin } from "@/lib/auth-guard"
-import { findOrCreateAgency, findOrCreateWorkspace, readDb, updateDb } from "@/lib/db"
+import { findOrCreateAgency, findOrCreateWorkspace, purgeUserAccount, readDb, updateDb } from "@/lib/db"
+import { clearImpersonation, getImpersonatedUserId, publicUser } from "@/lib/session"
 import { ACTIVATION_TOKEN_TTL_MS, createHashedToken } from "@/lib/auth-tokens"
 import { accountCreatedEmail, activationEmail, appUrl, billingEmail } from "@/lib/email-templates"
 import { previewUrl, sendAuthMail, sendMail } from "@/lib/mail"
 import { hashPassword } from "@/lib/password"
 import { provisionUserFromPaddle } from "@/lib/paddle-fulfillment"
 import { clampExtraCampaigns, isPlanId, PLANS } from "@/lib/plans"
-import { publicUser } from "@/lib/session"
 import type { PlanId, UserRole, UserStatus } from "@/lib/types"
 
 function serializeUsers(
@@ -195,4 +195,21 @@ export async function PATCH(request: Request) {
   }
   const db = await readDb()
   return NextResponse.json({ user: serializeUsers(db).find((item) => item.id === user.id) })
+}
+
+export async function DELETE(request: NextRequest) {
+  const admin = await requireAdmin()
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  const userId = request.nextUrl.searchParams.get("userId")?.trim() || ""
+  if (!userId) return NextResponse.json({ error: "userId is required" }, { status: 400 })
+
+  const result = await updateDb((db) => purgeUserAccount(db, userId, admin.user.id))
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })
+
+  const impersonated = await getImpersonatedUserId()
+  if (impersonated === userId) {
+    await clearImpersonation()
+  }
+
+  return NextResponse.json({ ok: true, userId: result.userId, email: result.email })
 }

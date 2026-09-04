@@ -20,18 +20,24 @@ import type { Agency, Campaign, PlanId, PublicUser, UserRole, UserStatus } from 
 
 export type AdminUserRow = PublicUser & { campaignCount: number; agencyName: string }
 
+type Toast = { id: number; kind: "ok" | "err"; text: string }
+
 export function AdminUsers({
   users,
   agencies,
+  currentUserId,
 }: {
   users: AdminUserRow[]
   agencies: Agency[]
+  currentUserId: string
 }) {
   const router = useRouter()
   const [rows, setRows] = useState(users)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<Toast[]>([])
   const [pending, setPending] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [managing, setManaging] = useState<AdminUserRow | null>(null)
   const [managedCampaigns, setManagedCampaigns] = useState<Campaign[]>([])
   const [managedActiveId, setManagedActiveId] = useState("")
@@ -49,6 +55,21 @@ export function AdminUsers({
     marketingOptIn: false,
     sendEmail: true,
   })
+
+  function showToast(kind: Toast["kind"], text: string) {
+    const id = Date.now() + Math.floor(Math.random() * 1000)
+    setToasts((current) => [...current, { id, kind, text }])
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id))
+    }, 4500)
+  }
+
+  function canDelete(user: AdminUserRow) {
+    if (user.id === currentUserId) return false
+    const activeAdmins = rows.filter((row) => row.role === "admin" && row.status === "active")
+    if (user.role === "admin" && user.status === "active" && activeAdmins.length <= 1) return false
+    return true
+  }
 
   async function patch(
     userId: string,
@@ -182,6 +203,45 @@ export function AdminUsers({
       name: uniqueCampaignName("New campaign", managedCampaigns),
     }
     await persistManaged([...managedCampaigns, campaign])
+  }
+
+  async function deleteUser(user: AdminUserRow) {
+    if (!canDelete(user)) {
+      showToast(
+        "err",
+        user.id === currentUserId ? "You cannot delete your own account." : "Cannot delete the last admin."
+      )
+      return
+    }
+    if (
+      !window.confirm(
+        `Delete ${user.name} (${user.email})? Their account, campaigns, scans, and local billing rows will be removed. They can sign up again with this email.`
+      )
+    ) {
+      return
+    }
+    if (user.role === "admin") {
+      if (!window.confirm(`This is an admin account. Delete ${user.name} anyway?`)) return
+    }
+    setDeletingId(user.id)
+    setError(null)
+    try {
+      const response = await fetch(`/api/admin/users?userId=${encodeURIComponent(user.id)}`, {
+        method: "DELETE",
+      })
+      const data = (await response.json()) as { error?: string }
+      if (!response.ok) throw new Error(data.error || "Could not delete user")
+      setRows((current) => current.filter((row) => row.id !== user.id))
+      if (managing?.id === user.id) setManaging(null)
+      showToast("ok", `${user.email} was deleted. That email can sign up again.`)
+      router.refresh()
+    } catch (err) {
+      const text = err instanceof Error ? err.message : "Could not delete user"
+      setError(text)
+      showToast("err", text)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   async function viewAs(userId: string) {
@@ -358,6 +418,7 @@ export function AdminUsers({
               <th className="px-3 py-2 font-medium">Campaigns</th>
               <th className="px-3 py-2 font-medium">Role</th>
               <th className="px-3 py-2 font-medium">View</th>
+              <th className="px-3 py-2 font-medium">Delete</th>
             </tr>
           </thead>
           <tbody>
@@ -460,6 +521,23 @@ export function AdminUsers({
                     View as user
                   </Button>
                 </td>
+                <td className="px-3 py-2">
+                  {canDelete(user) ? (
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="destructive"
+                      disabled={deletingId === user.id || pending}
+                      onClick={() => deleteUser(user)}
+                    >
+                      {deletingId === user.id ? "Deleting…" : "Delete"}
+                    </Button>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">
+                      {user.id === currentUserId ? "You" : "Last admin"}
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -520,6 +598,22 @@ export function AdminUsers({
           )}
         </DialogContent>
       </Dialog>
+
+      <div className="pointer-events-none fixed right-4 bottom-4 z-50 flex w-80 flex-col gap-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            role="status"
+            className={
+              toast.kind === "ok"
+                ? "pointer-events-auto rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 shadow-lg"
+                : "pointer-events-auto rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive shadow-lg"
+            }
+          >
+            {toast.text}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
