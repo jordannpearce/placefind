@@ -11,6 +11,9 @@ type Body = {
   keyword?: string
   targetBusiness?: string
   targetPlaceId?: string
+  targetCid?: string
+  targetLat?: number
+  targetLng?: number
   lat?: number
   lng?: number
   zoom?: number
@@ -54,6 +57,14 @@ export async function POST(request: Request) {
   const languageCode = body.languageCode?.trim() || "en"
   const device: DeviceType = body.device === "mobile" ? "mobile" : "desktop"
   const depth = Math.min(Math.max(Number(body.depth ?? 20), 10), 100)
+  const targetCid = body.targetCid?.trim() || undefined
+  const targetLat = Number(body.targetLat)
+  const targetLng = Number(body.targetLng)
+  const targetCoords = {
+    targetCid,
+    targetLat: Number.isFinite(targetLat) ? targetLat : undefined,
+    targetLng: Number.isFinite(targetLng) ? targetLng : undefined,
+  }
   const auth = await resolveRequestAuth({
     login: body.apiLogin,
     password: body.apiPassword,
@@ -68,6 +79,7 @@ export async function POST(request: Request) {
         keyword,
         targetBusiness,
         targetPlaceId: body.targetPlaceId,
+        ...targetCoords,
         lat,
         lng,
         zoom,
@@ -79,6 +91,7 @@ export async function POST(request: Request) {
       keyword,
       targetBusiness,
       targetPlaceId: body.targetPlaceId,
+      ...targetCoords,
       lat,
       lng,
       zoom,

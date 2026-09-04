@@ -1,3 +1,5 @@
+import type { Listing } from "./types"
+
 export type RankTone = {
   fill: string
   text: string
@@ -98,10 +100,84 @@ export function namesMatch(listingTitle: string, target: string): boolean {
   return overlap / queryTokens.length >= 0.7
 }
 
+export function idsEqual(left?: string | null, right?: string | null): boolean {
+  const a = left?.trim()
+  const b = right?.trim()
+  return Boolean(a && b && a === b)
+}
+
+/** Null when either side is missing coords; otherwise whether they sit within `miles`. */
+export function coordsNearby(
+  lat1?: number | null,
+  lng1?: number | null,
+  lat2?: number | null,
+  lng2?: number | null,
+  miles = 0.35
+): boolean | null {
+  if (
+    lat1 == null ||
+    lng1 == null ||
+    lat2 == null ||
+    lng2 == null ||
+    !Number.isFinite(lat1) ||
+    !Number.isFinite(lng1) ||
+    !Number.isFinite(lat2) ||
+    !Number.isFinite(lng2)
+  ) {
+    return null
+  }
+  const toRad = (deg: number) => (deg * Math.PI) / 180
+  const r = 3958.8
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+  const distance = 2 * r * Math.asin(Math.min(1, Math.sqrt(a)))
+  return distance <= miles
+}
+
+export function listingMatchesTarget(
+  listing: Listing,
+  target: {
+    title: string
+    placeId?: string | null
+    cid?: string | null
+    lat?: number | null
+    lng?: number | null
+  }
+): boolean {
+  if (listing.isPaid) return false
+  if (idsEqual(listing.placeId, target.placeId)) return true
+
+  const named = namesMatch(listing.title, target.title)
+  if (named && idsEqual(listing.cid, target.cid)) return true
+  if (!named) return false
+
+  const nearby = coordsNearby(listing.latitude, listing.longitude, target.lat, target.lng)
+  return nearby !== false
+}
+
 export function rankLabel(rank: number | null, error?: string | null): string {
   if (error) return "!"
   if (rank == null) return "—"
   return String(rank)
+}
+
+/** Always a visible glyph: loading, error, 1–20, outside-pack, or not-yet-scanned. */
+export function pinMark(input: {
+  rank?: number | null
+  error?: string | null
+  loading?: boolean
+  scanned?: boolean
+}): string {
+  if (input.loading) return "…"
+  if (input.error) return "!"
+  if (input.rank != null && Number.isFinite(input.rank) && input.rank > 0) {
+    return String(Math.round(input.rank))
+  }
+  if (input.scanned) return "—"
+  return "·"
 }
 
 export function formatReviews(count: number | null | undefined): string {
