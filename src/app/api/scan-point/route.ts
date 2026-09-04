@@ -1,6 +1,6 @@
 import { rejectUnlessSoftwareAccess } from "@/lib/billing-gate"
 import { fetchMapsPoint, getScanMode, resolveRequestAuth } from "@/lib/dataforseo"
-import { clampZoom, formatCoordinate } from "@/lib/grid"
+import { formatCoordinate } from "@/lib/grid"
 import { mockDelayMs, mockScanPoint } from "@/lib/mock-scan"
 import type { DeviceType, ScanPointResponse } from "@/lib/types"
 
@@ -37,7 +37,8 @@ export async function POST(request: Request) {
   const targetBusiness = body.targetBusiness?.trim()
   const lat = Number(body.lat)
   const lng = Number(body.lng)
-  const zoom = clampZoom(Number(body.zoom ?? 15))
+  const zoomRaw = Number(body.zoom ?? 15)
+  const zoom = Number.isFinite(zoomRaw) ? Math.min(21, Math.max(3, Math.round(zoomRaw))) : 15
   const pointId = body.pointId?.trim() || "point"
 
   if (!keyword) {
