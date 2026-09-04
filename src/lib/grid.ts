@@ -3,6 +3,12 @@ import type { GridPoint, GridSize } from "./types"
 export const GRID_SIZES: GridSize[] = [3, 5, 7, 9, 11, 13]
 
 const MILES_PER_DEGREE_LAT = 69.0
+const COORD_DECIMALS = 7
+const COORD_STEP = 10 ** -COORD_DECIMALS
+export const MIN_RADIUS_MILES = 0.5
+export const MIN_SPACING_MILES = 0.05
+const DEFAULT_CENTER = { lat: 30.2672, lng: -97.7431 }
+const DEFAULT_RADIUS_MILES = 1.4
 
 export function milesToLatitudeDelta(miles: number): number {
   return miles / MILES_PER_DEGREE_LAT
@@ -21,30 +27,95 @@ export function clampZoom(zoom: number): number {
 
 /** DataForSEO Maps: latitude,longitude,zoom with a `z` suffix. Max 7 decimals, zoom 3–21. */
 export function formatCoordinate(lat: number, lng: number, zoom: number): string {
-  return `${clampDecimals(lat, 7)},${clampDecimals(lng, 7)},${clampZoom(zoom)}z`
+  return `${clampDecimals(lat, COORD_DECIMALS)},${clampDecimals(lng, COORD_DECIMALS)},${clampZoom(zoom)}z`
 }
 
 export function clampDecimals(value: number, digits: number): string {
-  const factor = 10 ** digits
-  const rounded = Math.round(value * factor) / factor
-  return String(rounded)
+  return String(quantizeCoord(value, digits))
 }
 
+/** Round GPS to DataForSEO’s 7-decimal budget without leftover binary float noise. */
+export function quantizeCoord(value: number, digits = COORD_DECIMALS): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return 0
+  const factor = 10 ** digits
+  return Number((Math.round(n * factor) / factor).toFixed(digits))
+}
+
+export function normalizeGridSize(size: unknown): GridSize {
+  const n = Math.round(Number(size))
+  if ((GRID_SIZES as number[]).includes(n)) return n as GridSize
+  if (!Number.isFinite(n) || n < 3) return 5
+  const odd = n % 2 === 0 ? n + 1 : n
+  const clamped = Math.min(13, Math.max(3, odd))
+  return ((GRID_SIZES as number[]).includes(clamped) ? clamped : 5) as GridSize
+}
+
+export function normalizeRadiusMiles(radius: unknown): number {
+  const n = Number(radius)
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_RADIUS_MILES
+  return Math.min(50, Math.max(MIN_RADIUS_MILES, n))
+}
+
+export function normalizeSpacingMiles(
+  spacing: unknown,
+  radius?: unknown,
+  size?: unknown
+): number {
+  let miles = Number(spacing)
+  if (!Number.isFinite(miles) || miles <= 0) {
+    miles = spacingFromRadius(normalizeRadiusMiles(radius), normalizeGridSize(size))
+  }
+  return Math.min(20, Math.max(MIN_SPACING_MILES, miles))
+}
+
+export function normalizeCenter(lat: unknown, lng: unknown): { lat: number; lng: number } {
+  const nextLat = Number(lat)
+  const nextLng = Number(lng)
+  if (
+    !Number.isFinite(nextLat) ||
+    !Number.isFinite(nextLng) ||
+    nextLat < -90 ||
+    nextLat > 90 ||
+    nextLng < -180 ||
+    nextLng > 180
+  ) {
+    return { ...DEFAULT_CENTER }
+  }
+  return { lat: nextLat, lng: nextLng }
+}
+
+/**
+ * N×N lattice around the listing. Size, spacing, and center are sanitized so a
+ * 0/NaN radius or integer-truncated grid cannot collapse onto the center pin.
+ * Each cell is quantized to 7 decimals and kept unique for DataForSEO.
+ */
 export function buildGrid(
   centerLat: number,
   centerLng: number,
   size: GridSize,
   spacingMiles: number
 ): GridPoint[] {
-  const offset = (size - 1) / 2
-  const dLat = milesToLatitudeDelta(spacingMiles)
-  const dLng = milesToLongitudeDelta(spacingMiles, centerLat)
+  const n = normalizeGridSize(size)
+  const center = normalizeCenter(centerLat, centerLng)
+  const spacing = normalizeSpacingMiles(spacingMiles, undefined, n)
+  const offset = (n - 1) / 2
+  const dLat = milesToLatitudeDelta(spacing)
+  const dLng = milesToLongitudeDelta(spacing, center.lat)
   const points: GridPoint[] = []
+  const seen = new Set<string>()
 
-  for (let row = 0; row < size; row += 1) {
-    for (let col = 0; col < size; col += 1) {
-      const lat = centerLat + (offset - row) * dLat
-      const lng = centerLng + (col - offset) * dLng
+  for (let row = 0; row < n; row += 1) {
+    for (let col = 0; col < n; col += 1) {
+      let lat = quantizeCoord(center.lat + (offset - row) * dLat)
+      let lng = quantizeCoord(center.lng + (col - offset) * dLng)
+      let key = `${lat},${lng}`
+      while (seen.has(key)) {
+        lng = quantizeCoord(lng + COORD_STEP)
+        if (lng > 180) lng = quantizeCoord(180 - COORD_STEP)
+        key = `${lat},${lng}`
+      }
+      seen.add(key)
       points.push({
         id: `r${row}c${col}`,
         row,
@@ -89,12 +160,16 @@ export function haversineMiles(
 }
 
 export function spacingFromRadius(radiusMiles: number, gridSize: GridSize): number {
-  if (gridSize <= 1) return radiusMiles
-  return Number(((2 * radiusMiles) / (gridSize - 1)).toFixed(3))
+  const size = normalizeGridSize(gridSize)
+  const radius = normalizeRadiusMiles(radiusMiles)
+  if (size <= 1) return radius
+  return Number(((2 * radius) / (size - 1)).toFixed(3))
 }
 
 export function radiusFromSpacing(spacingMiles: number, gridSize: GridSize): number {
-  return Number((spacingMiles * ((gridSize - 1) / 2)).toFixed(2))
+  const size = normalizeGridSize(gridSize)
+  const spacing = normalizeSpacingMiles(spacingMiles, undefined, size)
+  return Number((spacing * ((size - 1) / 2)).toFixed(2))
 }
 
 export function suggestedZoom(spacingMiles: number): number {

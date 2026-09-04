@@ -4,18 +4,38 @@ import type { KeywordResults, PointResult, ScanMode, ScanPointResponse } from ".
 export function isPointResult(value: unknown): value is PointResult {
   if (!value || typeof value !== "object") return false
   const row = value as Record<string, unknown>
-  return typeof row.id === "string" && Number.isFinite(row.lat) && Number.isFinite(row.lng)
+  const id = String(row.id ?? "").trim()
+  const lat = Number(row.lat)
+  const lng = Number(row.lng)
+  return id.length > 0 && Number.isFinite(lat) && Number.isFinite(lng)
+}
+
+function asPointResult(row: PointResult, fallbackId: string): PointResult {
+  return {
+    ...row,
+    id: String(row.id || fallbackId),
+    lat: Number(row.lat),
+    lng: Number(row.lng),
+  }
 }
 
 function toPointMap(value: unknown): Record<string, PointResult> {
   if (!value) return {}
   if (Array.isArray(value)) {
-    return Object.fromEntries(value.filter(isPointResult).map((row) => [row.id, row]))
+    return Object.fromEntries(
+      value.filter(isPointResult).map((row) => {
+        const next = asPointResult(row, row.id)
+        return [next.id, next]
+      })
+    )
   }
   if (typeof value !== "object") return {}
   const out: Record<string, PointResult> = {}
   for (const [key, row] of Object.entries(value)) {
-    if (isPointResult(row)) out[row.id || key] = row
+    if (isPointResult(row)) {
+      const next = asPointResult(row, key)
+      out[next.id] = next
+    }
   }
   return out
 }
