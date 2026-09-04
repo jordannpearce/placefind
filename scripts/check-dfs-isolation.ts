@@ -32,7 +32,7 @@ try {
 
   assert.equal(usableCampaignLimit("starter", 0, false), 0)
   assert.equal(usableCampaignLimit("starter", 0, true), 1)
-  assert.equal(usableCampaignLimit("agency", 0, true), 10)
+  assert.equal(usableCampaignLimit("agency", 0, true), 5)
   assert.equal(usableCampaignLimit("enterprise", 0, true), 50)
 
   console.log("dfs isolation checks passed")
