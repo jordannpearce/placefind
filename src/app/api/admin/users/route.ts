@@ -6,6 +6,7 @@ import { ACTIVATION_TOKEN_TTL_MS, createHashedToken } from "@/lib/auth-tokens"
 import { accountCreatedEmail, activationEmail, appUrl, billingEmail } from "@/lib/email-templates"
 import { previewUrl, sendAuthMail, sendMail } from "@/lib/mail"
 import { hashPassword } from "@/lib/password"
+import { provisionUserFromPaddle } from "@/lib/paddle-fulfillment"
 import { clampExtraCampaigns, isPlanId, PLANS } from "@/lib/plans"
 import { publicUser } from "@/lib/session"
 import { defaultCampaign } from "@/lib/storage"
@@ -81,6 +82,7 @@ export async function POST(request: Request) {
       marketingOptIn: Boolean(body.marketingOptIn),
       company: body.company?.trim() || agency.name,
       agencyId: agency.id,
+      paddleCustomerId: "",
       createdAt: new Date().toISOString(),
       lastLoginAt: null,
       dfsLogin: "",
@@ -88,6 +90,7 @@ export async function POST(request: Request) {
     }
     created.extraCampaigns = clampExtraCampaigns(created.plan, body.extraCampaigns)
     db.users.push(created)
+    provisionUserFromPaddle(db, created)
     findOrCreateWorkspace(db, created.id)
     const workspace = db.workspaces[created.id]
     if (workspace && workspace.campaigns.length === 0) {

@@ -11,6 +11,8 @@ import type {
   AuthToken,
   MailRecord,
   MarketingLead,
+  PaddleCustomer,
+  PaddleSubscription,
   PlanId,
   User,
   UserWorkspace,
@@ -27,6 +29,8 @@ export type Database = {
   agencies: Agency[]
   settings: AppSettings
   leads: MarketingLead[]
+  customers: PaddleCustomer[]
+  subscriptions: PaddleSubscription[]
 }
 
 const ADMIN_EMAIL = "tmrapp1995@gmail.com"
@@ -76,6 +80,8 @@ function emptyDb(): Database {
     agencies: [],
     settings: { resendApiKey: "", resendFrom: DEFAULT_RESEND_FROM, resendAudienceId: "" },
     leads: [],
+    customers: [],
+    subscriptions: [],
   }
 }
 
@@ -123,6 +129,7 @@ function normalizeUser(raw: Partial<User> & { email: string }): User {
     marketingOptIn: Boolean(raw.marketingOptIn),
     company: raw.company || "",
     agencyId: raw.agencyId || "",
+    paddleCustomerId: raw.paddleCustomerId || "",
     createdAt: raw.createdAt || new Date().toISOString(),
     lastLoginAt: raw.lastLoginAt ?? null,
     dfsLogin: raw.dfsLogin || "",
@@ -172,6 +179,7 @@ function seedDb(db: Database): Database {
     marketingOptIn: false,
     company: "GridPins",
     agencyId: gridpin.id,
+    paddleCustomerId: "",
     createdAt: now,
     lastLoginAt: null,
     dfsLogin: "",
@@ -189,6 +197,7 @@ function seedDb(db: Database): Database {
     marketingOptIn: true,
     company: "Taylor Agency",
     agencyId: taylor.id,
+    paddleCustomerId: "",
     createdAt: now,
     lastLoginAt: null,
     dfsLogin: "",
@@ -234,6 +243,7 @@ function ensureAdmin(db: Database) {
     marketingOptIn: false,
     company: "GridPins",
     agencyId: agency.id,
+    paddleCustomerId: "",
     createdAt: new Date().toISOString(),
     lastLoginAt: null,
     dfsLogin: "",
@@ -262,9 +272,35 @@ function hydrate(raw: Partial<Database>): Database {
       resendAudienceId: raw.settings?.resendAudienceId ?? "",
     },
     leads: (raw.leads ?? []).map((lead) => normalizeLead(lead)).filter((lead): lead is MarketingLead => Boolean(lead)),
+    customers: (raw.customers ?? [])
+      .filter((row) => Boolean(row.customerId))
+      .map((row) => ({
+        customerId: row.customerId,
+        email: row.email?.trim().toLowerCase() || "",
+        createdAt: row.createdAt || new Date().toISOString(),
+        updatedAt: row.updatedAt || row.createdAt || new Date().toISOString(),
+      })),
+    subscriptions: (raw.subscriptions ?? [])
+      .filter((row) => Boolean(row.subscriptionId && row.customerId))
+      .map((row) => ({
+        subscriptionId: row.subscriptionId,
+        customerId: row.customerId,
+        status: row.status,
+        priceId: row.priceId || "",
+        productId: row.productId || "",
+        scheduledChangeAction: row.scheduledChangeAction ?? null,
+        scheduledChangeAt: row.scheduledChangeAt ?? null,
+        createdAt: row.createdAt || new Date().toISOString(),
+        updatedAt: row.updatedAt || row.createdAt || new Date().toISOString(),
+      })),
   }
   for (const user of db.users) {
     if (!user.agencyId) user.agencyId = findOrCreateAgency(db, user.company || user.name).id
+  }
+  for (const customer of db.customers) {
+    if (!customer.email) continue
+    const user = db.users.find((item) => item.email === customer.email)
+    if (user && !user.paddleCustomerId) user.paddleCustomerId = customer.customerId
   }
   const demo = db.users.find((user) => user.id === "user_demo" || user.email === "demo@gridpin.app")
   if (demo) {
@@ -336,8 +372,28 @@ async function ensureSchema() {
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS customers (
+          customer_id TEXT PRIMARY KEY,
+          email TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS subscriptions (
+          subscription_id TEXT PRIMARY KEY,
+          customer_id TEXT NOT NULL REFERENCES customers(customer_id),
+          status TEXT NOT NULL,
+          price_id TEXT NOT NULL,
+          product_id TEXT NOT NULL,
+          scheduled_change_action TEXT,
+          scheduled_change_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS customers_email_idx ON customers (email);
+        CREATE INDEX IF NOT EXISTS subscriptions_customer_id_idx ON subscriptions (customer_id);
       `)
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS extra_campaigns INTEGER NOT NULL DEFAULT 0`)
+      await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS paddle_customer_id TEXT NOT NULL DEFAULT ''`)
     })()
   }
   await schemaReady
@@ -345,7 +401,7 @@ async function ensureSchema() {
 
 async function loadFromPostgres(): Promise<Database> {
   await ensureSchema()
-  const [users, tokens, emails, workspaces, agencies, settingsRows] = await Promise.all([
+  const [users, tokens, emails, workspaces, agencies, settingsRows, customers, subscriptions] = await Promise.all([
     query<{
       id: string
       name: string
@@ -358,6 +414,7 @@ async function loadFromPostgres(): Promise<Database> {
       marketing_opt_in: boolean
       company: string
       agency_id: string
+      paddle_customer_id: string
       created_at: Date
       last_login_at: Date | null
       dfs_login: string
@@ -383,6 +440,23 @@ async function loadFromPostgres(): Promise<Database> {
     }>("SELECT * FROM workspaces"),
     query<{ id: string; name: string; created_at: Date }>("SELECT * FROM agencies"),
     query<{ key: string; value: string }>("SELECT * FROM app_settings"),
+    query<{
+      customer_id: string
+      email: string
+      created_at: Date
+      updated_at: Date
+    }>("SELECT * FROM customers"),
+    query<{
+      subscription_id: string
+      customer_id: string
+      status: string
+      price_id: string
+      product_id: string
+      scheduled_change_action: string | null
+      scheduled_change_at: Date | null
+      created_at: Date
+      updated_at: Date
+    }>("SELECT * FROM subscriptions"),
   ])
 
   const settingsMap = Object.fromEntries(settingsRows.rows.map((row) => [row.key, row.value]))
@@ -400,6 +474,7 @@ async function loadFromPostgres(): Promise<Database> {
         marketingOptIn: row.marketing_opt_in,
         company: row.company,
         agencyId: row.agency_id,
+        paddleCustomerId: row.paddle_customer_id || "",
         createdAt: row.created_at.toISOString(),
         lastLoginAt: row.last_login_at ? row.last_login_at.toISOString() : null,
         dfsLogin: row.dfs_login,
@@ -445,6 +520,23 @@ async function loadFromPostgres(): Promise<Database> {
       resendAudienceId: settingsMap.resendAudienceId || "",
     },
     leads: parseStoredLeads(settingsMap.marketingLeads),
+    customers: customers.rows.map((row) => ({
+      customerId: row.customer_id,
+      email: row.email,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+    })),
+    subscriptions: subscriptions.rows.map((row) => ({
+      subscriptionId: row.subscription_id,
+      customerId: row.customer_id,
+      status: row.status,
+      priceId: row.price_id,
+      productId: row.product_id,
+      scheduledChangeAction: row.scheduled_change_action,
+      scheduledChangeAt: row.scheduled_change_at ? row.scheduled_change_at.toISOString() : null,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+    })),
   })
   return db
 }
@@ -457,6 +549,8 @@ async function saveToPostgres(db: Database) {
     await client.query("DELETE FROM tokens")
     await client.query("DELETE FROM emails")
     await client.query("DELETE FROM workspaces")
+    await client.query("DELETE FROM subscriptions")
+    await client.query("DELETE FROM customers")
     await client.query("DELETE FROM users")
     await client.query("DELETE FROM agencies")
     await client.query("DELETE FROM app_settings")
@@ -471,8 +565,8 @@ async function saveToPostgres(db: Database) {
       await client.query(
         `INSERT INTO users (
           id, name, email, password_hash, role, status, plan, extra_campaigns, marketing_opt_in, company, agency_id,
-          created_at, last_login_at, dfs_login, dfs_password
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+          paddle_customer_id, created_at, last_login_at, dfs_login, dfs_password
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
         [
           user.id,
           user.name,
@@ -485,10 +579,36 @@ async function saveToPostgres(db: Database) {
           user.marketingOptIn,
           user.company,
           user.agencyId,
+          user.paddleCustomerId,
           user.createdAt,
           user.lastLoginAt,
           user.dfsLogin,
           user.dfsPassword,
+        ]
+      )
+    }
+    for (const customer of db.customers) {
+      await client.query(
+        "INSERT INTO customers (customer_id, email, created_at, updated_at) VALUES ($1, $2, $3, $4)",
+        [customer.customerId, customer.email, customer.createdAt, customer.updatedAt]
+      )
+    }
+    for (const subscription of db.subscriptions) {
+      await client.query(
+        `INSERT INTO subscriptions (
+          subscription_id, customer_id, status, price_id, product_id,
+          scheduled_change_action, scheduled_change_at, created_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          subscription.subscriptionId,
+          subscription.customerId,
+          subscription.status,
+          subscription.priceId,
+          subscription.productId,
+          subscription.scheduledChangeAction,
+          subscription.scheduledChangeAt,
+          subscription.createdAt,
+          subscription.updatedAt,
         ]
       )
     }
@@ -587,10 +707,10 @@ export async function readDb(): Promise<Database> {
   return loadFromFile()
 }
 
-export async function updateDb<T>(mutator: (db: Database) => T): Promise<T> {
+export async function updateDb<T>(mutator: (db: Database) => T | Promise<T>): Promise<T> {
   const run = writeQueue.then(async () => {
     const db = await readDb()
-    const result = mutator(db)
+    const result = await mutator(db)
     if (pool()) await saveToPostgres(db)
     else persistFile(db)
     return result

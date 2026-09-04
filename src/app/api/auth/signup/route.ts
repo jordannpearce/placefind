@@ -5,6 +5,7 @@ import { findOrCreateAgency, updateDb } from "@/lib/db"
 import { activationEmail, appUrl } from "@/lib/email-templates"
 import { previewUrl, sendAuthMail } from "@/lib/mail"
 import { hashPassword } from "@/lib/password"
+import { provisionUserFromPaddle } from "@/lib/paddle-fulfillment"
 import { defaultCampaign } from "@/lib/storage"
 
 export async function POST(request: Request) {
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
       marketingOptIn: Boolean(body.marketingOptIn),
       company: body.company?.trim() || agency.name,
       agencyId: agency.id,
+      paddleCustomerId: "",
       createdAt: new Date().toISOString(),
       lastLoginAt: null,
       dfsLogin: "",
@@ -52,6 +54,7 @@ export async function POST(request: Request) {
       scans: {},
     }
     token = createHashedToken(db, created.id, "activation", ACTIVATION_TOKEN_TTL_MS)
+    provisionUserFromPaddle(db, created)
     return created
   })
 

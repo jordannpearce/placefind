@@ -44,8 +44,9 @@ export default function PrivacyPage() {
         <P>
           Hosting and the production database run on our cloud infrastructure. Transactional email
           may be sent through our email provider when that service is configured; otherwise messages
-          stay in an in-app outbox. Live Maps lookups go to DataForSEO with the credentials you
-          provide. Those providers process data on our or your instructions under their own terms.
+          stay in an in-app outbox. Subscription payments are processed by Paddle. Live Maps lookups
+          go to DataForSEO with the credentials you provide. Those providers process data on our or
+          your instructions under their own terms.
         </P>
       </section>
       <section className="space-y-3">

@@ -56,10 +56,11 @@ export default function TermsPage() {
       <section className="space-y-3">
         <H>4. Fees and third-party costs</H>
         <P>
-          GridPins subscription fees are billed monthly according to the plan you choose. Changing
-          plan or Growth extra-campaign slots may generate a billing notice. Live Maps tasks are
-          billed by DataForSEO (or another provider you connect) to the credentials you enter. Those
-          API charges are not included in the GridPins subscription and are not refundable by us.
+          GridPins subscription fees are billed monthly or annually according to the plan you choose.
+          Subscription payments are processed by Paddle, our payment processor. Changing plan or
+          Growth extra-campaign slots may generate a billing notice. Live Maps tasks are billed by
+          DataForSEO (or another provider you connect) to the credentials you enter. Those API
+          charges are not included in the GridPins subscription and are not refundable by us.
         </P>
       </section>
       <section className="space-y-3">

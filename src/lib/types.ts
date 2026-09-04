@@ -198,6 +198,25 @@ export type MarketingLead = {
   createdAt: string
 }
 
+export type PaddleCustomer = {
+  customerId: string
+  email: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type PaddleSubscription = {
+  subscriptionId: string
+  customerId: string
+  status: string
+  priceId: string
+  productId: string
+  scheduledChangeAction: string | null
+  scheduledChangeAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type User = {
   id: string
   name: string
@@ -210,6 +229,7 @@ export type User = {
   marketingOptIn: boolean
   company: string
   agencyId: string
+  paddleCustomerId: string
   createdAt: string
   lastLoginAt: string | null
   dfsLogin: string
