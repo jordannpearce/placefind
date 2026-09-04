@@ -1,5 +1,5 @@
-import { listingsFromTask, matchTarget } from "../src/lib/dataforseo"
-import { buildGrid, spacingFromRadius } from "../src/lib/grid"
+import { dataForSeoErrorMessage, listingsFromTask, mapsLiveTask, matchTarget } from "../src/lib/dataforseo"
+import { buildGrid, formatCoordinate, spacingFromRadius } from "../src/lib/grid"
 import { mockScanPoint } from "../src/lib/mock-scan"
 import { mergeWorkspaceScans, normalizeWorkspaceScans } from "../src/lib/scan-results"
 
@@ -95,4 +95,46 @@ const wiped = mergeWorkspaceScans({ camp_houndstooth_austin: { coffee: { r0c0: m
 assert(wiped.camp_houndstooth_austin.coffee.r0c0.found, "empty server scans must not wipe local results")
 
 console.log("ok DataForSEO parse + workspace scan shape")
+
+const coord = formatCoordinate(30.26721234567, -97.74319876543, 15.4)
+assert(coord === "30.2672123,-97.7431988,15z", `location_coordinate must be lat,lng,zoomz with 7 decimals, got ${coord}`)
+assert(
+  formatCoordinate(30.26, -97.74, 2) === "30.26,-97.74,3z" &&
+    formatCoordinate(30.26, -97.74, 99) === "30.26,-97.74,21z",
+  "zoom must clamp to 3–21"
+)
+
+const taskBody = mapsLiveTask({
+  keyword: "coffee",
+  languageCode: "en",
+  locationCoordinate: coord,
+  device: "desktop",
+  depth: 20,
+})
+assert(taskBody.location_coordinate === coord, "live task uses formatted coordinate")
+assert(!("location_code" in taskBody) && !("location_name" in taskBody), "coordinate-only task must omit location_code/name")
+assert(taskBody.search_this_area === true && taskBody.search_places === false, "grid tasks stay in search-this-area mode")
+
+assert(
+  dataForSeoErrorMessage({ status_code: 20000, status_message: "Ok." }) === null,
+  "ok payload is not an error"
+)
+assert(
+  dataForSeoErrorMessage({
+    status_code: 20000,
+    tasks: [{ status_code: 40501, status_message: "Invalid Field: 'location_coordinate'." }],
+  }) === "DataForSEO 40501: Invalid Field: 'location_coordinate'",
+  "task status_code wins over a top-level Ok"
+)
+assert(
+  dataForSeoErrorMessage({ status_code: 40100, status_message: "Authorization Error." }, 401) ===
+    "DataForSEO 40100: Authorization Error",
+  "top-level auth errors keep the DFS code"
+)
+assert(
+  dataForSeoErrorMessage({}, 502) === "DataForSEO returned HTTP 502",
+  "HTTP failures without a JSON body still surface"
+)
+
+console.log("ok DataForSEO request shape + error bodies")
 console.log("all scan pin checks passed")

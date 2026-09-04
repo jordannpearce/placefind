@@ -74,7 +74,7 @@ export async function PUT(request: Request) {
       }
     }
     if (body.settings) {
-      const login = body.settings.login?.trim() ?? current.settings.login
+      const login = body.settings.login?.trim() || current.settings.login
       const password = body.settings.password?.trim() || current.settings.password
       current.settings = { login, password }
       const user = db.users.find((item) => item.id === auth.user.id)

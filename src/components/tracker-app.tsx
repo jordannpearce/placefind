@@ -3,11 +3,10 @@
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Info, Menu, PanelRight, Settings, X } from "lucide-react"
+import { Info, Menu, Settings, X } from "lucide-react"
 
 import { ScanForm } from "@/components/scan-form"
 import { SettingsDialog } from "@/components/settings-dialog"
-import { ResultsPanel } from "@/components/results-panel"
 import { Wordmark } from "@/components/wordmark"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
@@ -49,7 +48,6 @@ import type {
   Campaign,
   GeocodeHit,
   KeywordResults,
-  KeywordStatRow,
   PlanId,
   ScanConfig,
   ScanPointResponse,
@@ -111,7 +109,6 @@ export function TrackerApp() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [setupOpen, setSetupOpen] = useState(false)
-  const [resultsOpen, setResultsOpen] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
   const [campaignLimitError, setCampaignLimitError] = useState<string | null>(null)
   const [planLimits, setPlanLimits] = useState({
@@ -132,17 +129,10 @@ export function TrackerApp() {
   const results = scansByKeyword[config.activeKeyword] ?? {}
   const resultList = useMemo(() => Object.values(results), [results])
   const stats = resultList.length > 0 ? computeStats(resultList, config.targetBusiness) : null
-  const selected = selectedId ? results[selectedId] ?? null : null
   const progress =
     scanning && scanProgress.total > 0
       ? Math.round((scanProgress.done / scanProgress.total) * 100)
       : 0
-  const keywordStats: KeywordStatRow[] = config.keywords.flatMap((keyword) => {
-    const rows = Object.values(scansByKeyword[keyword] ?? {})
-    if (rows.length === 0) return []
-    return [{ keyword, stats: computeStats(rows, config.targetBusiness) }]
-  })
-
   useEffect(() => {
     let cancelled = false
     fetch("/api/status", {
@@ -498,8 +488,8 @@ export function TrackerApp() {
                 const message = payload.error || `Scan failed (${response.status})`
                 if (response.status === 401 || response.status === 402) {
                   abortRef.current = true
-                  setScanError(message)
                 }
+                if (message !== "Cancelled") setScanError(message)
                 return placeholderPoint({
                   id: point.id,
                   lat: point.lat,
@@ -510,14 +500,19 @@ export function TrackerApp() {
                 })
               }
               if (payload.mode) setModeLabel(payload.mode)
+              if (payload.error && payload.error !== "Cancelled") {
+                setScanError(payload.error)
+              }
               return { ...payload, id: payload.id || point.id }
             } catch (error) {
+              const message = error instanceof Error ? error.message : "Scan failed"
+              if (message !== "Cancelled") setScanError(message)
               return placeholderPoint({
                 id: point.id,
                 lat: point.lat,
                 lng: point.lng,
                 zoom: config.zoom,
-                error: error instanceof Error ? error.message : "Scan failed",
+                error: message,
               })
             }
           },
@@ -702,22 +697,6 @@ export function TrackerApp() {
     />
   )
 
-  const resultsPanel = (
-    <ResultsPanel
-      stats={stats}
-      selected={selected}
-      selectedId={selectedId}
-      points={points}
-      results={results}
-      targetBusiness={config.targetBusiness}
-      emptyMessage="Add keywords and a listing, then scan this campaign. Each pin is one Maps task per keyword."
-      keywordStats={keywordStats}
-      activeKeyword={config.activeKeyword}
-      onSelectKeyword={(keyword) => patchConfig({ activeKeyword: keyword })}
-      onSelectPin={setSelectedId}
-    />
-  )
-
   if (billingLock?.locked) {
     return (
       <div className="mx-auto flex max-w-2xl flex-col justify-center px-4 py-16">
@@ -790,19 +769,10 @@ export function TrackerApp() {
           >
             <Info />
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="xl:hidden"
-            onClick={() => setResultsOpen(true)}
-          >
-            <PanelRight />
-            Results
-          </Button>
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_380px]">
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="hidden min-h-0 overflow-y-auto border-r p-4 lg:block">
           {form}
         </aside>
@@ -831,6 +801,15 @@ export function TrackerApp() {
                   {config.gridSize}×{config.gridSize} · {config.radiusMiles.toFixed(1)} mi radius ·{" "}
                   {config.keywords.length} keyword{config.keywords.length === 1 ? "" : "s"}
                 </p>
+                {stats ? (
+                  <p className="text-muted-foreground">
+                    ATR {stats.atr?.toFixed(1) ?? "—"} · pack {stats.top3Share}% · {stats.found}/
+                    {stats.points}
+                    {stats.errors > 0
+                      ? ` · ${stats.errors} error${stats.errors === 1 ? "" : "s"}`
+                      : ""}
+                  </p>
+                ) : null}
                 {config.keywords.length > 1 ? (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {config.keywords.map((keyword) => (
@@ -887,10 +866,6 @@ export function TrackerApp() {
             )}
           </div>
         </main>
-
-        <aside className="hidden min-h-0 overflow-y-auto border-l p-4 xl:block">
-          {resultsPanel}
-        </aside>
       </div>
 
       <Sheet open={setupOpen} onOpenChange={setSetupOpen}>
@@ -898,12 +873,6 @@ export function TrackerApp() {
           {form}
         </SheetContent>
       </Sheet>
-      <Sheet open={resultsOpen} onOpenChange={setResultsOpen}>
-        <SheetContent side="right" className="w-[min(100%,380px)] overflow-y-auto p-4">
-          {resultsPanel}
-        </SheetContent>
-      </Sheet>
-
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>

@@ -94,7 +94,9 @@ function PinPopup({
         {result.locationCoordinate} · {listings.length} listing
         {listings.length === 1 ? "" : "s"}
       </p>
-      {listings.length === 0 ? (
+      {result.error ? (
+        <p className="text-xs text-destructive">{result.error}</p>
+      ) : listings.length === 0 ? (
         <p className="text-xs text-muted-foreground">No businesses returned at this point.</p>
       ) : (
         <ol className="max-h-56 space-y-1.5 overflow-auto pr-1">

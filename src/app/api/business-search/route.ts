@@ -1,5 +1,5 @@
 import { rejectUnlessSoftwareAccess } from "@/lib/billing-gate"
-import { resolveRequestAuth } from "@/lib/dataforseo"
+import { dataForSeoErrorMessage, resolveRequestAuth } from "@/lib/dataforseo"
 import { googleMapsUrl } from "@/lib/grid"
 import { searchMockBusinesses } from "@/lib/mock-scan"
 import { namesMatch } from "@/lib/rank"
@@ -169,13 +169,11 @@ async function searchLiveMaps(
         }>
       }>
     }
-    if (!response.ok || (payload.status_code && payload.status_code >= 40000)) {
-      return { hits: [], error: payload.status_message || `DataForSEO returned HTTP ${response.status}` }
+    const dfsError = dataForSeoErrorMessage(payload, response.status)
+    if (dfsError) {
+      return { hits: [], error: dfsError }
     }
     const task = payload.tasks?.[0]
-    if (task?.status_code && task.status_code >= 40000) {
-      return { hits: [], error: task.status_message || "DataForSEO Maps search failed" }
-    }
     const items = task?.result?.[0]?.items ?? []
     const hits = items
       .filter((item) => item.type === "maps_search" && item.title)

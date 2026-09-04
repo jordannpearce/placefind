@@ -125,19 +125,83 @@ export function getScanMode(
   return "mock"
 }
 
+export function mapsLiveTask(input: {
+  keyword: string
+  languageCode: string
+  locationCoordinate: string
+  device: DeviceType
+  depth: number
+}) {
+  return {
+    keyword: input.keyword,
+    language_code: input.languageCode || "en",
+    location_coordinate: input.locationCoordinate,
+    device: input.device === "mobile" ? "mobile" : "desktop",
+    depth: Math.min(Math.max(Math.round(input.depth || 20), 1), 700),
+    search_this_area: true,
+    search_places: false,
+  }
+}
+
+export function dataForSeoErrorMessage(
+  payload: DataForSeoResponse | null | undefined,
+  httpStatus?: number
+): string | null {
+  const task = payload?.tasks?.[0]
+  const taskCode = Number(task?.status_code ?? 0)
+  const topCode = Number(payload?.status_code ?? 0)
+  const code = taskCode >= 40000 ? taskCode : topCode >= 40000 ? topCode : 0
+  const message = (
+    (taskCode >= 40000 ? task?.status_message : "") ||
+    (topCode >= 40000 ? payload?.status_message : "") ||
+    task?.status_message ||
+    payload?.status_message ||
+    ""
+  )
+    .toString()
+    .replace(/\.$/, "")
+    .trim()
+
+  if (code >= 40000) {
+    return message ? `DataForSEO ${code}: ${message}` : `DataForSEO error ${code}`
+  }
+  if (httpStatus && httpStatus >= 400) {
+    return message
+      ? `DataForSEO HTTP ${httpStatus}: ${message}`
+      : `DataForSEO returned HTTP ${httpStatus}`
+  }
+  return null
+}
+
+async function readDataForSeoJson(response: Response): Promise<DataForSeoResponse> {
+  const raw = await response.text()
+  if (!raw.trim()) return {}
+  try {
+    return JSON.parse(raw) as DataForSeoResponse
+  } catch {
+    throw new Error(
+      response.ok
+        ? "DataForSEO returned an unreadable response"
+        : `DataForSEO returned HTTP ${response.status}`
+    )
+  }
+}
+
 export async function verifyDataForSeoAuth(auth: DataForSeoAuth): Promise<{ ok: boolean; message: string }> {
   try {
     const cred = Buffer.from(`${auth.login}:${auth.password}`).toString("base64")
     const response = await fetch("https://api.dataforseo.com/v3/appendix/user_data", {
       headers: { Authorization: `Basic ${cred}` },
     })
-    const payload = (await response.json()) as { status_code?: number; status_message?: string }
-    if (!response.ok || (payload.status_code && payload.status_code >= 40000)) {
-      return { ok: false, message: payload.status_message || `HTTP ${response.status}` }
-    }
+    const payload = await readDataForSeoJson(response)
+    const error = dataForSeoErrorMessage(payload, response.status)
+    if (error) return { ok: false, message: error }
     return { ok: true, message: "DataForSEO account connected." }
-  } catch {
-    return { ok: false, message: "Could not reach DataForSEO." }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Could not reach DataForSEO.",
+    }
   }
 }
 
@@ -169,33 +233,28 @@ export async function fetchMapsPoint(input: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify([
-      {
-        language_code: input.languageCode,
-        location_coordinate: locationCoordinate,
+      mapsLiveTask({
         keyword: input.keyword,
+        languageCode: input.languageCode,
+        locationCoordinate,
         device: input.device,
         depth: input.depth,
-        search_this_area: true,
-        search_places: false,
-      },
+      }),
     ]),
   })
 
+  const payload = await readDataForSeoJson(response)
+  const dfsError = dataForSeoErrorMessage(payload, response.status)
+  if (dfsError) {
+    throw new Error(dfsError)
+  }
   if (!response.ok) {
     throw new Error(`DataForSEO returned HTTP ${response.status}`)
-  }
-
-  const payload = (await response.json()) as DataForSeoResponse
-  if (payload.status_code && payload.status_code >= 40000) {
-    throw new Error(payload.status_message || "DataForSEO request failed")
   }
 
   const task = payload.tasks?.[0]
   if (!task) {
     throw new Error("DataForSEO returned no tasks")
-  }
-  if (task.status_code && task.status_code >= 40000) {
-    throw new Error(task.status_message || "DataForSEO task failed")
   }
 
   const listings = listingsFromTask(task)

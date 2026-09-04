@@ -1,6 +1,6 @@
 import { rejectUnlessSoftwareAccess } from "@/lib/billing-gate"
 import { fetchMapsPoint, getScanMode, resolveRequestAuth } from "@/lib/dataforseo"
-import { formatCoordinate } from "@/lib/grid"
+import { clampZoom, formatCoordinate } from "@/lib/grid"
 import { mockDelayMs, mockScanPoint } from "@/lib/mock-scan"
 import type { DeviceType, ScanPointResponse } from "@/lib/types"
 
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   const targetBusiness = body.targetBusiness?.trim()
   const lat = Number(body.lat)
   const lng = Number(body.lng)
-  const zoom = Number(body.zoom ?? 15)
+  const zoom = clampZoom(Number(body.zoom ?? 15))
   const pointId = body.pointId?.trim() || "point"
 
   if (!keyword) {
@@ -48,9 +48,6 @@ export async function POST(request: Request) {
   }
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return Response.json({ error: "Valid latitude and longitude are required" }, { status: 400 })
-  }
-  if (zoom < 3 || zoom > 21) {
-    return Response.json({ error: "Zoom must be between 3 and 21" }, { status: 400 })
   }
 
   const languageCode = body.languageCode?.trim() || "en"

@@ -13,8 +13,15 @@ export function milesToLongitudeDelta(miles: number, latitude: number): number {
   return miles / Math.max(milesPerDegreeLng, 0.01)
 }
 
+export function clampZoom(zoom: number): number {
+  const rounded = Math.round(Number(zoom))
+  if (!Number.isFinite(rounded)) return 15
+  return Math.min(21, Math.max(3, rounded))
+}
+
+/** DataForSEO Maps: latitude,longitude,zoom with a `z` suffix. Max 7 decimals, zoom 3–21. */
 export function formatCoordinate(lat: number, lng: number, zoom: number): string {
-  return `${clampDecimals(lat, 7)},${clampDecimals(lng, 7)},${zoom}z`
+  return `${clampDecimals(lat, 7)},${clampDecimals(lng, 7)},${clampZoom(zoom)}z`
 }
 
 export function clampDecimals(value: number, digits: number): string {
