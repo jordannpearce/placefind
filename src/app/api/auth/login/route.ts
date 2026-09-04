@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   await writeSession(user)
   const db = await readDb()
   const current = userHasSoftwareAccess(user, db)
-  const billingUrl = billingPathForUser(user, db)
+  const billingUrl = current ? "/dashboard" : billingPathForUser(user, db)
   return NextResponse.json({
     ok: true,
     role: user.role,
