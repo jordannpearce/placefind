@@ -13,13 +13,12 @@ async function mintPortalRedirect() {
   const auth = await requireUser()
   if (!auth) redirect("/login?next=/account")
 
-  if (!paddleApiKey()) {
-    return NextResponse.json({ error: "Paddle billing is not configured." }, { status: 503 })
-  }
-
   const db = await readDb()
   const customerId = findPaddleCustomerId(db, auth.user)
   if (!customerId) redirect("/account?billing=missing")
+  if (!paddleApiKey()) {
+    return NextResponse.json({ error: "Paddle billing is not configured." }, { status: 503 })
+  }
 
   const subscriptionIds = db.subscriptions
     .filter((row) => row.customerId === customerId)
