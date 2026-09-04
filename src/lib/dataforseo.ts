@@ -307,17 +307,20 @@ export function listingsFromTask(task: DataForSeoTask | undefined | null): Listi
   let organic = 0
   return listings.map((listing) => {
     if (listing.isPaid) {
+      const paidRank = listing.rankGroup || listing.rankAbsolute || 1
       return {
         ...listing,
-        rankGroup: listing.rankGroup || 1,
-        rankAbsolute: listing.rankAbsolute || 1,
+        rankGroup: listing.rankGroup || paidRank,
+        rankAbsolute: listing.rankAbsolute || paidRank,
       }
     }
     organic += 1
+    const parsed = listing.rankGroup || listing.rankAbsolute
+    const rank = parsed || organic
     return {
       ...listing,
-      rankGroup: listing.rankGroup || organic,
-      rankAbsolute: listing.rankAbsolute || organic,
+      rankGroup: listing.rankGroup || rank,
+      rankAbsolute: listing.rankAbsolute || rank,
     }
   })
 }
