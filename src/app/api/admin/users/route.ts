@@ -1,28 +1,31 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { createManagedUser, sendManagedUserWelcome, serializeAdminUsers } from "@/lib/admin-managed-user"
 import { requireAdmin } from "@/lib/auth-guard"
-import { findOrCreateAgency, findOrCreateWorkspace, readDb, updateDb } from "@/lib/db"
+import { findOrCreateAgency, readDb, updateDb } from "@/lib/db"
 import { purgeUserAccount } from "@/lib/purge-user"
-import { clearImpersonation, getImpersonatedUserId, publicUser } from "@/lib/session"
-import { ACTIVATION_TOKEN_TTL_MS, createHashedToken } from "@/lib/auth-tokens"
-import {
-  accountCreatedEmail,
-  accountInviteEmail,
-  activationEmail,
-  appUrl,
-  billingEmail,
-} from "@/lib/email-templates"
-import { previewUrl, sendAuthMail, sendMail } from "@/lib/mail"
-import { hashPassword, randomToken } from "@/lib/password"
+import { clearImpersonation, getImpersonatedUserId } from "@/lib/session"
+import { billingEmail } from "@/lib/email-templates"
+import { sendMail } from "@/lib/mail"
 import {
   computeTrialEndsAt,
   isTrialUnit,
   parseTrialEndsAt,
   type TrialUnit,
 } from "@/lib/paddle-access"
-import { provisionUserFromPaddle } from "@/lib/paddle-fulfillment"
 import { clampExtraCampaigns, isPlanId, PLANS } from "@/lib/plans"
-import type { PlanId, UserRole, UserStatus } from "@/lib/types"
+import type { PlanId, User, UserRole, UserStatus } from "@/lib/types"
+
+function suspendBlockedReason(db: Awaited<ReturnType<typeof readDb>>, target: User, actorId: string) {
+  if (target.id === actorId) return "You cannot suspend your own account."
+  if (target.role === "admin") {
+    const remaining = db.users.filter(
+      (item) => item.id !== target.id && item.role === "admin" && item.status === "active"
+    )
+    if (remaining.length === 0) return "Cannot suspend the last admin."
+  }
+  return null
+}
 
 function trialFromBody(body: { trialEndsAt?: string | null; trialAmount?: number; trialUnit?: TrialUnit | string }) {
   if (body.trialAmount !== undefined || body.trialUnit !== undefined) {
@@ -35,16 +38,7 @@ function trialFromBody(body: { trialEndsAt?: string | null; trialAmount?: number
   return undefined
 }
 
-function serializeUsers(
-  db: Awaited<ReturnType<typeof readDb>>
-) {
-  const agencies = Object.fromEntries(db.agencies.map((agency) => [agency.id, agency.name]))
-  return db.users.map((user) => ({
-    ...publicUser(user),
-    agencyName: agencies[user.agencyId] || user.company || "Independent",
-    campaignCount: db.workspaces[user.id]?.campaigns.length ?? 0,
-  }))
-}
+const serializeUsers = serializeAdminUsers
 
 export async function GET() {
   const admin = await requireAdmin()
@@ -91,90 +85,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 })
   }
 
-  const status: UserStatus = invite
-    ? "pending"
-    : body.status === "pending" || body.status === "suspended"
-      ? body.status
-      : "active"
   const trialEndsAt = trialFromBody(body) ?? null
-  let token = ""
-  let inviteToken = ""
-
-  const user = await updateDb((db) => {
-    if (db.users.some((item) => item.email === email)) return null
-    const agency = findOrCreateAgency(db, body.agencyName?.trim() || body.company?.trim() || name)
-    const created = {
-      id: `user_${Date.now()}`,
+  const created = await updateDb((db) =>
+    createManagedUser(db, {
       name,
       email,
-      passwordHash: hashPassword(invite ? randomToken() : password),
-      role: body.role === "admin" ? ("admin" as const) : ("user" as const),
-      status,
-      plan: isPlanId(body.plan) && PLANS[body.plan] ? body.plan : ("starter" as const),
-      extraCampaigns: 0,
-      marketingOptIn: Boolean(body.marketingOptIn),
-      company: body.company?.trim() || agency.name,
-      agencyId: agency.id,
-      paddleCustomerId: "",
-      createdAt: new Date().toISOString(),
-      lastLoginAt: null,
-      dfsLogin: "",
-      dfsPassword: "",
+      password,
+      company: body.company,
+      agencyName: body.agencyName,
+      plan: body.plan,
+      extraCampaigns: body.extraCampaigns,
+      role: body.role,
+      status: body.status,
+      marketingOptIn: body.marketingOptIn,
       trialEndsAt,
-    }
-    created.extraCampaigns = clampExtraCampaigns(created.plan, body.extraCampaigns)
-    db.users.push(created)
-    provisionUserFromPaddle(db, created)
-    findOrCreateWorkspace(db, created.id)
-    if (invite) {
-      inviteToken = createHashedToken(db, created.id, "reset", ACTIVATION_TOKEN_TTL_MS)
-    } else if (status === "pending") {
-      token = createHashedToken(db, created.id, "activation", ACTIVATION_TOKEN_TTL_MS)
-    }
-    return created
-  })
+      defaultPlan: "starter",
+    })
+  )
 
-  if (!user) {
+  if (!created.ok) {
     return NextResponse.json({ error: "An account with that email already exists." }, { status: 409 })
   }
-
-  let preview: string | null = null
-  const shouldEmail = invite || body.sendEmail !== false
-  if (shouldEmail) {
-    if (invite) {
-      const setPasswordUrl = `${appUrl()}/reset-password?token=${inviteToken}`
-      const template = accountInviteEmail(user.name, user.email, setPasswordUrl, user.trialEndsAt)
-      const mail = await sendAuthMail({
-        to: user.email,
-        subject: template.subject,
-        html: template.html,
-        kind: "account_created",
-        userId: user.id,
-      })
-      preview = mail.provider === "preview" ? previewUrl(mail.id) : null
-    } else if (status === "pending") {
-      const verifyUrl = `${appUrl()}/verify?token=${token}`
-      const template = activationEmail(user.name, verifyUrl)
-      const mail = await sendAuthMail({
-        to: user.email,
-        subject: template.subject,
-        html: template.html,
-        kind: "activation",
-        userId: user.id,
-      })
-      preview = mail.provider === "preview" ? previewUrl(mail.id) : null
-    } else {
-      const template = accountCreatedEmail(user.name, user.email, user.trialEndsAt)
-      const mail = await sendAuthMail({
-        to: user.email,
-        subject: template.subject,
-        html: template.html,
-        kind: "account_created",
-        userId: user.id,
-      })
-      preview = mail.provider === "preview" ? previewUrl(mail.id) : null
-    }
-  }
+  const user = created.user
+  const preview = await sendManagedUserWelcome(created, body.sendEmail !== false)
 
   const db = await readDb()
   return NextResponse.json({
@@ -188,6 +121,8 @@ export async function PATCH(request: Request) {
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   let body: {
     userId?: string
+    name?: string
+    email?: string
     status?: UserStatus
     plan?: PlanId
     extraCampaigns?: number
@@ -208,11 +143,30 @@ export async function PATCH(request: Request) {
   if (!body.userId) return NextResponse.json({ error: "userId is required" }, { status: 400 })
 
   const previous = { plan: "", extraCampaigns: 0 }
-  const user = await updateDb((db) => {
+  const patched = await updateDb((db) => {
     const found = db.users.find((item) => item.id === body.userId)
-    if (!found) return null
+    if (!found) return { error: "User not found" as const, status: 404 as const }
+    const nextName = typeof body.name === "string" ? body.name.trim() : null
+    if (nextName !== null && nextName.length < 2) {
+      return { error: "Name is required." as const, status: 400 as const }
+    }
+    const nextEmail = typeof body.email === "string" ? body.email.trim().toLowerCase() : null
+    if (nextEmail !== null) {
+      if (!nextEmail.includes("@")) {
+        return { error: "A valid email is required." as const, status: 400 as const }
+      }
+      if (db.users.some((item) => item.id !== found.id && item.email === nextEmail)) {
+        return { error: "An account with that email already exists." as const, status: 409 as const }
+      }
+    }
+    if (body.status === "suspended") {
+      const blocked = suspendBlockedReason(db, found, admin.user.id)
+      if (blocked) return { error: blocked, status: 400 as const }
+    }
     previous.plan = found.plan
     previous.extraCampaigns = found.extraCampaigns
+    if (nextName !== null) found.name = nextName
+    if (nextEmail !== null) found.email = nextEmail
     if (body.status) found.status = body.status
     if (body.plan && isPlanId(body.plan) && PLANS[body.plan]) found.plan = body.plan
     if (body.extraCampaigns !== undefined) {
@@ -239,9 +193,12 @@ export async function PATCH(request: Request) {
       found.agencyId = agency.id
       found.company = found.company || agency.name
     }
-    return found
+    return { user: found }
   })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
+  if ("error" in patched) {
+    return NextResponse.json({ error: patched.error }, { status: patched.status })
+  }
+  const user = patched.user
   if (user.plan !== previous.plan || user.extraCampaigns !== previous.extraCampaigns) {
     const template = billingEmail(user.name, user.plan, user.extraCampaigns)
     await sendMail({

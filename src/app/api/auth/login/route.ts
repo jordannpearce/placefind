@@ -25,9 +25,6 @@ export async function POST(request: Request) {
       { status: 403 }
     )
   }
-  if (user.status === "suspended") {
-    return NextResponse.json({ error: "This account is suspended. Contact support." }, { status: 403 })
-  }
 
   await updateDb((db) => {
     const found = db.users.find((item) => item.id === user.id)

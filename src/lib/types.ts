@@ -227,6 +227,7 @@ export type User = {
   passwordHash: string
   role: UserRole
   status: UserStatus
+  /** `agency` is a Pro-plan agency account. Role stays `user` unless they are staff. */
   plan: PlanId
   extraCampaigns: number
   marketingOptIn: boolean

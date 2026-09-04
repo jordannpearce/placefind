@@ -102,4 +102,30 @@ assert.equal(hasComplimentarySoftwareAccess(formerDemo), false)
 const admin = user({ role: "admin", email: "admin@example.com" })
 assert.equal(userHasSoftwareAccess(admin, emptyMirror), true)
 
+const suspendedTrial = user({
+  email: "agency-trial@example.com",
+  plan: "agency",
+  status: "suspended",
+  trialEndsAt: computeTrialEndsAt(7, "days"),
+})
+assert.equal(userHasSoftwareAccess(suspendedTrial, emptyMirror), false)
+assert.equal(hasComplimentarySoftwareAccess(suspendedTrial), false)
+assert.equal(billingPathForUser(suspendedTrial, emptyMirror), "/pricing?billing=required")
+
+const suspendedPaid = user({
+  email: "agency-paid@example.com",
+  plan: "agency",
+  status: "suspended",
+  paddleCustomerId: "ctm_1",
+})
+assert.equal(userHasSoftwareAccess(suspendedPaid, paidMirror), false)
+assert.equal(billingPathForUser(suspendedPaid, paidMirror), "/account?billing=required")
+
+const suspendedAdmin = user({
+  role: "admin",
+  status: "suspended",
+  email: "admin-suspended@example.com",
+})
+assert.equal(userHasSoftwareAccess(suspendedAdmin, emptyMirror), true)
+
 console.log("trial access checks passed")

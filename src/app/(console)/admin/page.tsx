@@ -3,6 +3,7 @@ import Link from "next/link"
 import { AdminAgencies } from "@/components/admin-agencies"
 import { AdminUsers } from "@/components/admin-users"
 import { buttonVariants } from "@/components/ui/button"
+import { isAgencyAccount } from "@/lib/plans"
 import { requireAdmin } from "@/lib/auth-guard"
 import { readDb } from "@/lib/db"
 import { publicUser } from "@/lib/session"
@@ -37,7 +38,11 @@ export default async function AdminPage() {
         </Link>
       </div>
       <div className="mt-8">
-        <AdminAgencies agencies={agencies} />
+        <AdminAgencies
+          agencies={agencies}
+          users={users.filter((user) => isAgencyAccount(user))}
+          currentUserId={admin.user.id}
+        />
       </div>
       <div className="mt-8">
         <AdminUsers users={users} agencies={db.agencies} currentUserId={admin.user.id} />

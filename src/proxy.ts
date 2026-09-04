@@ -31,9 +31,9 @@ export async function proxy(request: NextRequest) {
       let user = db.users.find((item) => item.id === session.uid)
       if (asId && session.role === "admin") {
         const target = db.users.find((item) => item.id === asId)
-        if (target && target.status !== "suspended") user = target
+        if (target && target.status !== "pending") user = target
       }
-      if (user && user.status === "active" && !userHasSoftwareAccess(user, db)) {
+      if (user && !userHasSoftwareAccess(user, db)) {
         return NextResponse.redirect(new URL(billingPathForUser(user, db), request.url))
       }
     } catch {

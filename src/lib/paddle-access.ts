@@ -1,4 +1,8 @@
-import type { PaddleCustomer, PaddleSubscription, User, UserRole } from "./types"
+import type { PaddleCustomer, PaddleSubscription, User, UserRole, UserStatus } from "./types"
+
+type AccessUser = Pick<User, "id" | "email" | "role" | "paddleCustomerId" | "trialEndsAt"> & {
+  status?: UserStatus | string
+}
 
 export const BILLING_REQUIRED_CODE = "billing_required"
 
@@ -80,11 +84,20 @@ export function pickAccessSubscription(subscriptions: PaddleSubscription[]): Pad
   return latest[0] ?? null
 }
 
+/** Admin-suspended accounts stay signed in for billing, but the tracker/scans lock. Admins are never blocked. */
+export function accountIsSuspended(
+  user: { role?: UserRole | string; status?: UserStatus | string } | null | undefined
+): boolean {
+  if (!user || user.role === "admin") return false
+  return user.status === "suspended"
+}
+
 export function hasComplimentarySoftwareAccess(
   user:
     | Pick<User, "id" | "email" | "role" | "trialEndsAt">
-    | { id?: string; email: string; role: UserRole | string; trialEndsAt?: string | null }
+    | { id?: string; email: string; role: UserRole | string; trialEndsAt?: string | null; status?: UserStatus | string }
 ): boolean {
+  if (accountIsSuspended(user)) return false
   return user.role === "admin" || trialStillOpen(user)
 }
 
@@ -112,10 +125,8 @@ export function subscriptionsForUser(
 }
 
 /** True when this account may use the tracker, scans, and workspace product. */
-export function userHasSoftwareAccess(
-  user: Pick<User, "id" | "email" | "role" | "paddleCustomerId" | "trialEndsAt">,
-  mirror: BillingMirror
-): boolean {
+export function userHasSoftwareAccess(user: AccessUser, mirror: BillingMirror): boolean {
+  if (accountIsSuspended(user)) return false
   if (hasComplimentarySoftwareAccess(user)) return true
   return subscriptionGrantsAccess(pickAccessSubscription(subscriptionsForUser(user, mirror)))
 }
@@ -124,11 +135,8 @@ export function userHasSoftwareAccess(
  * Where to send a signed-in user who is not current.
  * Never-subscribed → pricing. Existing Paddle customer → account (portal).
  */
-export function billingPathForUser(
-  user: Pick<User, "id" | "email" | "role" | "paddleCustomerId" | "trialEndsAt">,
-  mirror: BillingMirror
-): string {
-  if (hasComplimentarySoftwareAccess(user)) return "/dashboard"
+export function billingPathForUser(user: AccessUser, mirror: BillingMirror): string {
+  if (userHasSoftwareAccess(user, mirror)) return "/dashboard"
   const customerId = findCustomerIdForUser(user, mirror.customers)
   return customerId ? "/account?billing=required" : "/pricing?billing=required"
 }
@@ -174,10 +182,7 @@ export function postLoginPath(input: {
   return input.billingPath
 }
 
-export function billingRequiredPayload(
-  user: Pick<User, "id" | "email" | "role" | "paddleCustomerId" | "trialEndsAt">,
-  mirror: BillingMirror
-) {
+export function billingRequiredPayload(user: AccessUser, mirror: BillingMirror) {
   return {
     error:
       "An active GridPins subscription is required to use the tracker, run ranking scans, or change workspace campaigns.",

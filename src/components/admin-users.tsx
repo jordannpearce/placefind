@@ -9,13 +9,14 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { TrialUnit } from "@/lib/paddle-access"
-import { MAX_EXTRA_CAMPAIGNS, PLANS, PLAN_ORDER } from "@/lib/plans"
+import { isAgencyAccount, MAX_EXTRA_CAMPAIGNS, PLANS, PLAN_ORDER } from "@/lib/plans"
 import { blankCampaign, uniqueCampaignName } from "@/lib/storage"
 import type { Agency, Campaign, PlanId, PublicUser, UserRole, UserStatus } from "@/lib/types"
 
@@ -39,6 +40,8 @@ export function AdminUsers({
   const [toasts, setToasts] = useState<Toast[]>([])
   const [pending, setPending] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [editing, setEditing] = useState<AdminUserRow | null>(null)
+  const [editForm, setEditForm] = useState({ name: "", email: "" })
   const [managing, setManaging] = useState<AdminUserRow | null>(null)
   const [managedCampaigns, setManagedCampaigns] = useState<Campaign[]>([])
   const [managedActiveId, setManagedActiveId] = useState("")
@@ -77,6 +80,8 @@ export function AdminUsers({
   async function patch(
     userId: string,
     body: {
+      name?: string
+      email?: string
       status?: UserStatus
       plan?: PlanId
       extraCampaigns?: number
@@ -86,7 +91,8 @@ export function AdminUsers({
       trialAmount?: number
       trialUnit?: TrialUnit
       clearTrial?: boolean
-    }
+    },
+    silent = false
   ) {
     setError(null)
     const response = await fetch("/api/admin/users", {
@@ -96,12 +102,47 @@ export function AdminUsers({
     })
     const data = (await response.json()) as { error?: string; user?: AdminUserRow }
     if (!response.ok) {
-      setError(data.error || "Update failed")
-      return
+      const text = data.error || "Update failed"
+      setError(text)
+      if (!silent) showToast("err", text)
+      return false
     }
     setRows((current) =>
       current.map((row) => (row.id === userId && data.user ? { ...row, ...data.user } : row))
     )
+    return true
+  }
+
+  async function changeStatus(user: AdminUserRow, status: UserStatus) {
+    if (status === "suspended" && user.status !== "suspended") {
+      if (
+        !window.confirm(
+          `Suspend ${user.name} (${user.email})? They can still sign in to billing and account, but the tracker and scans will lock.`
+        )
+      ) {
+        return
+      }
+    }
+    const ok = await patch(user.id, { status })
+    if (ok) {
+      showToast("ok", status === "suspended" ? `${user.email} is suspended.` : `${user.email} is ${status}.`)
+    }
+  }
+
+  function openEdit(user: AdminUserRow) {
+    setEditing(user)
+    setEditForm({ name: user.name, email: user.email })
+  }
+
+  async function saveEdit(event: React.FormEvent) {
+    event.preventDefault()
+    if (!editing) return
+    const ok = await patch(editing.id, { name: editForm.name, email: editForm.email })
+    if (ok) {
+      showToast("ok", `${editForm.email} updated.`)
+      setEditing(null)
+      router.refresh()
+    }
   }
 
   async function createUser(event: React.FormEvent) {
@@ -464,8 +505,24 @@ export function AdminUsers({
             {rows.map((user) => (
               <tr key={user.id} className="border-t">
                 <td className="px-3 py-2">
-                  <p className="font-medium">{user.name}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium">{user.name}</p>
+                    {isAgencyAccount(user) ? (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                        Agency
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="text-[11px] text-muted-foreground">{user.email}</p>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="ghost"
+                    className="mt-1 h-auto px-0 text-[11px]"
+                    onClick={() => openEdit(user)}
+                  >
+                    Edit
+                  </Button>
                 </td>
                 <td className="px-3 py-2">
                   <select
@@ -519,7 +576,7 @@ export function AdminUsers({
                   <select
                     className="h-8 rounded-lg border bg-transparent px-2"
                     value={user.status}
-                    onChange={(event) => patch(user.id, { status: event.target.value as UserStatus })}
+                    onChange={(event) => changeStatus(user, event.target.value as UserStatus)}
                   >
                     <option value="pending">Pending</option>
                     <option value="active">Active</option>
@@ -585,6 +642,40 @@ export function AdminUsers({
           </tbody>
         </table>
       </div>
+
+      <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={saveEdit}>
+            <DialogHeader>
+              <DialogTitle>Edit account</DialogTitle>
+              <DialogDescription>Change the display name or email. Plan, trial, and extras stay on the row.</DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 grid gap-3">
+              <Field label="Name">
+                <Input
+                  value={editForm.name}
+                  onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
+                  required
+                />
+              </Field>
+              <Field label="Email">
+                <Input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(event) => setEditForm((current) => ({ ...current, email: event.target.value }))}
+                  required
+                />
+              </Field>
+            </div>
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={() => setEditing(null)}>
+                Cancel
+              </Button>
+              <Button type="submit">Save</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(managing)} onOpenChange={(open) => !open && setManaging(null)}>
         <DialogContent className="sm:max-w-lg">
@@ -692,7 +783,7 @@ function TrialEditor({
   onPatch: (
     userId: string,
     body: { trialAmount?: number; trialUnit?: TrialUnit; clearTrial?: boolean }
-  ) => Promise<void>
+  ) => Promise<unknown>
 }) {
   const [amount, setAmount] = useState("7")
   const [unit, setUnit] = useState<TrialUnit>("days")

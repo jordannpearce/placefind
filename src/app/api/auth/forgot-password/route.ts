@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   let name = ""
   await updateDb((db) => {
     const user = db.users.find((item) => item.email === email)
-    if (!user || user.status === "suspended") return
+    if (!user || user.status === "pending") return
     const token = createHashedToken(db, user.id, "reset", RESET_TOKEN_TTL_MS)
     resetUrl = `${appUrl()}/reset-password?token=${token}`
     userId = user.id

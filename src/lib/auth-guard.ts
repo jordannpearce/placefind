@@ -21,8 +21,13 @@ export async function requireAdmin(): Promise<Authed | null> {
   if (!session) return null
   const db = await readDb()
   const user = db.users.find((item) => item.id === session.uid)
-  if (!user || user.role !== "admin" || user.status !== "active") return null
+  // Admins keep /admin even if someone marked the row suspended.
+  if (!user || user.role !== "admin") return null
   return userWithWorkspace(user)
+}
+
+function canActAsUser(user: User) {
+  return user.status === "active" || user.status === "suspended"
 }
 
 /** The user the console should act as (may be impersonated). */
@@ -31,12 +36,12 @@ export async function requireUser(): Promise<Authed | null> {
   if (!session) return null
   const db = await readDb()
   const real = db.users.find((item) => item.id === session.uid)
-  if (!real || real.status !== "active") return null
+  if (!real || !canActAsUser(real)) return null
 
   const asId = await getImpersonatedUserId()
   if (asId && real.role === "admin") {
     const target = db.users.find((item) => item.id === asId)
-    if (target && target.status !== "suspended") {
+    if (target && canActAsUser(target)) {
       return userWithWorkspace(target)
     }
   }

@@ -22,8 +22,8 @@ export async function POST(request: Request) {
   const db = await readDb()
   const target = db.users.find((user) => user.id === body.userId)
   if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 })
-  if (target.status === "suspended") {
-    return NextResponse.json({ error: "That account is suspended." }, { status: 400 })
+  if (target.status === "pending") {
+    return NextResponse.json({ error: "That account has not been activated." }, { status: 400 })
   }
 
   await writeImpersonation(target.id)

@@ -134,4 +134,14 @@ assert.equal(postLoginPath({ next: null, current: true, role: "admin", billingPa
 assert.equal(usableCampaignLimit("starter", 0, false), 0)
 assert.equal(usableCampaignLimit("starter", 0, true), 1)
 
+const suspendedAgency = user({
+  email: "agency@example.com",
+  plan: "agency",
+  status: "suspended",
+  paddleCustomerId: "ctm_2",
+  trialEndsAt: computeTrialEndsAt(2, "days"),
+})
+assert.equal(userHasSoftwareAccess(suspendedAgency, paidMirror), false)
+assert.equal(hasComplimentarySoftwareAccess(suspendedAgency), false)
+
 console.log("billing access checks passed")
