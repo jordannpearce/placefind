@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 
-import { purgeUserAccount, type Database } from "../src/lib/db.ts"
+import type { Database } from "../src/lib/db.ts"
+import { purgeUserAccount } from "../src/lib/purge-user.ts"
 import type { Agency, PaddleCustomer, PaddleSubscription, User, UserWorkspace } from "../src/lib/types.ts"
 
 const now = "2026-09-04T00:00:00.000Z"
@@ -290,3 +291,143 @@ assert.equal(
 )
 
 console.log("ok purgeUserAccount removes the account so the email can sign up again")
+
+async function checkJsonFallbackSignupReuse() {
+  process.env.DATABASE_URL = ""
+  const { readFileSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { updateDb, readDb } = await import("../src/lib/db.ts")
+  const stamp = Date.now()
+  const email = `reuse-${stamp}@example.com`
+  const actor = "user_tm_admin"
+  const oldCampaignId = `camp_old_${stamp}`
+  const customerId = `ctm_${stamp}`
+
+  const created = await updateDb((next) => {
+    const row = user({
+      id: `user_reuse_${stamp}`,
+      email,
+      name: "Reuse Me",
+      paddleCustomerId: customerId,
+      plan: "enterprise",
+      dfsLogin: "old-dfs",
+      dfsPassword: "old-secret",
+    })
+    next.users.push(row)
+    next.workspaces[row.id] = workspace({
+      campaigns: [
+        {
+          id: oldCampaignId,
+          name: "Must not survive",
+          brand: "Old",
+          keywords: ["old"],
+          activeKeyword: "old",
+          businessName: "Old Biz",
+          businessCity: "Austin",
+          businessState: "TX",
+          placeId: "",
+          mapsUrl: "",
+          locationLabel: "",
+          center: { lat: 30, lng: -97 },
+          gridSize: 5,
+          radiusMiles: 1,
+          languageCode: "en",
+          device: "desktop",
+          schedule: "manual",
+          createdAt: now,
+          lastScanAt: now,
+          nextScanAt: null,
+        },
+      ],
+      settings: { login: "old-dfs", password: "old-secret" },
+      activeCampaignId: oldCampaignId,
+      scans: { [oldCampaignId]: { old: {} } },
+    })
+    next.customers.push({
+      customerId,
+      email,
+      createdAt: now,
+      updatedAt: now,
+    })
+    next.subscriptions.push({
+      subscriptionId: `sub_${stamp}`,
+      customerId,
+      status: "active",
+      priceId: "pri_old",
+      productId: "pro_old",
+      scheduledChangeAction: null,
+      scheduledChangeAt: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    next.tokens.push({
+      id: `tok_${stamp}`,
+      userId: row.id,
+      type: "reset",
+      tokenHash: "reset-hash",
+      expiresAt: now,
+    })
+    return row
+  })
+
+  const deleted = await updateDb((next) => purgeUserAccount(next, created.id, actor))
+  assert.equal(deleted.ok, true)
+
+  const afterDelete = await readDb()
+  assert.equal(afterDelete.users.some((item) => item.email === email), false)
+  assert.equal(afterDelete.workspaces[created.id], undefined)
+  assert.equal(afterDelete.customers.some((row) => row.customerId === customerId), false)
+  assert.equal(afterDelete.tokens.some((token) => token.userId === created.id), false)
+
+  const jsonPath = join(process.cwd(), ".data", "gridpin.json")
+  const stored = JSON.parse(readFileSync(jsonPath, "utf8")) as Database
+  assert.equal(
+    stored.users.some((item) => item.email === email),
+    false,
+    "JSON fallback file must drop the deleted email"
+  )
+
+  const signedUp = await updateDb((next) => {
+    if (next.users.some((item) => item.email === email)) return null
+    const fresh = user({
+      id: `user_fresh_${stamp}`,
+      email,
+      name: "Brand New",
+      paddleCustomerId: "",
+      plan: "starter",
+      extraCampaigns: 0,
+      dfsLogin: "",
+      dfsPassword: "",
+      status: "pending",
+    })
+    next.users.push(fresh)
+    next.workspaces[fresh.id] = {
+      campaigns: [],
+      settings: { login: "", password: "" },
+      activeCampaignId: "",
+      scans: {},
+    }
+    return fresh
+  })
+  assert.ok(signedUp, "signup must succeed with the same email after delete")
+  assert.equal(signedUp.plan, "starter")
+  assert.equal(signedUp.paddleCustomerId, "")
+  assert.equal(signedUp.dfsLogin, "")
+  assert.equal(signedUp.dfsPassword, "")
+  assert.notEqual(signedUp.id, created.id)
+  const freshWorkspace = (await readDb()).workspaces[signedUp.id]
+  assert.ok(freshWorkspace)
+  assert.equal(
+    freshWorkspace.campaigns.some((campaign) => campaign.id === oldCampaignId),
+    false
+  )
+
+  await updateDb((next) => purgeUserAccount(next, signedUp.id, actor))
+  console.log("ok JSON fallback delete then signup reuses the email as a fresh unpaid account")
+}
+
+void checkJsonFallbackSignupReuse().catch((error) => {
+  console.error(error)
+  process.exit(1)
+})
+
