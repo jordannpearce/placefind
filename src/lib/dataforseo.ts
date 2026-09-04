@@ -1,5 +1,5 @@
 import { formatCoordinate } from "./grid"
-import { namesMatch } from "./rank"
+import { listingMatchesTarget } from "./rank"
 import type { DeviceType, Listing, PointResult, ScanMode } from "./types"
 
 const LIVE_ENDPOINT = "https://api.dataforseo.com/v3/serp/google/maps/live/advanced"
@@ -125,6 +125,12 @@ export function getScanMode(
   return "mock"
 }
 
+/**
+ * One Maps live/advanced task for a single grid cell.
+ * `location_coordinate` IS that cell’s GPS (`lat,lng,zoomz`).
+ * Do not send `location_code` / `location_name` (e.g. United States / 2840) —
+ * those ignore the lattice and search a national centroid.
+ */
 export function mapsLiveTask(input: {
   keyword: string
   languageCode: string
@@ -134,7 +140,7 @@ export function mapsLiveTask(input: {
 }) {
   return {
     keyword: input.keyword,
-    language_code: input.languageCode || "en",
+    language_code: input.languageCode?.trim() || "en",
     location_coordinate: input.locationCoordinate,
     device: input.device === "mobile" ? "mobile" : "desktop",
     depth: Math.min(Math.max(Math.round(input.depth || 20), 1), 700),
@@ -209,6 +215,9 @@ export async function fetchMapsPoint(input: {
   keyword: string
   targetBusiness: string
   targetPlaceId?: string
+  targetCid?: string
+  targetLat?: number
+  targetLng?: number
   lat: number
   lng: number
   zoom: number
@@ -267,6 +276,9 @@ export async function fetchMapsPoint(input: {
     listings,
     targetBusiness: input.targetBusiness,
     targetPlaceId: input.targetPlaceId,
+    targetCid: input.targetCid,
+    targetLat: input.targetLat,
+    targetLng: input.targetLng,
   })
 }
 
@@ -274,23 +286,40 @@ export function collectMapsItems(task: DataForSeoTask | undefined | null): DataF
   const blocks = task?.result
   if (!Array.isArray(blocks)) return []
   const out: DataForSeoItem[] = []
+  const visit = (item: DataForSeoItem | null | undefined) => {
+    if (!item) return
+    if (Array.isArray(item.items) && item.items.length > 0) {
+      for (const child of item.items) visit(child)
+      return
+    }
+    out.push(item)
+  }
   for (const block of blocks) {
     const items = block?.items
     if (!Array.isArray(items)) continue
-    for (const item of items) {
-      if (!item) continue
-      if (Array.isArray(item.items) && item.items.length > 0) {
-        out.push(...item.items)
-      } else {
-        out.push(item)
-      }
-    }
+    for (const item of items) visit(item)
   }
   return out
 }
 
 export function listingsFromTask(task: DataForSeoTask | undefined | null): Listing[] {
-  return collectMapsItems(task).filter(isListingItem).map(toListing)
+  const listings = collectMapsItems(task).filter(isListingItem).map(toListing)
+  let organic = 0
+  return listings.map((listing) => {
+    if (listing.isPaid) {
+      return {
+        ...listing,
+        rankGroup: listing.rankGroup || 1,
+        rankAbsolute: listing.rankAbsolute || 1,
+      }
+    }
+    organic += 1
+    return {
+      ...listing,
+      rankGroup: listing.rankGroup || organic,
+      rankAbsolute: listing.rankAbsolute || organic,
+    }
+  })
 }
 
 function isListingItem(item: DataForSeoItem): boolean {
@@ -306,6 +335,8 @@ export function organicRank(listing: Pick<Listing, "rankGroup" | "rankAbsolute">
   return null
 }
 
+export { listingMatchesTarget }
+
 export function matchTarget(input: {
   id: string
   lat: number
@@ -314,12 +345,19 @@ export function matchTarget(input: {
   listings: Listing[]
   targetBusiness: string
   targetPlaceId?: string
+  targetCid?: string
+  targetLat?: number
+  targetLng?: number
 }): PointResult {
-  const match = input.listings.find((listing) => {
-    if (listing.isPaid) return false
-    if (input.targetPlaceId && listing.placeId === input.targetPlaceId) return true
-    return namesMatch(listing.title, input.targetBusiness)
-  })
+  const match = input.listings.find((listing) =>
+    listingMatchesTarget(listing, {
+      title: input.targetBusiness,
+      placeId: input.targetPlaceId,
+      cid: input.targetCid,
+      lat: input.targetLat,
+      lng: input.targetLng,
+    })
+  )
 
   return {
     id: input.id,

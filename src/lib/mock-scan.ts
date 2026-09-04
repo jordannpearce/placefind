@@ -1,6 +1,6 @@
 import { formatCoordinate, googleMapsUrl, haversineMiles } from "./grid"
 import { matchTarget } from "./dataforseo"
-import { namesMatch, normalizeName } from "./rank"
+import { listingMatchesTarget, namesMatch, normalizeName } from "./rank"
 import type { BusinessCandidate, Listing, PointResult } from "./types"
 
 type MockPlace = {
@@ -279,6 +279,9 @@ export function mockScanPoint(input: {
   keyword: string
   targetBusiness: string
   targetPlaceId?: string
+  targetCid?: string
+  targetLat?: number
+  targetLng?: number
   lat: number
   lng: number
   zoom: number
@@ -295,9 +298,10 @@ export function mockScanPoint(input: {
   })
 
   const sponsor = scored[3]?.place
-  const listings: Listing[] = sponsor
+  const base: Listing[] = sponsor
     ? [{ ...placeToListing(sponsor, 1, true), rankGroup: 1, rankAbsolute: 1 }, ...organic]
     : organic
+  const listings = ensureTargetInPack(base, input)
 
   return matchTarget({
     id: input.pointId,
@@ -307,7 +311,74 @@ export function mockScanPoint(input: {
     listings,
     targetBusiness: input.targetBusiness,
     targetPlaceId: input.targetPlaceId,
+    targetCid: input.targetCid,
+    targetLat: input.targetLat,
+    targetLng: input.targetLng,
   })
+}
+
+/** Sample mode still paints a 1–12 rank on every pin when the campaign listing is not in the Austin set. */
+function ensureTargetInPack(
+  listings: Listing[],
+  input: {
+    targetBusiness: string
+    targetPlaceId?: string
+    targetCid?: string
+    targetLat?: number
+    targetLng?: number
+    lat: number
+    lng: number
+    keyword: string
+  }
+): Listing[] {
+  const target = {
+    title: input.targetBusiness,
+    placeId: input.targetPlaceId,
+    cid: input.targetCid,
+    lat: input.targetLat,
+    lng: input.targetLng,
+  }
+  if (listings.some((listing) => listingMatchesTarget(listing, target))) return listings
+
+  const rank = 1 + Math.floor(seededNoise(input.lat, input.lng, `target:${input.targetBusiness}`) * 10)
+  const storeLat = input.targetLat ?? input.lat
+  const storeLng = input.targetLng ?? input.lng
+  const injected: Listing = {
+    rankAbsolute: rank,
+    rankGroup: rank,
+    type: "maps_search",
+    title: input.targetBusiness,
+    domain: null,
+    address: null,
+    placeId: input.targetPlaceId?.trim() || `ChIJMockTarget${input.targetBusiness.slice(0, 12)}`,
+    cid: input.targetCid?.trim() || null,
+    phone: null,
+    category: input.keyword,
+    rating: 4.4,
+    reviews: 120,
+    latitude: storeLat,
+    longitude: storeLng,
+    url: googleMapsUrl({
+      title: input.targetBusiness,
+      lat: storeLat,
+      lng: storeLng,
+      placeId: input.targetPlaceId,
+    }),
+    isPaid: false,
+  }
+
+  const paid = listings.filter((listing) => listing.isPaid)
+  const organic = listings.filter((listing) => !listing.isPaid)
+  const nextOrganic = [...organic]
+  nextOrganic.splice(Math.min(rank - 1, nextOrganic.length), 0, injected)
+  return [
+    ...paid,
+    ...nextOrganic.map((listing, index) => ({
+      ...listing,
+      rankGroup: index + 1,
+      rankAbsolute: index + 1,
+    })),
+  ]
 }
 
 export function mockDelayMs(lat: number, lng: number): number {

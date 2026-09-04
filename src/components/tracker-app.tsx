@@ -471,6 +471,8 @@ export function TrackerApp() {
                   keyword,
                   targetBusiness: config.targetBusiness,
                   targetPlaceId: config.targetPlaceId || undefined,
+                  targetLat: config.center.lat,
+                  targetLng: config.center.lng,
                   lat: point.lat,
                   lng: point.lng,
                   zoom: config.zoom,

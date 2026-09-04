@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge"
-import { formatReviews, namesMatch } from "@/lib/rank"
+import { formatReviews, listingMatchesTarget } from "@/lib/rank"
 import type { Listing } from "@/lib/types"
 import { findGeoInName, geoLabel, splitTitleByGeo } from "@/lib/us-geo"
 import { cn } from "@/lib/utils"
@@ -64,10 +64,8 @@ export function ListingCard({
   targetBusiness: string
   compact?: boolean
 }) {
-  const isTarget =
-    namesMatch(listing.title, targetBusiness) ||
-    (listing.placeId != null && listing.placeId === targetBusiness)
-  const rank = listing.isPaid ? "Ad" : `#${listing.rankGroup}`
+  const isTarget = listingMatchesTarget(listing, { title: targetBusiness })
+  const rank = listing.isPaid ? "Ad" : listing.rankGroup > 0 ? `#${listing.rankGroup}` : "—"
 
   return (
     <div

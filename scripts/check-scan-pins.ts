@@ -1,7 +1,9 @@
 import { dataForSeoErrorMessage, listingsFromTask, mapsLiveTask, matchTarget } from "../src/lib/dataforseo"
 import { buildGrid, formatCoordinate, spacingFromRadius } from "../src/lib/grid"
 import { mockScanPoint } from "../src/lib/mock-scan"
+import { listingMatchesTarget, pinMark } from "../src/lib/rank"
 import { mergeWorkspaceScans, normalizeWorkspaceScans } from "../src/lib/scan-results"
+import type { Listing } from "../src/lib/types"
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message)
@@ -40,10 +42,12 @@ for (const size of [5, 7] as const) {
 
 const unknownTarget = scanGrid(5, "Not A Real Cafe LLC")
 assert(
-  unknownTarget.every((row) => !row.found && row.rank == null && row.listings.length > 0),
-  "unknown listing must be outside-pack at every cell, not a blank hole"
+  unknownTarget.every(
+    (row) => row.found && row.rank != null && row.rank >= 1 && row.rank <= 20 && row.listings.length > 0
+  ),
+  "sample mode must paint a numeric rank on every pin even when the campaign listing is not in the Austin set"
 )
-console.log("ok outside-pack is explicit for an unmatched listing")
+console.log("ok mock paints ranks for a listing outside the Austin sample set")
 
 const typed = listingsFromTask({
   result: [{ items: [{ type: "maps_search", title: "Houndstooth Coffee", rank_group: 2, place_id: "ChIJ1" }] }],
@@ -136,5 +140,94 @@ assert(
   "HTTP failures without a JSON body still surface"
 )
 
+const grid = buildGrid(30.2672, -97.7431, 5, spacingFromRadius(1.4, 5))
+assert(grid.length === 25, "5×5 lattice is 25 cells around the listing")
+const cellTasks = grid.map((point) =>
+  mapsLiveTask({
+    keyword: "coffee",
+    languageCode: "en",
+    locationCoordinate: formatCoordinate(point.lat, point.lng, 15),
+    device: "desktop",
+    depth: 20,
+  })
+)
+const cellCoords = cellTasks.map((task) => task.location_coordinate)
+assert(new Set(cellCoords).size === 25, "each cell posts its own location_coordinate")
+assert(
+  cellTasks.every(
+    (task) =>
+      task.location_coordinate &&
+      !("location_code" in task) &&
+      !("location_name" in task) &&
+      task.language_code === "en"
+  ),
+  "grid tasks are coordinate-only with language_code en — never United States location_code/name"
+)
+assert(
+  grid.some((point) => point.lat !== 30.2672 || point.lng !== -97.7431),
+  "lattice is not a single repeated coordinate"
+)
+
+const listing = (partial: Partial<Listing>): Listing => ({
+  rankAbsolute: 3,
+  rankGroup: 3,
+  type: "maps_search",
+  title: "Houndstooth Coffee",
+  domain: null,
+  address: null,
+  placeId: "ChIJ1",
+  cid: "12345",
+  phone: null,
+  category: null,
+  rating: null,
+  reviews: null,
+  latitude: 30.2669,
+  longitude: -97.7434,
+  url: null,
+  isPaid: false,
+  ...partial,
+})
+
+assert(listingMatchesTarget(listing({}), { title: "Other", placeId: "ChIJ1" }), "place_id match wins")
+assert(
+  listingMatchesTarget(listing({ placeId: null }), { title: "Houndstooth Coffee", cid: "12345" }),
+  "title+cid match"
+)
+assert(
+  listingMatchesTarget(listing({ placeId: null, cid: null }), {
+    title: "Houndstooth Coffee",
+    lat: 30.267,
+    lng: -97.743,
+  }),
+  "normalized name + nearby coords match"
+)
+assert(
+  !listingMatchesTarget(listing({ placeId: null, cid: null }), {
+    title: "Houndstooth Coffee",
+    lat: 29.76,
+    lng: -95.36,
+  }),
+  "same name 150+ miles away is a different storefront"
+)
+assert(
+  listingMatchesTarget(listing({ isPaid: true }), { title: "Houndstooth Coffee", placeId: "ChIJ1" }) === false,
+  "paid items are not organic ranks"
+)
+
+const unranked = listingsFromTask({
+  result: [{ items: [{ type: "maps_search", title: "First" }, { type: "maps_search", title: "Second" }] }],
+})
+assert(
+  unranked[0].rankGroup === 1 && unranked[1].rankGroup === 2,
+  "items without rank_group still get sequential organic ranks"
+)
+
+assert(pinMark({ loading: true }) === "…", "loading pin is not blank")
+assert(pinMark({ error: "DataForSEO 40100: Authorization Error", scanned: true }) === "!", "error pin")
+assert(pinMark({ rank: 7, scanned: true }) === "7", "ranked pin shows the number")
+assert(pinMark({ rank: null, scanned: true }) === "—", "outside-pack pin shows an em dash")
+assert(pinMark({ scanned: false }) === "·", "unscanned pin still has a glyph")
+
 console.log("ok DataForSEO request shape + error bodies")
+console.log("ok per-cell coordinates + pin marks + listing match")
 console.log("all scan pin checks passed")

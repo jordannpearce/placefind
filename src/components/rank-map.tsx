@@ -15,7 +15,7 @@ import "leaflet/dist/leaflet.css"
 
 import { ListingCard } from "@/components/business-name"
 import { cellBounds } from "@/lib/grid"
-import { rankLabel, rankTone } from "@/lib/rank"
+import { pinMark, rankTone } from "@/lib/rank"
 import type { GridPoint, PointResult } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -70,13 +70,14 @@ function MapClick({
 }
 
 function pinIcon(fill: string, text: string, label: string, selected: boolean) {
-  const size = selected ? 26 : 20
+  const size = selected ? 32 : 28
+  const safe = label || "—"
   return L.divIcon({
-    className: "rank-pin",
+    className: "leaflet-div-icon rank-pin",
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     popupAnchor: [0, -size / 2],
-    html: `<span class="rank-pin-inner${selected ? " is-selected" : ""}" style="background:${fill};color:${text};width:${size}px;height:${size}px">${label}</span>`,
+    html: `<span class="rank-pin-inner${selected ? " is-selected" : ""}" style="background:${fill};color:${text};width:${size}px;height:${size}px">${safe}</span>`,
   })
 }
 
@@ -171,19 +172,25 @@ export default function RankMap({
         const result = results[point.id]
         const loading = loadingIds.has(point.id)
         const selected = selectedId === point.id
+        const scanned = Boolean(result)
         const tone = rankTone(result?.rank, result?.error)
-        const fill = loading ? "#94a3b8" : tone.fill
-        const label = loading ? "…" : rankLabel(result?.rank ?? null, result?.error)
+        const fill = loading || !scanned ? "#94a3b8" : tone.fill
+        const label = pinMark({
+          rank: result?.rank,
+          error: result?.error,
+          loading,
+          scanned,
+        })
 
         return (
           <Marker
-            key={point.id}
+            key={`${point.id}-${label}-${fill}-${selected}`}
             position={[point.lat, point.lng]}
-            icon={pinIcon(fill, loading ? "#0f172a" : tone.text, label, selected)}
+            icon={pinIcon(fill, loading || !scanned ? "#0f172a" : tone.text, label, selected)}
             eventHandlers={{
               click: () => onSelect(point.id),
             }}
-            zIndexOffset={selected ? 500 : 0}
+            zIndexOffset={selected ? 500 : loading ? 100 : 0}
           >
             {result ? (
               <Popup autoPan>

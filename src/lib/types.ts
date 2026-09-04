@@ -48,6 +48,9 @@ export type ScanRequest = {
   keyword: string
   targetBusiness: string
   targetPlaceId?: string
+  targetCid?: string
+  targetLat?: number
+  targetLng?: number
   lat: number
   lng: number
   zoom: number
