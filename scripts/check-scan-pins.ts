@@ -25,6 +25,14 @@ function scanGrid(size: 5 | 7, target = "Houndstooth Coffee") {
 for (const size of [5, 7] as const) {
   const results = scanGrid(size)
   assert(results.length === size * size, `${size}×${size} must produce ${size * size} points`)
+  const uniqueCoords = new Set(results.map((row) => `${row.lat},${row.lng}`))
+  const uniqueTasks = new Set(results.map((row) => row.locationCoordinate))
+  assert(uniqueCoords.size === size * size, `${size}×${size} must have ${size * size} unique lat/lng, got ${uniqueCoords.size}`)
+  assert(uniqueTasks.size === size * size, `${size}×${size} must send ${size * size} unique location_coordinate values, got ${uniqueTasks.size}`)
+  assert(
+    results.every((row) => !("location_code" in row) && row.locationCoordinate.includes(",")),
+    `${size}×${size} every cell stays on lat,lng,zoom — not a country code`
+  )
   assert(
     results.every((row) => row.id && (row.found ? row.rank != null && row.rank >= 1 : row.rank == null)),
     `${size}×${size} every cell needs a rank or explicit outside-pack`

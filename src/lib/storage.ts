@@ -1,4 +1,9 @@
-import { spacingFromRadius } from "./grid"
+import {
+  normalizeCenter,
+  normalizeGridSize,
+  normalizeRadiusMiles,
+  spacingFromRadius,
+} from "./grid"
 import { normalizeWorkspaceScans, toKeywordResults } from "./scan-results"
 import type {
   ApiSettings,
@@ -246,6 +251,12 @@ function migrateCampaign(raw: LegacyCampaign): Campaign {
     activeKeyword: pickActiveKeyword(keywords, raw.activeKeyword ?? raw.keyword),
     id: raw.id || `camp_${Date.now()}`,
     name: raw.name?.trim() || fallback.name,
+    gridSize: normalizeGridSize(raw.gridSize ?? fallback.gridSize),
+    radiusMiles: normalizeRadiusMiles(raw.radiusMiles ?? fallback.radiusMiles),
+    center: normalizeCenter(
+      raw.center?.lat ?? fallback.center.lat,
+      raw.center?.lng ?? fallback.center.lng
+    ),
   }
 }
 
@@ -304,9 +315,9 @@ export function campaignToConfig(campaign: Campaign, forceMock: boolean): ScanCo
     businessState: campaign.businessState,
     mapsUrl: campaign.mapsUrl,
     locationLabel: campaign.locationLabel,
-    center: campaign.center,
-    gridSize: campaign.gridSize,
-    radiusMiles: campaign.radiusMiles,
+    center: normalizeCenter(campaign.center?.lat, campaign.center?.lng),
+    gridSize: normalizeGridSize(campaign.gridSize),
+    radiusMiles: normalizeRadiusMiles(campaign.radiusMiles),
     spacingMiles: spacingFromRadius(campaign.radiusMiles, campaign.gridSize),
     zoom: 15,
     languageCode: campaign.languageCode,
