@@ -15,16 +15,33 @@ type DataForSeoItem = {
   rank_absolute?: number
   domain?: string | null
   title?: string | null
+  original_title?: string | null
   url?: string | null
   address?: string | null
   place_id?: string | null
-  cid?: string | null
+  cid?: string | number | null
   phone?: string | null
   category?: string | null
   latitude?: number | null
   longitude?: number | null
   rating?: DataForSeoRating | null
+  items?: DataForSeoItem[] | null
 }
+
+const LISTING_TYPES = new Set([
+  "maps_search",
+  "maps_paid_item",
+  "maps_organic",
+  "local_pack",
+  "map",
+  "maps",
+])
+
+const SKIP_TYPES = new Set([
+  "refinement_chips",
+  "refinement_chips_element",
+  "refinement_chips_option",
+])
 
 type DataForSeoTask = {
   status_code?: number
@@ -164,10 +181,7 @@ export async function fetchMapsPoint(input: {
     throw new Error(task.status_message || "DataForSEO task failed")
   }
 
-  const items = task.result?.[0]?.items ?? []
-  const listings = items
-    .filter((item) => item.type === "maps_search" || item.type === "maps_paid_item")
-    .map((item) => toListing(item))
+  const listings = listingsFromTask(task)
 
   return matchTarget({
     id: input.pointId,
@@ -178,6 +192,42 @@ export async function fetchMapsPoint(input: {
     targetBusiness: input.targetBusiness,
     targetPlaceId: input.targetPlaceId,
   })
+}
+
+export function collectMapsItems(task: DataForSeoTask | undefined | null): DataForSeoItem[] {
+  const blocks = task?.result
+  if (!Array.isArray(blocks)) return []
+  const out: DataForSeoItem[] = []
+  for (const block of blocks) {
+    const items = block?.items
+    if (!Array.isArray(items)) continue
+    for (const item of items) {
+      if (!item) continue
+      if (Array.isArray(item.items) && item.items.length > 0) {
+        out.push(...item.items)
+      } else {
+        out.push(item)
+      }
+    }
+  }
+  return out
+}
+
+export function listingsFromTask(task: DataForSeoTask | undefined | null): Listing[] {
+  return collectMapsItems(task).filter(isListingItem).map(toListing)
+}
+
+function isListingItem(item: DataForSeoItem): boolean {
+  const type = item.type?.trim()
+  if (type && SKIP_TYPES.has(type)) return false
+  if (type && LISTING_TYPES.has(type)) return true
+  return Boolean(item.title || item.original_title || item.place_id)
+}
+
+export function organicRank(listing: Pick<Listing, "rankGroup" | "rankAbsolute">): number | null {
+  if (listing.rankGroup > 0) return listing.rankGroup
+  if (listing.rankAbsolute > 0) return listing.rankAbsolute
+  return null
 }
 
 export function matchTarget(input: {
@@ -200,24 +250,29 @@ export function matchTarget(input: {
     lat: input.lat,
     lng: input.lng,
     locationCoordinate: input.locationCoordinate,
-    rank: match?.rankGroup ?? match?.rankAbsolute ?? null,
+    rank: match ? organicRank(match) : null,
     found: Boolean(match),
     listings: input.listings,
     error: null,
   }
 }
 
+function positiveRank(value: unknown): number {
+  const rank = Number(value)
+  return Number.isFinite(rank) && rank > 0 ? Math.round(rank) : 0
+}
+
 function toListing(item: DataForSeoItem): Listing {
   const isPaid = item.type === "maps_paid_item"
   return {
-    rankAbsolute: item.rank_absolute ?? 0,
-    rankGroup: item.rank_group ?? 0,
+    rankAbsolute: positiveRank(item.rank_absolute),
+    rankGroup: positiveRank(item.rank_group),
     type: isPaid ? "maps_paid_item" : "maps_search",
-    title: item.title ?? "Untitled listing",
+    title: item.title || item.original_title || "Untitled listing",
     domain: item.domain ?? null,
     address: item.address ?? null,
-    placeId: item.place_id ?? null,
-    cid: item.cid ?? null,
+    placeId: item.place_id != null ? String(item.place_id) : null,
+    cid: item.cid != null ? String(item.cid) : null,
     phone: item.phone ?? null,
     category: item.category ?? null,
     rating: item.rating?.value ?? null,

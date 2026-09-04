@@ -1,4 +1,5 @@
 import { spacingFromRadius } from "./grid"
+import { normalizeWorkspaceScans, toKeywordResults } from "./scan-results"
 import type {
   ApiSettings,
   Campaign,
@@ -340,36 +341,37 @@ export function configToCampaignPatch(config: ScanConfig): Partial<Campaign> {
   }
 }
 
-export function loadScans(campaignId: string): KeywordResults {
+export function loadAllScans(): Record<string, KeywordResults> {
   if (typeof window === "undefined") return {}
   try {
     const raw = window.localStorage.getItem(SCANS_KEY)
     if (!raw) return {}
-    const parsed = JSON.parse(raw) as Record<string, Record<string, PointResult[]>>
-    const byKeyword = parsed[campaignId] ?? {}
-    const out: KeywordResults = {}
-    for (const [keyword, rows] of Object.entries(byKeyword)) {
-      out[keyword] = Object.fromEntries(rows.map((row) => [row.id, row]))
-    }
-    return out
+    return normalizeWorkspaceScans(JSON.parse(raw) as unknown)
   } catch {
     return {}
   }
 }
 
+export function loadScans(campaignId: string): KeywordResults {
+  return loadAllScans()[campaignId] ?? {}
+}
+
+export function saveAllScans(scans: Record<string, KeywordResults>) {
+  if (typeof window === "undefined") return
+  const all: Record<string, Record<string, PointResult[]>> = {}
+  for (const [campaignId, byKeyword] of Object.entries(scans)) {
+    all[campaignId] = Object.fromEntries(
+      Object.entries(byKeyword).map(([keyword, byId]) => [keyword, Object.values(byId)])
+    )
+  }
+  window.localStorage.setItem(SCANS_KEY, JSON.stringify(all))
+}
+
 export function saveScans(campaignId: string, scans: KeywordResults) {
   if (typeof window === "undefined") return
-  let all: Record<string, Record<string, PointResult[]>> = {}
-  try {
-    const raw = window.localStorage.getItem(SCANS_KEY)
-    if (raw) all = JSON.parse(raw) as Record<string, Record<string, PointResult[]>>
-  } catch {
-    all = {}
-  }
-  all[campaignId] = Object.fromEntries(
-    Object.entries(scans).map(([keyword, byId]) => [keyword, Object.values(byId)])
-  )
-  window.localStorage.setItem(SCANS_KEY, JSON.stringify(all))
+  const all = loadAllScans()
+  all[campaignId] = toKeywordResults(scans)
+  saveAllScans(all)
 }
 
 export function deleteScans(campaignId: string) {

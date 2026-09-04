@@ -5,27 +5,35 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { rankTone } from "@/lib/rank"
-import type { KeywordStatRow, PointResult, ScanStats } from "@/lib/types"
+import { rankLabel, rankTone } from "@/lib/rank"
+import type { GridPoint, KeywordStatRow, PointResult, ScanStats } from "@/lib/types"
 
 type ResultsPanelProps = {
   stats: ScanStats | null
   selected: PointResult | null
+  selectedId: string | null
+  points: GridPoint[]
+  results: Record<string, PointResult>
   targetBusiness: string
   emptyMessage: string
   keywordStats: KeywordStatRow[]
   activeKeyword: string
   onSelectKeyword: (keyword: string) => void
+  onSelectPin: (id: string) => void
 }
 
 export function ResultsPanel({
   stats,
   selected,
+  selectedId,
+  points,
+  results,
   targetBusiness,
   emptyMessage,
   keywordStats,
   activeKeyword,
   onSelectKeyword,
+  onSelectPin,
 }: ResultsPanelProps) {
   if (!stats) {
     return (
@@ -48,6 +56,13 @@ export function ResultsPanel({
         <StatCard label="Local pack" value={`${stats.top3Share}%`} hint="Share of pins in top 3" />
         <StatCard label="Coverage" value={`${stats.coverage}%`} hint={`${stats.found} of ${stats.points} pins`} />
       </div>
+
+      <RankGrid
+        points={points}
+        results={results}
+        selectedId={selectedId}
+        onSelect={onSelectPin}
+      />
 
       <Tabs defaultValue="pin" className="min-h-0 flex-1">
         <TabsList className="w-full">
@@ -138,6 +153,59 @@ export function ResultsPanel({
   )
 }
 
+function RankGrid({
+  points,
+  results,
+  selectedId,
+  onSelect,
+}: {
+  points: GridPoint[]
+  results: Record<string, PointResult>
+  selectedId: string | null
+  onSelect: (id: string) => void
+}) {
+  const size = Math.round(Math.sqrt(points.length)) || 1
+  return (
+    <div>
+      <p className="mb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+        Rank grid · {size}×{size}
+      </p>
+      <div
+        className="grid gap-px rounded-xl border bg-border p-px"
+        style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
+      >
+        {points.map((point) => {
+          const result = results[point.id]
+          const tone = rankTone(result?.rank, result?.error)
+          const selected = selectedId === point.id
+          return (
+            <button
+              key={point.id}
+              type="button"
+              onClick={() => onSelect(point.id)}
+              title={
+                result?.error
+                  ? result.error
+                  : result?.found && result.rank != null
+                    ? `Rank ${result.rank}`
+                    : "Outside pack"
+              }
+              className="aspect-square min-h-7 text-[11px] font-semibold"
+              style={{
+                background: result ? tone.fill : "#e2e8f0",
+                color: result ? tone.text : "#334155",
+                boxShadow: selected ? "inset 0 0 0 2px #0f172a" : undefined,
+              }}
+            >
+              {result ? rankLabel(result.rank, result.error) : "·"}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function StatCard({
   label,
   value,
@@ -174,7 +242,7 @@ function PinDetail({
         <div>
           <p className="text-xs text-muted-foreground">Target rank at this GPS point</p>
           <p className="font-heading text-3xl" style={{ color: tone.fill }}>
-            {result.error ? "Error" : result.found ? `#${result.rank}` : "—"}
+            {result.error ? "Error" : result.found && result.rank != null ? `#${result.rank}` : "—"}
           </p>
         </div>
         <Badge style={{ background: tone.fill, color: tone.text }}>{tone.label}</Badge>

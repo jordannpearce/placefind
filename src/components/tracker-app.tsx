@@ -21,6 +21,7 @@ import { Progress } from "@/components/ui/progress"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { buildGrid, spacingFromRadius, suggestedZoom } from "@/lib/grid"
 import { mapPool } from "@/lib/pool"
+import { mergeWorkspaceScans, normalizeWorkspaceScans, placeholderPoint } from "@/lib/scan-results"
 import { computeStats } from "@/lib/stats"
 import {
   blankCampaign,
@@ -29,13 +30,14 @@ import {
   deleteScans,
   emptyConfig,
   loadActiveCampaignId,
+  loadAllScans,
   loadCampaigns,
   loadScans,
   loadSettings,
+  saveAllScans,
   nextScanAt,
   saveActiveCampaignId,
   saveCampaigns,
-  saveScans,
   saveSettings,
   toStateAbbr,
   uniqueCampaignName,
@@ -78,7 +80,7 @@ function readWorkspace() {
     campaigns,
     activeId: active?.id ?? "",
     config: configFromCampaign(active, !hasUserKeys),
-    scans: active ? loadScans(active.id) : {},
+    scans: loadAllScans(),
     live: hasUserKeys,
   }
 }
@@ -89,7 +91,9 @@ export function TrackerApp() {
   const [campaigns, setCampaigns] = useState<Campaign[]>(workspace.campaigns)
   const [activeCampaignId, setActiveCampaignId] = useState(workspace.activeId)
   const [settings, setSettings] = useState<ApiSettings>(workspace.settings)
-  const [scansByKeyword, setScansByKeyword] = useState<KeywordResults>(workspace.scans)
+  const [scansByCampaign, setScansByCampaign] = useState<Record<string, KeywordResults>>(
+    workspace.scans
+  )
   const [hydratedFromServer, setHydratedFromServer] = useState(false)
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -124,6 +128,7 @@ export function TrackerApp() {
     [config.center.lat, config.center.lng, config.gridSize, config.spacingMiles]
   )
 
+  const scansByKeyword = scansByCampaign[activeCampaignId] ?? {}
   const results = scansByKeyword[config.activeKeyword] ?? {}
   const resultList = useMemo(() => Object.values(results), [results])
   const stats = resultList.length > 0 ? computeStats(resultList, config.targetBusiness) : null
@@ -203,7 +208,7 @@ export function TrackerApp() {
               setActiveCampaignId("")
               saveActiveCampaignId("")
               setConfig({ ...emptyConfig(), forceMock: !serverLive })
-              setScansByKeyword({})
+              setScansByCampaign({})
               setSelectedId(null)
             } else {
               const activeId =
@@ -231,7 +236,13 @@ export function TrackerApp() {
               setConfig((current) => ({ ...current, forceMock: false }))
             }
           }
-          if (data.scans) setScansByKeyword(data.scans)
+          if (data.scans) {
+            const incoming = normalizeWorkspaceScans(
+              data.scans,
+              (data.campaigns ?? []).map((campaign) => campaign.id)
+            )
+            setScansByCampaign((current) => mergeWorkspaceScans(current, incoming))
+          }
           if (data.plan) {
             const extras = data.extraCampaigns ?? 0
             setPlanLimits({
@@ -259,7 +270,7 @@ export function TrackerApp() {
         campaigns,
         settings,
         activeCampaignId,
-        scans: scansByKeyword,
+        scans: scansByCampaign,
       }),
     })
       .then(async (response) => {
@@ -268,7 +279,7 @@ export function TrackerApp() {
         if (data.error) setCampaignLimitError(data.error)
         const refresh = await fetch("/api/me/workspace")
         if (!refresh.ok || cancelled) return
-        const next = (await refresh.json()) as { campaigns?: Campaign[] }
+        const next = (await refresh.json()) as { campaigns?: Campaign[]; scans?: unknown }
         if (Array.isArray(next.campaigns)) {
           setCampaigns(next.campaigns)
           saveCampaigns(next.campaigns)
@@ -276,22 +287,38 @@ export function TrackerApp() {
             setActiveCampaignId("")
             saveActiveCampaignId("")
             setConfig((current) => ({ ...emptyConfig(), forceMock: current.forceMock }))
-            setScansByKeyword({})
+            setScansByCampaign({})
             setSelectedId(null)
           }
+        }
+        if (next.scans) {
+          const incoming = normalizeWorkspaceScans(
+            next.scans,
+            (next.campaigns ?? []).map((campaign) => campaign.id)
+          )
+          setScansByCampaign((current) => mergeWorkspaceScans(current, incoming))
         }
       })
       .catch(() => undefined)
     return () => {
       cancelled = true
     }
-  }, [activeCampaignId, billingLock?.locked, campaigns, hydratedFromServer, scansByKeyword, settings])
+  }, [activeCampaignId, billingLock?.locked, campaigns, hydratedFromServer, scansByCampaign, settings])
 
-  const persistScans = useCallback(
-    (campaignId: string, scans: KeywordResults) => {
-      saveScans(campaignId, scans)
+  const persistScans = useCallback((scans: Record<string, KeywordResults>) => {
+    saveAllScans(scans)
+  }, [])
+
+  const updateActiveScans = useCallback(
+    (updater: (current: KeywordResults) => KeywordResults) => {
+      if (!activeCampaignId) return
+      setScansByCampaign((all) => {
+        const next = { ...all, [activeCampaignId]: updater(all[activeCampaignId] ?? {}) }
+        persistScans(next)
+        return next
+      })
     },
-    []
+    [activeCampaignId, persistScans]
   )
 
   const patchConfig = useCallback((next: Partial<ScanConfig>) => {
@@ -316,21 +343,19 @@ export function TrackerApp() {
       return merged
     })
     if (next.keywords) {
-      setScansByKeyword((current) => {
+      updateActiveScans((current) => {
         const kept: KeywordResults = {}
         for (const keyword of next.keywords ?? []) {
           if (current[keyword]) kept[keyword] = current[keyword]
         }
-        persistScans(activeCampaignId, kept)
         return kept
       })
     }
     if (next.center || next.gridSize || next.spacingMiles || next.radiusMiles) {
-      setScansByKeyword({})
-      persistScans(activeCampaignId, {})
+      updateActiveScans(() => ({}))
       setSelectedId(null)
     }
-  }, [activeCampaignId, persistScans])
+  }, [activeCampaignId, persistScans, updateActiveScans])
 
   const pickCenter = useCallback(
     async (lat: number, lng: number) => {
@@ -368,10 +393,22 @@ export function TrackerApp() {
       keywordIndex: 1,
       keywordCount: keywords.length,
     })
-    setScansByKeyword((current) => {
-      const next = { ...current }
-      for (const keyword of keywords) next[keyword] = {}
-      return next
+    setScansByCampaign((all) => {
+      const current = { ...(all[activeCampaignId] ?? {}) }
+      for (const keyword of keywords) {
+        current[keyword] = Object.fromEntries(
+          points.map((point) => [
+            point.id,
+            placeholderPoint({
+              id: point.id,
+              lat: point.lat,
+              lng: point.lng,
+              zoom: config.zoom,
+            }),
+          ])
+        )
+      }
+      return { ...all, [activeCampaignId]: current }
     })
 
     try {
@@ -391,50 +428,85 @@ export function TrackerApp() {
           config.forceMock || !liveConfigured ? 8 : 4,
           async (point) => {
             if (abortRef.current) {
-              return {
+              return placeholderPoint({
                 id: point.id,
                 lat: point.lat,
                 lng: point.lng,
-                locationCoordinate: "",
-                rank: null,
-                found: false,
-                listings: [],
+                zoom: config.zoom,
                 error: "Cancelled",
-                mode: "mock",
-              } satisfies ScanPointResponse
+              })
             }
 
-            const response = await fetch("/api/scan-point", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                pointId: point.id,
-                keyword,
-                targetBusiness: config.targetBusiness,
-                targetPlaceId: config.targetPlaceId || undefined,
+            try {
+              const response = await fetch("/api/scan-point", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  pointId: point.id,
+                  keyword,
+                  targetBusiness: config.targetBusiness,
+                  targetPlaceId: config.targetPlaceId || undefined,
+                  lat: point.lat,
+                  lng: point.lng,
+                  zoom: config.zoom,
+                  languageCode: config.languageCode,
+                  device: config.device,
+                  depth: config.depth,
+                  forceMock: config.forceMock,
+                  apiLogin: settings.login || undefined,
+                  apiPassword: settings.password || undefined,
+                }),
+              })
+              let payload: ScanPointResponse & { error?: string }
+              try {
+                payload = (await response.json()) as ScanPointResponse & { error?: string }
+              } catch {
+                return placeholderPoint({
+                  id: point.id,
+                  lat: point.lat,
+                  lng: point.lng,
+                  zoom: config.zoom,
+                  error: "Scan failed",
+                })
+              }
+              if (!response.ok) {
+                const message = payload.error || `Scan failed (${response.status})`
+                if (response.status === 401 || response.status === 402) {
+                  abortRef.current = true
+                  setScanError(message)
+                }
+                return placeholderPoint({
+                  id: point.id,
+                  lat: point.lat,
+                  lng: point.lng,
+                  zoom: config.zoom,
+                  error: message,
+                  mode: payload.mode,
+                })
+              }
+              if (payload.mode) setModeLabel(payload.mode)
+              return { ...payload, id: payload.id || point.id }
+            } catch (error) {
+              return placeholderPoint({
+                id: point.id,
                 lat: point.lat,
                 lng: point.lng,
                 zoom: config.zoom,
-                languageCode: config.languageCode,
-                device: config.device,
-                depth: config.depth,
-                forceMock: config.forceMock,
-                apiLogin: settings.login || undefined,
-                apiPassword: settings.password || undefined,
-              }),
-            })
-            const payload = (await response.json()) as ScanPointResponse & { error?: string }
-            if (!response.ok && payload.error) {
-              throw new Error(payload.error)
+                error: error instanceof Error ? error.message : "Scan failed",
+              })
             }
-            if (payload.mode) setModeLabel(payload.mode)
-            return payload
           },
           (result) => {
-            setScansByKeyword((current) => ({
-              ...current,
-              [keyword]: { ...current[keyword], [result.id]: result },
-            }))
+            setScansByCampaign((all) => {
+              const current = all[activeCampaignId] ?? {}
+              return {
+                ...all,
+                [activeCampaignId]: {
+                  ...current,
+                  [keyword]: { ...current[keyword], [result.id]: result },
+                },
+              }
+            })
             setLoadingIds((current) => {
               const next = new Set(current)
               next.delete(result.id)
@@ -455,9 +527,9 @@ export function TrackerApp() {
         activeKeyword: keywords.includes(originalKeyword) ? originalKeyword : keywords[0],
       }))
       const finishedAt = new Date()
-      setScansByKeyword((current) => {
-        persistScans(activeCampaignId, current)
-        return current
+      setScansByCampaign((all) => {
+        persistScans(all)
+        return all
       })
       setCampaigns((current) => {
         const next = current.map((campaign) =>
@@ -485,11 +557,11 @@ export function TrackerApp() {
   const selectCampaign = (id: string) => {
     const campaign = campaigns.find((item) => item.id === id)
     if (!campaign) return
-    persistScans(activeCampaignId, scansByKeyword)
+    persistScans(scansByCampaign)
     setActiveCampaignId(id)
     saveActiveCampaignId(id)
     setConfig(campaignToConfig(campaign, config.forceMock))
-    setScansByKeyword(loadScans(id))
+    setScansByCampaign((all) => (all[id] ? all : { ...all, [id]: loadScans(id) }))
     setSelectedId(null)
   }
 
@@ -499,7 +571,7 @@ export function TrackerApp() {
       return
     }
     setCampaignLimitError(null)
-    if (activeCampaignId) persistScans(activeCampaignId, scansByKeyword)
+    persistScans(scansByCampaign)
     const campaign = {
       ...blankCampaign(),
       name: uniqueCampaignName("New campaign", campaigns),
@@ -510,7 +582,7 @@ export function TrackerApp() {
     setActiveCampaignId(campaign.id)
     saveActiveCampaignId(campaign.id)
     setConfig({ ...emptyConfig(), forceMock: config.forceMock })
-    setScansByKeyword({})
+    setScansByCampaign((all) => ({ ...all, [campaign.id]: {} }))
     setSelectedId(null)
   }
 
@@ -521,11 +593,16 @@ export function TrackerApp() {
     deleteScans(id)
     setCampaigns(next)
     saveCampaigns(next)
+    setScansByCampaign((all) => {
+      const copy = { ...all }
+      delete copy[id]
+      persistScans(copy)
+      return copy
+    })
     if (next.length === 0) {
       setActiveCampaignId("")
       saveActiveCampaignId("")
       setConfig({ ...emptyConfig(), forceMock: config.forceMock })
-      setScansByKeyword({})
       setSelectedId(null)
       return
     }
@@ -533,7 +610,6 @@ export function TrackerApp() {
     setActiveCampaignId(fallback.id)
     saveActiveCampaignId(fallback.id)
     setConfig(campaignToConfig(fallback, config.forceMock))
-    setScansByKeyword(loadScans(fallback.id))
     setSelectedId(null)
   }
 
@@ -605,11 +681,15 @@ export function TrackerApp() {
     <ResultsPanel
       stats={stats}
       selected={selected}
+      selectedId={selectedId}
+      points={points}
+      results={results}
       targetBusiness={config.targetBusiness}
       emptyMessage="Add keywords and a listing, then scan this campaign. Each pin is one Maps task per keyword."
       keywordStats={keywordStats}
       activeKeyword={config.activeKeyword}
       onSelectKeyword={(keyword) => patchConfig({ activeKeyword: keyword })}
+      onSelectPin={setSelectedId}
     />
   )
 

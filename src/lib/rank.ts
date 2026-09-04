@@ -37,9 +37,10 @@ function contrastText(hex: string): string {
 }
 
 export function rankFill(rank: number): string {
+  if (!Number.isFinite(rank) || rank <= 0) return "#94a3b8"
   if (rank <= 3) {
     const greens = ["#166534", "#22c55e", "#86efac"]
-    return greens[rank - 1]
+    return greens[rank - 1] ?? "#86efac"
   }
   if (rank <= 10) {
     return mix("#facc15", "#ea580c", (rank - 4) / 6)

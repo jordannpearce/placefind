@@ -5,6 +5,7 @@ import { billingRequiredResponse } from "@/lib/billing-gate"
 import { readDb, updateDb } from "@/lib/db"
 import { billingPathForUser, userHasSoftwareAccess } from "@/lib/paddle-access"
 import { campaignLimit, campaignLimitMessage } from "@/lib/plans"
+import { normalizeWorkspaceScans } from "@/lib/scan-results"
 import { defaultCampaign } from "@/lib/storage"
 
 export async function GET() {
@@ -94,7 +95,15 @@ export async function PUT(request: Request) {
         : (current.campaigns[0]?.id ?? "")
     }
     if (body.scans && typeof body.scans === "object") {
-      current.scans = body.scans as typeof current.scans
+      const incoming = normalizeWorkspaceScans(
+        body.scans,
+        current.campaigns.map((campaign) => campaign.id)
+      )
+      const next: typeof current.scans = {}
+      for (const campaign of current.campaigns) {
+        next[campaign.id] = incoming[campaign.id] ?? current.scans[campaign.id] ?? {}
+      }
+      current.scans = next
     }
     db.workspaces[auth.user.id] = current
     return { ok: true as const }

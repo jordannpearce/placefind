@@ -1,5 +1,6 @@
 import { rejectUnlessSoftwareAccess } from "@/lib/billing-gate"
 import { fetchMapsPoint, getScanMode, resolveRequestAuth } from "@/lib/dataforseo"
+import { formatCoordinate } from "@/lib/grid"
 import { mockDelayMs, mockScanPoint } from "@/lib/mock-scan"
 import type { DeviceType, ScanPointResponse } from "@/lib/types"
 
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
         id: pointId,
         lat,
         lng,
-        locationCoordinate: `${lat},${lng},${zoom}z`,
+        locationCoordinate: formatCoordinate(lat, lng, zoom),
         rank: null,
         found: false,
         listings: [],

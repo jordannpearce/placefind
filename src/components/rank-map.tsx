@@ -170,14 +170,14 @@ export default function RankMap({
         const loading = loadingIds.has(point.id)
         const selected = selectedId === point.id
         const tone = rankTone(result?.rank, result?.error)
-        const fill = loading ? "#94a3b8" : result ? tone.fill : "#cbd5e1"
-        const label = loading ? "…" : result ? rankLabel(result.rank, result.error) : "·"
+        const fill = loading ? "#94a3b8" : tone.fill
+        const label = loading ? "…" : rankLabel(result?.rank ?? null, result?.error)
 
         return (
           <Marker
             key={point.id}
             position={[point.lat, point.lng]}
-            icon={pinIcon(fill, result && !loading ? tone.text : "#0f172a", label, selected)}
+            icon={pinIcon(fill, loading ? "#0f172a" : tone.text, label, selected)}
             eventHandlers={{
               click: () => onSelect(point.id),
             }}
