@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import {
-  createManagedUser,
-  isAgencyAccount,
-  sendManagedUserWelcome,
-  serializeAdminUsers,
-} from "@/lib/admin-managed-user"
+import { createManagedUser, sendManagedUserWelcome, serializeAdminUsers } from "@/lib/admin-managed-user"
 import { requireAdmin } from "@/lib/auth-guard"
 import { findOrCreateAgency, readDb, updateDb } from "@/lib/db"
 import {
@@ -16,6 +11,7 @@ import {
 } from "@/lib/paddle-access"
 import { purgeUserAccount } from "@/lib/purge-user"
 import { clearImpersonation, getImpersonatedUserId } from "@/lib/session"
+import { isAgencyAccount } from "@/lib/agency-account"
 import { isPlanId, PLANS } from "@/lib/plans"
 import type { PlanId } from "@/lib/types"
 
@@ -44,8 +40,13 @@ function agencyPayload(db: Awaited<ReturnType<typeof readDb>>) {
 export async function GET() {
   const admin = await requireAdmin()
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  const db = await readDb()
-  return NextResponse.json(agencyPayload(db))
+  try {
+    const db = await readDb()
+    return NextResponse.json(agencyPayload(db))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not list agencies"
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }
 
 export async function POST(request: Request) {
@@ -114,12 +115,17 @@ export async function POST(request: Request) {
   }
 
   const preview = await sendManagedUserWelcome(created, body.sendEmail !== false)
-  const db = await readDb()
-  return NextResponse.json({
-    user: serializeAdminUsers(db).find((item) => item.id === created.user.id),
-    previewUrl: preview,
-    ...agencyPayload(db),
-  })
+  try {
+    const db = await readDb()
+    return NextResponse.json({
+      user: serializeAdminUsers(db).find((item) => item.id === created.user.id),
+      previewUrl: preview,
+      ...agencyPayload(db),
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Agency created, but listing failed"
+    return NextResponse.json({ error: message, userId: created.user.id }, { status: 500 })
+  }
 }
 
 export async function DELETE(request: NextRequest) {

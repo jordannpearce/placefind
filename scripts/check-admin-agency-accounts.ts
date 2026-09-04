@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 
 import { accountIsSuspended, userHasSoftwareAccess } from "../src/lib/paddle-access.ts"
-import { isAgencyAccount } from "../src/lib/plans.ts"
+import { isAgencyAccount } from "../src/lib/agency-account.ts"
 import { purgeUserAccount } from "../src/lib/purge-user.ts"
 import type { Agency, PaddleCustomer, PaddleSubscription, User } from "../src/lib/types.ts"
 

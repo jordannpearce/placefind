@@ -16,7 +16,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { TrialUnit } from "@/lib/paddle-access"
-import { isAgencyAccount, MAX_EXTRA_CAMPAIGNS, PLANS, PLAN_ORDER } from "@/lib/plans"
+import { isAgencyAccount } from "@/lib/agency-account"
+import { MAX_EXTRA_CAMPAIGNS, PLANS, PLAN_ORDER } from "@/lib/plans"
 import { blankCampaign, uniqueCampaignName } from "@/lib/storage"
 import type { Agency, Campaign, PlanId, PublicUser, UserRole, UserStatus } from "@/lib/types"
 

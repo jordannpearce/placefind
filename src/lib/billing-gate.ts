@@ -25,7 +25,8 @@ export async function softwareAccessState(): Promise<SoftwareAccessState | null>
   const auth = await requireUser()
   if (!auth) return null
   const db = await readDb()
-  const current = userHasSoftwareAccess(auth.user, db)
+  const suspended = auth.user.role !== "admin" && auth.user.status === "suspended"
+  const current = !suspended && userHasSoftwareAccess(auth.user, db)
   return {
     auth,
     current,
@@ -51,6 +52,9 @@ export async function rejectUnlessSoftwareAccess() {
   const auth = await requireUser()
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const db = await readDb()
-  if (userHasSoftwareAccess(auth.user, db)) return null
-  return billingRequiredResponse(auth.user, db)
+  const suspended = auth.user.role !== "admin" && auth.user.status === "suspended"
+  if (suspended || !userHasSoftwareAccess(auth.user, db)) {
+    return billingRequiredResponse(auth.user, db)
+  }
+  return null
 }

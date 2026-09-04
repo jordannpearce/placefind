@@ -80,8 +80,6 @@ export function createManagedUser(db: Database, input: CreateManagedUserInput): 
   return { ok: true, user: created, invite, inviteToken, activationToken }
 }
 
-export { isAgencyAccount } from "@/lib/plans"
-
 export function serializeAdminUsers(db: Database) {
   const agencies = Object.fromEntries(db.agencies.map((agency) => [agency.id, agency.name]))
   return db.users.map((user) => {
