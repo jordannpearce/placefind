@@ -180,6 +180,8 @@ export function findOrCreateAgency(db: Database, name: string): Agency {
   return agency
 }
 
+export { purgeUserAccount, type PurgeUserResult } from "./purge-user"
+
 function seedDb(db: Database): Database {
   const now = new Date().toISOString()
   const gridpin = findOrCreateAgency(db, "GridPins")

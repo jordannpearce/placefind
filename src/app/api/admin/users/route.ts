@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { requireAdmin } from "@/lib/auth-guard"
-import { findOrCreateAgency, findOrCreateWorkspace, purgeUserAccount, readDb, updateDb } from "@/lib/db"
+import { findOrCreateAgency, findOrCreateWorkspace, readDb, updateDb } from "@/lib/db"
+import { purgeUserAccount } from "@/lib/purge-user"
 import { clearImpersonation, getImpersonatedUserId, publicUser } from "@/lib/session"
 import { ACTIVATION_TOKEN_TTL_MS, createHashedToken } from "@/lib/auth-tokens"
 import { accountCreatedEmail, activationEmail, appUrl, billingEmail } from "@/lib/email-templates"
