@@ -14,6 +14,7 @@ import {
   type TrialUnit,
 } from "@/lib/paddle-access"
 import { clampExtraCampaigns, isPlanId, PLANS } from "@/lib/plans"
+import { setExtraScanCredits } from "@/lib/scan-quota"
 import type { PlanId, User, UserRole, UserStatus } from "@/lib/types"
 
 function suspendBlockedReason(db: Awaited<ReturnType<typeof readDb>>, target: User, actorId: string) {
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
     agencyName?: string
     plan?: PlanId
     extraCampaigns?: number
+    extraScanCredits?: number
     role?: UserRole
     status?: UserStatus
     marketingOptIn?: boolean
@@ -95,6 +97,7 @@ export async function POST(request: Request) {
       agencyName: body.agencyName,
       plan: body.plan,
       extraCampaigns: body.extraCampaigns,
+      extraScanCredits: body.extraScanCredits,
       role: body.role,
       status: body.status,
       marketingOptIn: body.marketingOptIn,
@@ -126,6 +129,7 @@ export async function PATCH(request: Request) {
     status?: UserStatus
     plan?: PlanId
     extraCampaigns?: number
+    extraScanCredits?: number
     role?: UserRole
     agencyId?: string
     agencyName?: string
@@ -173,6 +177,9 @@ export async function PATCH(request: Request) {
       found.extraCampaigns = clampExtraCampaigns(found.plan, body.extraCampaigns)
     } else {
       found.extraCampaigns = clampExtraCampaigns(found.plan, found.extraCampaigns)
+    }
+    if (body.extraScanCredits !== undefined) {
+      setExtraScanCredits(found, body.extraScanCredits)
     }
     if (body.role) found.role = body.role
     if (typeof body.marketingOptIn === "boolean") found.marketingOptIn = body.marketingOptIn

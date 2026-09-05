@@ -5,7 +5,8 @@ import { buttonVariants } from "@/components/ui/button"
 import { requireUser } from "@/lib/auth-guard"
 import { readDb } from "@/lib/db"
 import { billingPathForUser, userHasSoftwareAccess } from "@/lib/paddle-access"
-import { usableCampaignLimit, PLANS } from "@/lib/plans"
+import { usableCampaignLimit, PLANS, STARTER_INCLUDED_SCANS } from "@/lib/plans"
+import { scanQuotaSnapshot, usesHostedMaps } from "@/lib/scan-quota"
 import { formatWhen, isCampaignDue } from "@/lib/storage"
 
 export default async function DashboardPage() {
@@ -19,6 +20,8 @@ export default async function DashboardPage() {
   const plan = PLANS[user.plan]
   const limit = usableCampaignLimit(user.plan, user.extraCampaigns, true)
   const due = workspace.campaigns.filter((campaign) => isCampaignDue(campaign))
+  const hosted = usesHostedMaps(user)
+  const quota = scanQuotaSnapshot(user)
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -34,6 +37,9 @@ export default async function DashboardPage() {
             {user.plan === "agency" && user.extraCampaigns > 0
               ? ` · ${user.extraCampaigns} extra slot${user.extraCampaigns === 1 ? "" : "s"}`
               : ""}
+            {hosted && quota.remaining != null
+              ? ` · ${quota.remaining} scan${quota.remaining === 1 ? "" : "s"} left this month`
+              : ""}
           </p>
         </div>
         <Link href="/track" className={buttonVariants({ size: "lg" })}>
@@ -47,13 +53,19 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
-      <div className="mt-8 grid gap-3 sm:grid-cols-3">
+      <div className={`mt-8 grid gap-3 ${hosted ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
         <Stat label="Campaigns" value={String(workspace.campaigns.length)} />
         <Stat
           label="Keywords tracked"
           value={String(workspace.campaigns.reduce((sum, campaign) => sum + campaign.keywords.length, 0))}
         />
         <Stat label="Plan" value={plan.name} />
+        {hosted ? (
+          <Stat
+            label="Scans left"
+            value={`${quota.remaining ?? 0}/${STARTER_INCLUDED_SCANS + quota.extraCredits}`}
+          />
+        ) : null}
       </div>
 
       <h2 className="mt-10 font-heading text-2xl">Campaigns</h2>

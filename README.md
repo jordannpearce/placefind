@@ -38,14 +38,23 @@ From Admin you can:
 
 ### Live DataForSEO scans
 
-Paste a DataForSEO login in **Account** or the tracker Settings gear, or put it in `.env.local`:
+Starter ($20) includes 5 live Maps scans each calendar month on the admin DataForSEO key — that account never enters or sees a key. Extra scans are $5 each on Account.
+
+Pro and Advanced paste their own DataForSEO login in **Account** or the tracker Settings gear. Admin can also put keys in `.env.local` for hosted Starter scans and the admin account:
 
 ```bash
 DATAFORSEO_LOGIN=your_login
 DATAFORSEO_PASSWORD=your_password
 ```
 
-Each pin is one live Maps task (~$0.002). A 7×7 scan is 49 tasks per keyword.
+Optional extra-scan catalog overrides (otherwise GridPins can create the $5 product in Paddle):
+
+```bash
+PADDLE_EXTRA_SCAN_PRICE_ID=
+PADDLE_EXTRA_SCAN_PRODUCT_ID=
+```
+
+Each pin is one live Maps task (~$0.002). A 7×7 scan is 49 tasks per keyword. Never send hosted API keys to the Starter client.
 
 ## Product
 
@@ -53,7 +62,7 @@ Each pin is one live Maps task (~$0.002). A 7×7 scan is 49 tasks per keyword.
 - Email/password accounts with activation
 - Dashboard of campaigns per brand and location
 - Tracker with multiple keywords, grid size, radius, and schedules
-- Account billing via Paddle (overlay checkout, webhooks, customer portal): Starter $20 (1 campaign), Pro $50 (5 campaigns, extra slots $5 each up to 10), Advanced $250 (50 campaigns). Set the Paddle default payment link to `https://gridpins.com/pricing`. Railway: `PADDLE_API_KEY`, `PADDLE_ENVIRONMENT=production`, `PADDLE_WEBHOOK_SECRET`, `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`, `NEXT_PUBLIC_PADDLE_PRICE_*`.
+- Account billing via Paddle (overlay checkout, webhooks, customer portal): Starter $20 (1 campaign, 5 hosted live scans/month, extra scans $5), Pro $50 (5 campaigns, extra slots $5 each up to 10, own DataForSEO key), Advanced $250 (50 campaigns, own DataForSEO key). Set the Paddle default payment link to `https://gridpins.com/pricing`. Railway: `PADDLE_API_KEY`, `PADDLE_ENVIRONMENT=production`, `PADDLE_WEBHOOK_SECRET`, `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`, `NEXT_PUBLIC_PADDLE_PRICE_*`.
 - Admin: users, agencies, impersonation, Resend, targeted mail
 
 ## How a grid scan works

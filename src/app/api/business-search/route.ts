@@ -1,5 +1,7 @@
+import { requireUser } from "@/lib/auth-guard"
 import { rejectUnlessSoftwareAccess } from "@/lib/billing-gate"
 import { dataForSeoErrorMessage, resolveRequestAuth } from "@/lib/dataforseo"
+import { usesHostedMaps } from "@/lib/scan-quota"
 import { googleMapsUrl } from "@/lib/grid"
 import { searchMockBusinesses } from "@/lib/mock-scan"
 import { namesMatch } from "@/lib/rank"
@@ -36,10 +38,11 @@ export async function POST(request: Request) {
   }
 
   const query = [name, city, state].filter(Boolean).join(", ")
-  const auth = await resolveRequestAuth({
-    login: body.apiLogin,
-    password: body.apiPassword,
-  })
+  const session = await requireUser()
+  const hosted = Boolean(session && usesHostedMaps(session.user))
+  const auth = await resolveRequestAuth(
+    hosted ? null : { login: body.apiLogin, password: body.apiPassword }
+  )
   const live = await searchLiveMaps(name, city, state, auth)
   const directory = await searchNominatim(query, city, state)
   const cityCenter = directory.length === 0 && city ? await searchNominatim([city, state].filter(Boolean).join(", "), city, state) : []
@@ -72,7 +75,9 @@ export async function POST(request: Request) {
         live.error ||
         (auth
           ? "No listings matched that name in this city. Check the spelling, or pick a closer city."
-          : "No listings found. Add DataForSEO keys in Settings to search live Google Maps, or confirm the name, city, and state."),
+          : hosted
+            ? "No listings found. Confirm the business name, city, and state."
+            : "No listings found. Add DataForSEO keys in Settings to search live Google Maps, or confirm the name, city, and state."),
     })
   }
 

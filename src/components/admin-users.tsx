@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { TrialUnit } from "@/lib/paddle-access"
 import { isAgencyAccount } from "@/lib/agency-account"
-import { MAX_EXTRA_CAMPAIGNS, PLANS, PLAN_ORDER } from "@/lib/plans"
+import { EXTRA_SCAN_PRICE, MAX_EXTRA_CAMPAIGNS, MAX_EXTRA_SCAN_CREDITS, PLANS, PLAN_ORDER } from "@/lib/plans"
 import { blankCampaign, uniqueCampaignName } from "@/lib/storage"
 import type { Agency, Campaign, PlanId, PublicUser, UserRole, UserStatus } from "@/lib/types"
 
@@ -55,6 +55,7 @@ export function AdminUsers({
     agencyName: "",
     plan: "starter" as PlanId,
     extraCampaigns: 0,
+    extraScanCredits: 0,
     role: "user" as UserRole,
     status: "active" as UserStatus,
     marketingOptIn: false,
@@ -86,6 +87,7 @@ export function AdminUsers({
       status?: UserStatus
       plan?: PlanId
       extraCampaigns?: number
+      extraScanCredits?: number
       role?: UserRole
       agencyId?: string
       marketingOptIn?: boolean
@@ -168,6 +170,7 @@ export function AdminUsers({
         agencyName: "",
         plan: "starter",
         extraCampaigns: 0,
+        extraScanCredits: 0,
         role: "user",
         status: "active",
         marketingOptIn: false,
@@ -374,6 +377,7 @@ export function AdminUsers({
                     ...current,
                     plan,
                     extraCampaigns: plan === "agency" ? current.extraCampaigns : 0,
+                    extraScanCredits: plan === "starter" ? current.extraScanCredits : 0,
                   }))
                 }}
               >
@@ -468,6 +472,25 @@ export function AdminUsers({
               <span className="text-muted-foreground">$5 each, 0–{MAX_EXTRA_CAMPAIGNS}</span>
             </label>
           ) : null}
+          {form.plan === "starter" ? (
+            <label className="flex items-center gap-2">
+              Extra scan credits
+              <input
+                type="number"
+                min={0}
+                max={MAX_EXTRA_SCAN_CREDITS}
+                className="h-8 w-16 rounded-lg border bg-transparent px-2"
+                value={form.extraScanCredits}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    extraScanCredits: Number(event.target.value),
+                  }))
+                }
+              />
+              <span className="text-muted-foreground">${EXTRA_SCAN_PRICE} each</span>
+            </label>
+          ) : null}
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -560,18 +583,32 @@ export function AdminUsers({
                   </select>
                 </td>
                 <td className="px-3 py-2">
-                  <input
-                    type="number"
-                    min={0}
-                    max={MAX_EXTRA_CAMPAIGNS}
-                    disabled={user.plan !== "agency"}
-                    className="h-8 w-16 rounded-lg border bg-transparent px-2 disabled:opacity-40"
-                    value={user.plan === "agency" ? user.extraCampaigns : 0}
-                    onChange={(event) =>
-                      patch(user.id, { extraCampaigns: Number(event.target.value) })
-                    }
-                    aria-label={`Extra campaign slots for ${user.name}`}
-                  />
+                  {user.plan === "starter" ? (
+                    <input
+                      type="number"
+                      min={0}
+                      max={MAX_EXTRA_SCAN_CREDITS}
+                      className="h-8 w-16 rounded-lg border bg-transparent px-2"
+                      value={user.extraScanCredits}
+                      onChange={(event) =>
+                        patch(user.id, { extraScanCredits: Number(event.target.value) })
+                      }
+                      aria-label={`Extra scan credits for ${user.name}`}
+                    />
+                  ) : (
+                    <input
+                      type="number"
+                      min={0}
+                      max={MAX_EXTRA_CAMPAIGNS}
+                      disabled={user.plan !== "agency"}
+                      className="h-8 w-16 rounded-lg border bg-transparent px-2 disabled:opacity-40"
+                      value={user.plan === "agency" ? user.extraCampaigns : 0}
+                      onChange={(event) =>
+                        patch(user.id, { extraCampaigns: Number(event.target.value) })
+                      }
+                      aria-label={`Extra campaign slots for ${user.name}`}
+                    />
+                  )}
                 </td>
                 <td className="px-3 py-2">
                   <select

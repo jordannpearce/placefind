@@ -4,8 +4,10 @@ import { requireAdmin, requireUser } from "@/lib/auth-guard"
 import { billingRequiredResponse } from "@/lib/billing-gate"
 import { emptyWorkspace, readDb, updateDb } from "@/lib/db"
 import { billingPathForUser, userHasSoftwareAccess } from "@/lib/paddle-access"
+import { hostedDataForSeoAuth } from "@/lib/dataforseo"
 import { campaignLimitMessage, usableCampaignLimit } from "@/lib/plans"
 import { normalizeWorkspaceScans } from "@/lib/scan-results"
+import { scanQuotaSnapshot, usesHostedMaps } from "@/lib/scan-quota"
 
 export async function GET() {
   const auth = await requireUser()
@@ -14,8 +16,10 @@ export async function GET() {
   const current = userHasSoftwareAccess(auth.user, db)
   const workspace = auth.workspace
   const extras = auth.user.extraCampaigns
-  const login = workspace.settings.login || auth.user.dfsLogin || ""
-  const password = workspace.settings.password || auth.user.dfsPassword || ""
+  const hosted = usesHostedMaps(auth.user)
+  const hostedLive = hosted ? Boolean(await hostedDataForSeoAuth()) : false
+  const login = hosted ? "" : workspace.settings.login || auth.user.dfsLogin || ""
+  const password = hosted ? "" : workspace.settings.password || auth.user.dfsPassword || ""
   const campaigns = current ? workspace.campaigns : []
   return NextResponse.json({
     campaigns,
@@ -27,6 +31,9 @@ export async function GET() {
     campaignLimit: usableCampaignLimit(auth.user.plan, extras, current),
     dfsLogin: login,
     hasDfsPassword: Boolean(password),
+    usesHostedMaps: hosted,
+    hostedLive,
+    scanQuota: scanQuotaSnapshot(auth.user),
     canBypassCampaignLimit: Boolean(await requireAdmin()),
     softwareAccess: current,
     billingUrl: current ? "/dashboard" : billingPathForUser(auth.user, db),
@@ -73,7 +80,7 @@ export async function PUT(request: Request) {
         current.activeCampaignId = incoming[0]?.id ?? ""
       }
     }
-    if (body.settings) {
+    if (body.settings && !usesHostedMaps(auth.user)) {
       const login = body.settings.login?.trim() || current.settings.login
       const password = body.settings.password?.trim() || current.settings.password
       current.settings = { login, password }

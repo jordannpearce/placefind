@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type ReactNode } from "react"
+import Link from "next/link"
 import { Crosshair, ExternalLink, Loader2, Plus, Trash2, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,7 @@ import type {
   DeviceType,
   GridSize,
   ScanConfig,
+  ScanQuotaSnapshot,
   ScanRun,
   ScheduleCadence,
 } from "@/lib/types"
@@ -39,6 +41,8 @@ type ScanFormProps = {
   campaignLimit: number
   campaignLimitError: string | null
   canBypassCampaignLimit: boolean
+  usesHostedMaps?: boolean
+  scanQuota?: ScanQuotaSnapshot | null
   savedScans: ScanRun[]
   viewingScanId: string
   compareScanId: string
@@ -66,6 +70,8 @@ export function ScanForm({
   campaignLimit,
   campaignLimitError,
   canBypassCampaignLimit,
+  usesHostedMaps = false,
+  scanQuota = null,
   savedScans,
   viewingScanId,
   compareScanId,
@@ -83,7 +89,9 @@ export function ScanForm({
   const oneCost = estimateScanCostUsd(pointCount)
   const due = active ? isCampaignDue(active) : false
   const atCampaignLimit = !canBypassCampaignLimit && campaigns.length >= campaignLimit
-  const canScan = Boolean(active && config.targetBusiness.trim() && keywordCount > 0)
+  const liveScan = liveConfigured && !config.forceMock
+  const quotaBlocked = usesHostedMaps && liveScan && (scanQuota?.remaining ?? 0) <= 0
+  const canScan = Boolean(active && config.targetBusiness.trim() && keywordCount > 0) && !quotaBlocked
 
   function addKeyword() {
     const next = draftKeyword.trim()
@@ -334,7 +342,9 @@ export function ScanForm({
                 setSearchError(
                   liveConfigured
                     ? "No listings came back from Maps for that name and city. Check spelling, or try the city only."
-                    : "No listings found. Save your DataForSEO keys in Settings, then search again — sample search only knows Austin coffee shops."
+                    : usesHostedMaps
+                      ? "No listings found. Live Maps is included — if hosted search is down, sample search only knows Austin coffee shops."
+                      : "No listings found. Save your DataForSEO keys in Settings, then search again — sample search only knows Austin coffee shops."
                 )
               }
             } catch (error) {
@@ -496,9 +506,11 @@ export function ScanForm({
         <span>
           <span className="font-medium text-foreground">Use sample data</span>
           <span className="mt-0.5 block text-muted-foreground">
-            {liveConfigured
-              ? "Skip DataForSEO and run the mock engine."
-              : "Add your DataForSEO keys in Settings to run live Maps scans."}
+            {usesHostedMaps
+              ? "Live Maps included — no key required."
+              : liveConfigured
+                ? "Skip DataForSEO and run the mock engine."
+                : "Add your DataForSEO keys in Settings to run live Maps scans."}
           </span>
         </span>
       </label>
@@ -509,8 +521,31 @@ export function ScanForm({
           : `This scan posts ${pointCount} Google Maps tasks`}
         {config.forceMock || !liveConfigured
           ? " against the mock engine."
-          : ` to your DataForSEO account (~$${allCost.toFixed(3)}).`}
+          : usesHostedMaps
+            ? "."
+            : ` to your DataForSEO account (~$${allCost.toFixed(3)}).`}
       </div>
+      {usesHostedMaps && scanQuota?.applies ? (
+        <p className="text-[11px] leading-4 text-muted-foreground">
+          {quotaBlocked ? (
+            <>
+              No live scans left this month.{" "}
+              <Link href="/account" className="text-primary hover:underline">
+                Buy extra scans on Account
+              </Link>
+              .
+            </>
+          ) : (
+            <>
+              {scanQuota.remaining} scan{scanQuota.remaining === 1 ? "" : "s"} left this month
+              {scanQuota.extraCredits > 0
+                ? ` (${scanQuota.included - scanQuota.used} included + ${scanQuota.extraCredits} extra)`
+                : ""}
+              .
+            </>
+          )}
+        </p>
+      ) : null}
 
       {scanning ? (
         <Button type="button" variant="outline" onClick={onCancel}>
@@ -534,7 +569,9 @@ export function ScanForm({
             onClick={() => onSubmit("active")}
           >
             Scan “{config.activeKeyword}” only
-            {!(config.forceMock || !liveConfigured) ? ` (~$${oneCost.toFixed(3)})` : ""}
+            {!(config.forceMock || !liveConfigured) && !usesHostedMaps
+              ? ` (~$${oneCost.toFixed(3)})`
+              : ""}
           </Button>
         </div>
       ) : (
@@ -544,9 +581,11 @@ export function ScanForm({
       )}
       {!canScan && !scanning ? (
         <p className="text-center text-[11px] text-muted-foreground">
-          {!config.targetBusiness.trim()
-            ? "Add a listing name before running a scan."
-            : "Add a keyword before running a scan."}
+          {quotaBlocked
+            ? "Buy extra scans on Account to run another live scan this month."
+            : !config.targetBusiness.trim()
+              ? "Add a listing name before running a scan."
+              : "Add a keyword before running a scan."}
         </p>
       ) : null}
       </>

@@ -28,8 +28,9 @@ export default async function AccountPage({
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="font-heading text-4xl tracking-tight">Account</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Profile, plan, extra campaign slots, DataForSEO keys, and email preferences. Changing plan
-        or extras sends a billing email. Paid access is provisioned from Paddle webhooks.
+        Profile, plan, extra campaign slots, and email preferences. Starter includes live Maps
+        scans — no API key to enter. Pro and Advanced save their own key here. Changing plan or
+        extras sends a billing email. Paid access is provisioned from Paddle webhooks.
       </p>
       {locked || !current ? (
         <div className="mt-6">

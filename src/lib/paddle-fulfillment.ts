@@ -17,8 +17,10 @@ import {
   subscriptionGrantsAccess,
   subscriptionRevokesAccess,
 } from "./paddle-access"
+import { extraScanCatalogFromSettings, isExtraScanPurchase } from "./extra-scan-catalog"
 import { resolvePlanFromCatalog } from "./paddle-catalog"
 import { clampExtraCampaigns } from "./plans"
+import { grantExtraScanCredits } from "./scan-quota"
 import { markLeadPaid } from "./leads"
 import type { PaddleCustomer, PaddleSubscription, PlanId, User } from "./types"
 
@@ -230,6 +232,29 @@ export async function handleTransactionCompleted(db: Database, event: Transactio
   if (customerId) upsertCustomer(db, customerId, "")
 
   const custom = customDataRecord(event.data.customData)
+  const catalog = extraScanCatalogFromSettings(db.settings)
+  const item = event.data.items[0]
+  const extraQuantity = Math.max(
+    1,
+    event.data.items.reduce((sum, line) => sum + Math.max(1, Number(line.quantity) || 1), 0)
+  )
+  if (
+    isExtraScanPurchase({
+      kind: custom?.kind,
+      priceId: item?.price?.id,
+      productId: item?.price?.productId,
+      extraScanPriceId: catalog.priceId,
+      extraScanProductId: catalog.productId,
+    })
+  ) {
+    const userId = typeof custom?.userId === "string" ? custom.userId : ""
+    const user =
+      (userId ? db.users.find((row) => row.id === userId) : null) ||
+      (customerId ? linkUserToPaddleCustomer(db, customerId, "") : null)
+    if (user) grantExtraScanCredits(user, extraQuantity)
+    return
+  }
+
   const leadId = typeof custom?.leadId === "string" ? custom.leadId : ""
   if (custom?.kind === "get_found_lead" && leadId) {
     const lead = db.leads.find((item) => item.id === leadId)
@@ -241,7 +266,6 @@ export async function handleTransactionCompleted(db: Database, event: Transactio
     return
   }
 
-  const item = event.data.items[0]
   const priceId = item?.price?.id || ""
   const productId = item?.price?.productId || ""
   const plan = await resolvePlan({
