@@ -6,11 +6,12 @@ import { AdminCloro } from "@/components/admin-cloro"
 import { AdminUsers } from "@/components/admin-users"
 import { buttonVariants } from "@/components/ui/button"
 import { isAgencyAccount } from "@/lib/agency-account"
-import { listAssignedBrands } from "@/lib/ai-visibility"
+import { isBrandAssignableAccount, listAssignedBrands } from "@/lib/ai-visibility"
 import { requireAdmin } from "@/lib/auth-guard"
 import { resolveCloroApiKey } from "@/lib/cloro"
 import { readDb } from "@/lib/db"
 import { maskSecret } from "@/lib/mail"
+import { userHasSoftwareAccess } from "@/lib/paddle-access"
 import { publicUser } from "@/lib/session"
 
 export default async function AdminPage() {
@@ -36,7 +37,8 @@ export default async function AdminPage() {
           <h1 className="font-heading text-4xl tracking-tight">Admin</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {db.users.length} accounts · {db.agencies.length} agencies · {db.emails.length} emails in
-            the outbox. Assign AI brands below or send Get Found leads from Leads.
+            the outbox. Add, edit, or delete users and any AI brand below. Get Found leads live under
+            Leads.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -62,11 +64,12 @@ export default async function AdminPage() {
                 plan: user.plan,
                 status: user.status,
                 agencyId: user.agencyId,
+                softwareAccess: userHasSoftwareAccess(user, db),
               })),
             agencies: db.agencies.map((agency) => ({
               id: agency.id,
               name: agency.name,
-              userCount: db.users.filter((user) => user.agencyId === agency.id && user.role !== "admin")
+              userCount: db.users.filter((user) => user.agencyId === agency.id && isBrandAssignableAccount(user))
                 .length,
             })),
           }}

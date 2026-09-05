@@ -3,10 +3,11 @@ import { NextResponse } from "next/server"
 import {
   brandAssignmentTargets,
   grantComplimentaryBrand,
+  isBrandAssignableAccount,
   listAssignedBrands,
   missingBrandLocation,
   parseBrandForm,
-  removeComplimentaryBrand,
+  removeAssignedBrand,
   updateAssignedBrandProfile,
   userHasMatchingBrand,
 } from "@/lib/ai-visibility"
@@ -14,6 +15,7 @@ import { withResolvedBrandLocation } from "@/lib/maps-location-server"
 import { requireAdmin } from "@/lib/auth-guard"
 import { resolveRequestAuth } from "@/lib/dataforseo"
 import { readDb, updateDb } from "@/lib/db"
+import { userHasSoftwareAccess } from "@/lib/paddle-access"
 
 export async function GET() {
   const admin = await requireAdmin()
@@ -31,11 +33,12 @@ export async function GET() {
         plan: user.plan,
         status: user.status,
         agencyId: user.agencyId,
+        softwareAccess: userHasSoftwareAccess(user, db),
       })),
     agencies: db.agencies.map((agency) => ({
       id: agency.id,
       name: agency.name,
-      userCount: db.users.filter((user) => user.agencyId === agency.id && user.role !== "admin").length,
+      userCount: db.users.filter((user) => user.agencyId === agency.id && isBrandAssignableAccount(user)).length,
     })),
   })
 }
@@ -120,13 +123,20 @@ export async function DELETE(request: Request) {
 
   const removed = await updateDb((next) => {
     const user = next.users.find((row) => row.id === userId)
-    if (!user) return null
-    return removeComplimentaryBrand(user, brandId)
+    if (!user) return { missing: "account" as const }
+    const brand = removeAssignedBrand(user, brandId)
+    if (!brand) return { missing: "brand" as const }
+    return { brand }
   })
-  if (!removed) {
+  if ("missing" in removed) {
     return NextResponse.json(
-      { error: "Only complimentary brands can be removed from here." },
-      { status: 400 }
+      {
+        error:
+          removed.missing === "account"
+            ? "Account not found."
+            : "Brand not found on that account.",
+      },
+      { status: 404 }
     )
   }
   const db = await readDb()

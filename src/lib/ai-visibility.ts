@@ -388,19 +388,35 @@ export function userHasMatchingBrand(user: Pick<User, "aiBrands">, input: Pick<A
   })
 }
 
-export function removeComplimentaryBrand(user: User, brandId: string) {
+/** Remove any brand from a workspace. Does not cancel Paddle. */
+export function removeAssignedBrand(user: User, brandId: string) {
   const id = brandId.trim()
-  const index = (user.aiBrands ?? []).findIndex(
-    (brand) => brand.id === id && brand.subscriptionId === "complimentary"
-  )
+  if (!id) return null
+  if (!Array.isArray(user.aiBrands)) user.aiBrands = []
+  const index = user.aiBrands.findIndex((brand) => brand.id === id)
   if (index < 0) return null
   const [removed] = user.aiBrands.splice(index, 1)
+  if (removed && Array.isArray(user.aiScans)) {
+    user.aiScans = user.aiScans.filter((scan) => scan.brandId !== id)
+  }
   return removed ?? null
+}
+
+export function removeComplimentaryBrand(user: User, brandId: string) {
+  const id = brandId.trim()
+  const brand = (user.aiBrands ?? []).find((item) => item.id === id)
+  if (!brand || brand.subscriptionId !== "complimentary") return null
+  return removeAssignedBrand(user, id)
 }
 
 export type BrandAssignmentTarget =
   | { ok: true; users: User[]; label: string }
   | { ok: false; error: string }
+
+/** Complimentary brands are first-class on every plan, including unpaid Starter. */
+export function isBrandAssignableAccount(user: Pick<User, "role" | "status">) {
+  return user.role !== "admin" && user.status !== "pending"
+}
 
 export function brandAssignmentTargets(
   users: User[],
@@ -410,25 +426,23 @@ export function brandAssignmentTargets(
   const userId = input.userId?.trim() || ""
   const agencyId = input.agencyId?.trim() || ""
   if (userId && agencyId) {
-    return { ok: false, error: "Choose either a user account or an agency, not both." }
+    return { ok: false, error: "Choose either an account or an agency, not both." }
   }
   if (userId) {
     const user = users.find((row) => row.id === userId)
     if (!user) return { ok: false, error: "Account not found." }
-    if (user.role === "admin") return { ok: false, error: "Assign brands to a user or agency account, not staff." }
+    if (user.role === "admin") return { ok: false, error: "Assign brands to an account or an agency, not staff." }
     if (user.status === "pending") return { ok: false, error: "That account is not active yet." }
     return { ok: true, users: [user], label: user.company || user.name }
   }
   if (agencyId) {
     const agency = agencies.find((row) => row.id === agencyId)
     if (!agency) return { ok: false, error: "Agency not found." }
-    const members = users.filter(
-      (row) => row.agencyId === agencyId && row.role !== "admin" && row.status !== "pending"
-    )
+    const members = users.filter((row) => row.agencyId === agencyId && isBrandAssignableAccount(row))
     if (!members.length) return { ok: false, error: "That agency has no accounts to assign." }
     return { ok: true, users: members, label: agency.name }
   }
-  return { ok: false, error: "Choose a user account or an agency." }
+  return { ok: false, error: "Choose an account or an agency." }
 }
 
 export function listAssignedBrands(

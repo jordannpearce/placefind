@@ -8,10 +8,19 @@ import {
   type BrandProfileDraft,
 } from "@/components/brand-profile-fields"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { UsStateSelect } from "@/components/us-state-select"
+import { PLANS } from "@/lib/plans"
 import type { AiBrand, PlanId, UserStatus } from "@/lib/types"
 
 type AssignUser = {
@@ -22,6 +31,11 @@ type AssignUser = {
   plan: PlanId
   status: UserStatus
   agencyId: string
+  softwareAccess?: boolean
+}
+
+function planLabel(plan: PlanId) {
+  return PLANS[plan]?.name ?? plan
 }
 
 type AssignAgency = {
@@ -74,6 +88,7 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
   const [editDraft, setEditDraft] = useState<BrandProfileDraft>(emptyBrandProfileDraft)
   const [editError, setEditError] = useState("")
   const [editMessage, setEditMessage] = useState("")
+  const [confirmDelete, setConfirmDelete] = useState<AssignedBrand | null>(null)
 
   const users = useMemo(
     () => payload.users.slice().sort((a, b) => (a.company || a.name).localeCompare(b.company || b.name)),
@@ -83,6 +98,7 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
     () => payload.agencies.slice().sort((a, b) => a.name.localeCompare(b.name)),
     [payload.agencies]
   )
+  const selectedUser = users.find((user) => user.id === form.userId) ?? null
   const editingBrand = payload.brands.find((brand) => `${brand.ownerUserId}:${brand.id}` === editingKey) ?? null
 
   async function submit(event: React.FormEvent) {
@@ -111,7 +127,7 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
       if (!response.ok) throw new Error(next.error || "Could not assign the brand.")
       setPayload((current) => ({ ...current, brands: next.brands }))
       setMessage(
-        `Assigned ${form.name.trim()} to ${next.label || "the selected account"}${
+        `Granted a free promotional brand (${form.name.trim()}, $0) to ${next.label || "the selected account"}${
           Array.isArray(next.granted) && next.granted.length > 1 ? ` (${next.granted.length} accounts)` : ""
         }.`
       )
@@ -190,16 +206,28 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
   async function removeBrand(brand: AssignedBrand) {
     setRemoving(`${brand.ownerUserId}:${brand.id}`)
     setError("")
+    setMessage("")
     try {
       const response = await fetch(
         `/api/admin/ai-brands?userId=${encodeURIComponent(brand.ownerUserId)}&brandId=${encodeURIComponent(brand.id)}`,
         { method: "DELETE" }
       )
       const next = (await response.json()) as Payload & { error?: string }
-      if (!response.ok) throw new Error(next.error || "Could not remove the brand.")
+      if (!response.ok) throw new Error(next.error || "Could not delete the brand.")
       setPayload((current) => ({ ...current, brands: next.brands }))
+      if (editingKey === `${brand.ownerUserId}:${brand.id}`) {
+        setEditingKey("")
+        setEditError("")
+        setEditMessage("")
+      }
+      setConfirmDelete(null)
+      setMessage(
+        brand.complimentary
+          ? `${brand.name} was deleted from ${brand.ownerCompany || brand.ownerName}.`
+          : `${brand.name} was removed from that workspace. AI Visibility access for this brand is gone here.`
+      )
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remove the brand.")
+      setError(err instanceof Error ? err.message : "Could not delete the brand.")
     } finally {
       setRemoving("")
     }
@@ -209,11 +237,20 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
     <section className="space-y-5 rounded-2xl border bg-card p-5">
       <div>
         <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">AI Visibility</p>
-        <h2 className="font-heading text-2xl">Create a brand and assign it</h2>
+        <h2 className="font-heading text-2xl">Grant a free promotional brand</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Complimentary brands skip checkout. Assign to one user account or every account in an
-          agency. Prompt scans on that workspace check the company name, street, phone, and website,
-          and use city plus state for the local Maps location.
+          Give any user account a free AI Visibility brand ($0, complimentary) for promotions,
+          comps, or make-goods. This is not a paid Paddle checkout and does not require an existing
+          AI Visibility subscription. Starter, Pro, Advanced, trial, complimentary software, and
+          agency members are all eligible. Assign to one account or an entire agency (duplicates
+          are skipped). Edit any brand below. Delete removes it from that workspace. Prompt scans
+          check the company name, street, phone, and website, and use city plus state for the local
+          Maps location.
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Recipients still need GridPins software access (paid plan, complimentary software, or an
+          open trial) to open /ai. You can still grant the brand to unpaid Starter or expired-trial
+          accounts — they will see it once they have software access.
         </p>
       </div>
 
@@ -301,7 +338,7 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
                 checked={form.target === "user"}
                 onChange={() => setForm((current) => ({ ...current, target: "user" }))}
               />
-              User account
+              Account — one user, including Starter
             </label>
             <label className="inline-flex items-center gap-2">
               <input
@@ -310,27 +347,39 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
                 checked={form.target === "agency"}
                 onChange={() => setForm((current) => ({ ...current, target: "agency" }))}
               />
-              Agency
+              Agency — entire group
             </label>
           </div>
         </div>
         {form.target === "user" ? (
           <div className="space-y-1.5 md:col-span-2">
-            <Label htmlFor="admin-brand-user">User account</Label>
+            <Label htmlFor="admin-brand-user">Account</Label>
             <select
               id="admin-brand-user"
               className="h-10 w-full rounded-lg border bg-transparent px-3 text-sm"
               value={form.userId}
               onChange={(event) => setForm((current) => ({ ...current, userId: event.target.value }))}
             >
-              <option value="">Choose a user…</option>
+              <option value="">Choose an account…</option>
               {users.map((user) => (
                 <option key={user.id} value={user.id}>
-                  {(user.company || user.name) + " · " + user.email}
+                  {(user.company || user.name) + " · " + user.email + " · " + planLabel(user.plan)}
                   {user.status !== "active" ? ` (${user.status})` : ""}
+                  {user.softwareAccess === false ? " · no software access yet" : ""}
                 </option>
               ))}
             </select>
+            {selectedUser && selectedUser.softwareAccess === false ? (
+              <p className="text-sm text-muted-foreground">
+                You can still grant this free promotional brand ($0). This account cannot open /ai
+                until it has software access (paid plan, complimentary software, or an open trial).
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Starter, Pro, Advanced, trial, complimentary software, and agency members are all
+                valid. No AI Visibility subscription required. Pending accounts stay blocked.
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-1.5 md:col-span-2">
@@ -348,19 +397,25 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
                 </option>
               ))}
             </select>
+            <p className="text-sm text-muted-foreground">
+              Every account in the group receives the brand. Members who already have it are skipped.
+            </p>
           </div>
         )}
         {error ? <p className="text-sm text-destructive md:col-span-2">{error}</p> : null}
         {message ? <p className="text-sm text-emerald-800 md:col-span-2">{message}</p> : null}
         <div className="md:col-span-2">
           <Button type="submit" size="lg" disabled={pending}>
-            {pending ? "Assigning…" : "Create and assign brand"}
+            {pending ? "Granting…" : "Grant free promotional brand"}
           </Button>
         </div>
       </form>
 
       {payload.brands.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No AI Visibility brands assigned yet.</p>
+        <p className="rounded-xl border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
+          No AI Visibility brands yet. Use the form above to add one and assign it to a user or
+          agency.
+        </p>
       ) : (
         <div className="space-y-4">
           <div className="overflow-x-auto rounded-2xl border">
@@ -393,13 +448,15 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
                       </td>
                       <td className="px-3 py-3">
                         <p>{brand.ownerCompany || brand.ownerName}</p>
-                        <p className="text-[11px] text-muted-foreground">{brand.ownerEmail}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {brand.ownerEmail} · {planLabel(brand.ownerPlan)}
+                        </p>
                       </td>
                       <td className="px-3 py-3 text-xs text-muted-foreground">{brand.agencyName}</td>
                       <td className="px-3 py-3 text-xs">
                         {brand.quota.remaining}/{brand.quota.included}
                         {brand.complimentary ? (
-                          <p className="text-[11px] text-muted-foreground">Complimentary</p>
+                          <p className="text-[11px] text-muted-foreground">Free / promotional ($0)</p>
                         ) : null}
                       </td>
                       <td className="px-3 py-3">
@@ -412,19 +469,18 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
                           >
                             {editingKey === key ? "Editing" : "Edit"}
                           </Button>
-                          {brand.complimentary ? (
-                            <Button
-                              type="button"
-                              size="xs"
-                              variant="outline"
-                              disabled={removing === key}
-                              onClick={() => void removeBrand(brand)}
-                            >
-                              Remove
-                            </Button>
-                          ) : (
-                            <span className="self-center text-[11px] text-muted-foreground">Paid</span>
-                          )}
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="destructive"
+                            disabled={removing === key}
+                            onClick={() => {
+                              setError("")
+                              setConfirmDelete(brand)
+                            }}
+                          >
+                            {removing === key ? "Deleting…" : "Delete"}
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -471,6 +527,36 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
           ) : null}
         </div>
       )}
+
+      <Dialog open={Boolean(confirmDelete)} onOpenChange={(open) => !open && setConfirmDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete this brand?</DialogTitle>
+            <DialogDescription>
+              {confirmDelete
+                ? confirmDelete.complimentary
+                  ? `Delete ${confirmDelete.name} from ${confirmDelete.ownerCompany || confirmDelete.ownerName}? This complimentary brand will leave their AI Visibility list.`
+                  : `Delete ${confirmDelete.name} from ${confirmDelete.ownerCompany || confirmDelete.ownerName}? This removes the brand from that workspace. Checkout is not cancelled here — access on this account is gone.`
+                : "This cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-2">
+            <Button type="button" variant="outline" onClick={() => setConfirmDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!confirmDelete || removing === `${confirmDelete.ownerUserId}:${confirmDelete.id}`}
+              onClick={() => confirmDelete && void removeBrand(confirmDelete)}
+            >
+              {confirmDelete && removing === `${confirmDelete.ownerUserId}:${confirmDelete.id}`
+                ? "Deleting…"
+                : "Delete brand"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }
