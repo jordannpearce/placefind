@@ -24,6 +24,7 @@ function trimPart(value: unknown, max: number) {
 }
 
 function finiteCoord(value: unknown) {
+  if (value == null || value === "") return null
   const n = typeof value === "number" ? value : Number(value)
   return Number.isFinite(n) ? n : null
 }
