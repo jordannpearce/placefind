@@ -61,9 +61,11 @@ export function AdminAgencies({
   const [rows, setRows] = useState(users)
   const [form, setForm] = useState(emptyForm)
   const [editing, setEditing] = useState<AdminUserRow | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<AdminUserRow | null>(null)
   const [editForm, setEditForm] = useState({
     name: "",
     email: "",
+    company: "",
     plan: "agency" as PlanId,
     extraCampaigns: 0,
     trialAmount: 7,
@@ -141,6 +143,7 @@ export function AdminAgencies({
           userId: editing.id,
           name: editForm.name,
           email: editForm.email,
+          company: editForm.company,
           plan: editForm.plan,
           extraCampaigns: editForm.plan === "agency" ? editForm.extraCampaigns : 0,
           ...(editForm.clearTrial
@@ -240,16 +243,19 @@ export function AdminAgencies({
     }
   }
 
-  async function deleteAgency(user: AdminUserRow) {
+  function requestDeleteAgency(user: AdminUserRow) {
     if (user.id === currentUserId) {
       showToast("err", "You cannot delete your own account.")
       return
     }
-    if (
-      !window.confirm(
-        `Delete ${user.name} (${user.email})? Their account, campaigns, scans, and local billing rows will be removed. They can sign up again with this email. Other people in the same agency group are not deleted.`
-      )
-    ) {
+    setError(null)
+    setConfirmDelete(user)
+  }
+
+  async function deleteAgency(user: AdminUserRow) {
+    if (user.id === currentUserId) {
+      showToast("err", "You cannot delete your own account.")
+      setConfirmDelete(null)
       return
     }
     setBusyId(user.id)
@@ -262,6 +268,7 @@ export function AdminAgencies({
       if (!response.ok) throw new Error(data.error || "Could not delete agency")
       setRows((current) => current.filter((row) => row.id !== user.id))
       if (editing?.id === user.id) setEditing(null)
+      setConfirmDelete(null)
       showToast("ok", `${user.email} was deleted. That email can sign up again.`)
       router.refresh()
     } catch (err) {
@@ -278,6 +285,7 @@ export function AdminAgencies({
     setEditForm({
       name: user.name,
       email: user.email,
+      company: user.company,
       plan: user.plan,
       extraCampaigns: user.extraCampaigns,
       trialAmount: 7,
@@ -509,7 +517,7 @@ export function AdminAgencies({
                       size="xs"
                       variant="destructive"
                       disabled={busy || user.id === currentUserId}
-                      onClick={() => deleteAgency(user)}
+                      onClick={() => requestDeleteAgency(user)}
                     >
                       {busy ? "Working…" : "Delete"}
                     </Button>
@@ -527,7 +535,7 @@ export function AdminAgencies({
             <DialogHeader>
               <DialogTitle>Edit agency</DialogTitle>
               <DialogDescription>
-                Change the owner name, email, plan, extra campaigns, or trial timer.
+                Change the owner name, email, company, plan, extra campaigns, or trial timer.
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -548,6 +556,14 @@ export function AdminAgencies({
                     setEditForm((current) => ({ ...current, email: event.target.value }))
                   }
                   required
+                />
+              </Field>
+              <Field label="Company">
+                <Input
+                  value={editForm.company}
+                  onChange={(event) =>
+                    setEditForm((current) => ({ ...current, company: event.target.value }))
+                  }
                 />
               </Field>
               <Field label="Plan">
@@ -656,6 +672,32 @@ export function AdminAgencies({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(confirmDelete)} onOpenChange={(open) => !open && setConfirmDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete this account?</DialogTitle>
+            <DialogDescription>
+              {confirmDelete
+                ? `Delete ${confirmDelete.name} (${confirmDelete.email})? Their account, campaigns, brands, scans, and local billing rows will be removed. They can sign up again with this email. Other people in the same agency group are not deleted.`
+                : "This cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-2">
+            <Button type="button" variant="outline" onClick={() => setConfirmDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!confirmDelete || busyId === confirmDelete.id}
+              onClick={() => confirmDelete && void deleteAgency(confirmDelete)}
+            >
+              {confirmDelete && busyId === confirmDelete.id ? "Working…" : "Delete account"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

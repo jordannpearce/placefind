@@ -126,6 +126,7 @@ export async function PATCH(request: Request) {
     userId?: string
     name?: string
     email?: string
+    company?: string
     status?: UserStatus
     plan?: PlanId
     extraCampaigns?: number
@@ -171,6 +172,7 @@ export async function PATCH(request: Request) {
     previous.extraCampaigns = found.extraCampaigns
     if (nextName !== null) found.name = nextName
     if (nextEmail !== null) found.email = nextEmail
+    if (typeof body.company === "string") found.company = body.company.trim()
     if (body.status) found.status = body.status
     if (body.plan && isPlanId(body.plan) && PLANS[body.plan]) found.plan = body.plan
     if (body.extraCampaigns !== undefined) {

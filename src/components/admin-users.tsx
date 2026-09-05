@@ -42,7 +42,8 @@ export function AdminUsers({
   const [pending, setPending] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editing, setEditing] = useState<AdminUserRow | null>(null)
-  const [editForm, setEditForm] = useState({ name: "", email: "" })
+  const [editForm, setEditForm] = useState({ name: "", email: "", company: "" })
+  const [confirmDelete, setConfirmDelete] = useState<AdminUserRow | null>(null)
   const [managing, setManaging] = useState<AdminUserRow | null>(null)
   const [managedCampaigns, setManagedCampaigns] = useState<Campaign[]>([])
   const [managedActiveId, setManagedActiveId] = useState("")
@@ -84,6 +85,7 @@ export function AdminUsers({
     body: {
       name?: string
       email?: string
+      company?: string
       status?: UserStatus
       plan?: PlanId
       extraCampaigns?: number
@@ -134,13 +136,17 @@ export function AdminUsers({
 
   function openEdit(user: AdminUserRow) {
     setEditing(user)
-    setEditForm({ name: user.name, email: user.email })
+    setEditForm({ name: user.name, email: user.email, company: user.company })
   }
 
   async function saveEdit(event: React.FormEvent) {
     event.preventDefault()
     if (!editing) return
-    const ok = await patch(editing.id, { name: editForm.name, email: editForm.email })
+    const ok = await patch(editing.id, {
+      name: editForm.name,
+      email: editForm.email,
+      company: editForm.company,
+    })
     if (ok) {
       showToast("ok", `${editForm.email} updated.`)
       setEditing(null)
@@ -258,7 +264,7 @@ export function AdminUsers({
     await persistManaged([...managedCampaigns, campaign])
   }
 
-  async function deleteUser(user: AdminUserRow) {
+  function requestDelete(user: AdminUserRow) {
     if (!canDelete(user)) {
       showToast(
         "err",
@@ -266,15 +272,18 @@ export function AdminUsers({
       )
       return
     }
-    if (
-      !window.confirm(
-        `Delete ${user.name} (${user.email})? Their account, campaigns, scans, and local billing rows will be removed. They can sign up again with this email.`
+    setError(null)
+    setConfirmDelete(user)
+  }
+
+  async function deleteUser(user: AdminUserRow) {
+    if (!canDelete(user)) {
+      showToast(
+        "err",
+        user.id === currentUserId ? "You cannot delete your own account." : "Cannot delete the last admin."
       )
-    ) {
+      setConfirmDelete(null)
       return
-    }
-    if (user.role === "admin") {
-      if (!window.confirm(`This is an admin account. Delete ${user.name} anyway?`)) return
     }
     setDeletingId(user.id)
     setError(null)
@@ -286,6 +295,8 @@ export function AdminUsers({
       if (!response.ok) throw new Error(data.error || "Could not delete user")
       setRows((current) => current.filter((row) => row.id !== user.id))
       if (managing?.id === user.id) setManaging(null)
+      if (editing?.id === user.id) setEditing(null)
+      setConfirmDelete(null)
       showToast("ok", `${user.email} was deleted. That email can sign up again.`)
       router.refresh()
     } catch (err) {
@@ -316,11 +327,12 @@ export function AdminUsers({
   return (
     <div className="space-y-6">
       <form className="rounded-2xl border bg-card p-5" onSubmit={createUser}>
-        <h2 className="font-heading text-2xl">Add a user</h2>
+        <h2 className="font-heading text-2xl">Add, edit, or delete accounts</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Create a tester or staff account. Set a password, or leave it blank to send an invite so
-          they choose one. A trial timer is the only free-use path — self-serve signups stay locked
-          until they subscribe.
+          Add a tester or staff account here. Edit name, email, and company from the row, or change
+          plan, status, trial, and agency inline. Delete purges that workspace. Set a password, or
+          leave it blank to send an invite. A trial timer is the only free-use path — self-serve
+          signups stay locked until they subscribe.
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <Field label="Name">
@@ -526,6 +538,13 @@ export function AdminUsers({
             </tr>
           </thead>
           <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={11} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  No accounts yet. Use Add a user above to create one.
+                </td>
+              </tr>
+            ) : null}
             {rows.map((user) => (
               <tr key={user.id} className="border-t">
                 <td className="px-3 py-2">
@@ -538,11 +557,14 @@ export function AdminUsers({
                     ) : null}
                   </div>
                   <p className="text-[11px] text-muted-foreground">{user.email}</p>
+                  {user.company ? (
+                    <p className="text-[11px] text-muted-foreground">{user.company}</p>
+                  ) : null}
                   <Button
                     type="button"
                     size="xs"
-                    variant="ghost"
-                    className="mt-1 h-auto px-0 text-[11px]"
+                    variant="outline"
+                    className="mt-2"
                     onClick={() => openEdit(user)}
                   >
                     Edit
@@ -665,7 +687,7 @@ export function AdminUsers({
                       size="xs"
                       variant="destructive"
                       disabled={deletingId === user.id || pending}
-                      onClick={() => deleteUser(user)}
+                      onClick={() => requestDelete(user)}
                     >
                       {deletingId === user.id ? "Deleting…" : "Delete"}
                     </Button>
@@ -686,7 +708,10 @@ export function AdminUsers({
           <form onSubmit={saveEdit}>
             <DialogHeader>
               <DialogTitle>Edit account</DialogTitle>
-              <DialogDescription>Change the display name or email. Plan, trial, and extras stay on the row.</DialogDescription>
+              <DialogDescription>
+                Change the display name, email, or company. Plan, status, trial, and agency stay on
+                the row.
+              </DialogDescription>
             </DialogHeader>
             <div className="mt-4 grid gap-3">
               <Field label="Name">
@@ -704,6 +729,12 @@ export function AdminUsers({
                   required
                 />
               </Field>
+              <Field label="Company">
+                <Input
+                  value={editForm.company}
+                  onChange={(event) => setEditForm((current) => ({ ...current, company: event.target.value }))}
+                />
+              </Field>
             </div>
             <DialogFooter className="mt-4">
               <Button type="button" variant="outline" onClick={() => setEditing(null)}>
@@ -712,6 +743,34 @@ export function AdminUsers({
               <Button type="submit">Save</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(confirmDelete)} onOpenChange={(open) => !open && setConfirmDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete this account?</DialogTitle>
+            <DialogDescription>
+              {confirmDelete
+                ? confirmDelete.role === "admin"
+                  ? `This is an admin account. Delete ${confirmDelete.name} (${confirmDelete.email})? Their account, campaigns, brands, scans, and local billing rows will be removed. They can sign up again with this email.`
+                  : `Delete ${confirmDelete.name} (${confirmDelete.email})? Their account, campaigns, brands, scans, and local billing rows will be removed. They can sign up again with this email.`
+                : "This cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-2">
+            <Button type="button" variant="outline" onClick={() => setConfirmDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!confirmDelete || deletingId === confirmDelete.id}
+              onClick={() => confirmDelete && void deleteUser(confirmDelete)}
+            >
+              {confirmDelete && deletingId === confirmDelete.id ? "Deleting…" : "Delete account"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
