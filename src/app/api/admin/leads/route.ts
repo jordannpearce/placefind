@@ -5,7 +5,7 @@ import { readDb, updateDb } from "@/lib/db"
 import {
   assignableLeadAgencies,
   costPerLeadUsd,
-  createAdminLead,
+  leadFromInquiry,
   parseCostPerLeadUsd,
   removeLead,
 } from "@/lib/leads"
@@ -42,21 +42,26 @@ export async function POST(request: Request) {
   const parsed = parseGetFoundInquiry(body)
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
-  const lead = await updateDb((db) => {
-    const created = createAdminLead(parsed.data)
-    db.leads.unshift(created)
-    db.leads = db.leads.slice(0, 500)
-    return created
-  })
+  try {
+    const lead = await updateDb((db) => {
+      const created = leadFromInquiry(parsed.data, false)
+      db.leads.unshift(created)
+      db.leads = db.leads.slice(0, 500)
+      return created
+    })
 
-  const db = await readDb()
-  return NextResponse.json({
-    ok: true,
-    lead,
-    leads: db.leads,
-    costPerLeadUsd: costPerLeadUsd(db.settings),
-    agencies: assignableLeadAgencies(db.users),
-  })
+    const db = await readDb()
+    return NextResponse.json({
+      ok: true,
+      lead,
+      leads: db.leads,
+      costPerLeadUsd: costPerLeadUsd(db.settings),
+      agencies: assignableLeadAgencies(db.users),
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not create this lead."
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }
 
 export async function PUT(request: Request) {
