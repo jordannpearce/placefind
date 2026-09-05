@@ -22,6 +22,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { buildGrid, spacingFromRadius, suggestedZoom } from "@/lib/grid"
 import { mapPool } from "@/lib/pool"
 import { compareScanRuns } from "@/lib/scan-compare"
+import type { PointDelta } from "@/lib/scan-compare"
 import {
   createScanRun,
   keywordResultsHavePoints,
@@ -57,9 +58,11 @@ import type {
   BusinessCandidate,
   Campaign,
   GeocodeHit,
+  GridPoint,
   KeywordResults,
   KeywordStatRow,
   PlanId,
+  PointResult,
   ScanConfig,
   ScanPointResponse,
   WorkspaceScans,
@@ -183,6 +186,16 @@ export function TrackerApp() {
     }
     return points
   }, [config.center.lat, config.center.lng, config.gridSize, points, scanning, viewingRun])
+  const previousMapPoints = useMemo(() => {
+    if (!compareRun?.center.lat || !compareRun.center.lng) return mapPoints
+    return buildGrid(
+      compareRun.center.lat,
+      compareRun.center.lng,
+      compareRun.gridSize,
+      spacingFromRadius(compareRun.radiusMiles, compareRun.gridSize)
+    )
+  }, [compareRun, mapPoints])
+  const previousResults = compareRun?.results[config.activeKeyword] ?? {}
 
   useEffect(() => {
     let cancelled = false
@@ -887,6 +900,37 @@ export function TrackerApp() {
         </aside>
 
         <main className="relative min-h-[70vh] p-3 md:p-4">
+          {comparison && compareRun ? (
+            <div className="grid h-[calc(100svh-6.5rem)] grid-cols-1 gap-3 xl:grid-cols-2">
+              <CompareMapPane
+                label="Previous"
+                when={formatWhen(compareRun.createdAt)}
+                keyword={config.activeKeyword}
+                targetBusiness={config.targetBusiness}
+                points={previousMapPoints}
+                results={previousResults}
+                spacingMiles={spacingFromRadius(compareRun.radiusMiles, compareRun.gridSize)}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+              />
+              <CompareMapPane
+                label="Current"
+                when={formatWhen(viewingRun?.createdAt ?? null)}
+                keyword={config.activeKeyword}
+                targetBusiness={config.targetBusiness}
+                points={mapPoints}
+                results={results}
+                spacingMiles={
+                  viewingRun
+                    ? spacingFromRadius(viewingRun.radiusMiles, viewingRun.gridSize)
+                    : config.spacingMiles
+                }
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                compareDeltas={comparison.points}
+              />
+            </div>
+          ) : (
           <div className="relative h-[calc(100svh-6.5rem)] overflow-hidden rounded-[28px] border shadow-sm">
             <RankMap
               points={mapPoints}
@@ -902,7 +946,6 @@ export function TrackerApp() {
               targetBusiness={config.targetBusiness}
               onSelect={setSelectedId}
               onPickCenter={pickCenter}
-              compareDeltas={comparison?.points ?? null}
             />
             <div className="pointer-events-none absolute inset-x-0 top-0 z-[400] flex justify-between p-3">
               <div className="pointer-events-auto rounded-2xl bg-background/90 px-3 py-2 text-xs shadow-sm ring-1 ring-foreground/10 backdrop-blur">
@@ -917,7 +960,6 @@ export function TrackerApp() {
                   {viewingRun
                     ? ` · ${scanning ? "scanning" : formatWhen(viewingRun.createdAt)}`
                     : ""}
-                  {comparison ? " · comparing" : ""}
                 </p>
                 {stats ? (
                   <p className="text-muted-foreground">
@@ -983,6 +1025,7 @@ export function TrackerApp() {
               </div>
             )}
           </div>
+          )}
         </main>
 
         <aside className="hidden min-h-0 overflow-y-auto border-l p-4 xl:block">
@@ -1050,6 +1093,53 @@ export function TrackerApp() {
           })
         }}
       />
+    </div>
+  )
+}
+
+function CompareMapPane({
+  label,
+  when,
+  keyword,
+  targetBusiness,
+  points,
+  results,
+  spacingMiles,
+  selectedId,
+  onSelect,
+  compareDeltas,
+}: {
+  label: string
+  when: string
+  keyword: string
+  targetBusiness: string
+  points: GridPoint[]
+  results: Record<string, PointResult>
+  spacingMiles: number
+  selectedId: string | null
+  onSelect: (id: string) => void
+  compareDeltas?: PointDelta[]
+}) {
+  return (
+    <div className="relative min-h-[280px] overflow-hidden rounded-[28px] border shadow-sm">
+      <RankMap
+        points={points}
+        results={results}
+        loadingIds={new Set()}
+        selectedId={selectedId}
+        spacingMiles={spacingMiles}
+        placingCenter={false}
+        targetBusiness={targetBusiness}
+        onSelect={onSelect}
+        onPickCenter={() => undefined}
+        compareDeltas={compareDeltas ?? null}
+      />
+      <div className="pointer-events-none absolute left-3 top-3 z-[400] rounded-2xl bg-background/90 px-3 py-2 text-xs shadow-sm ring-1 ring-foreground/10 backdrop-blur">
+        <p className="font-medium">{label}</p>
+        <p className="text-muted-foreground">
+          {when} · {keyword || "keyword"}
+        </p>
+      </div>
     </div>
   )
 }
