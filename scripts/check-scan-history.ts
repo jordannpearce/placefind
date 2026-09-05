@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 
-import { compareScanRuns } from "../src/lib/scan-compare"
+import { compareScanRuns, rankChangeDirection } from "../src/lib/scan-compare"
 import {
   createScanRun,
   latestKeywordResults,
@@ -57,5 +57,8 @@ assert.equal(comparison.points.find((row) => row.id === "r0c0")?.delta, -3)
 assert.equal(comparison.points.find((row) => row.id === "r0c1")?.delta, 2)
 assert.equal(comparison.improved, 1)
 assert.equal(comparison.declined, 1)
+assert.equal(comparison.averageRankDelta, -0.5)
+assert.equal(rankChangeDirection(comparison.averageRankDelta), "up")
+assert.equal(rankChangeDirection(2), "down")
 
 console.log("ok scan history + compare")

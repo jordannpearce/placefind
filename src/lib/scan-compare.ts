@@ -18,6 +18,7 @@ export type ScanComparison = {
   previousStats: ScanStats | null
   currentStats: ScanStats | null
   atrDelta: number | null
+  averageRankDelta: number | null
   coverageDelta: number | null
   packDelta: number | null
   points: PointDelta[]
@@ -77,6 +78,10 @@ export function compareScanRuns(
       previousStats?.atr != null && currentStats?.atr != null
         ? Number((currentStats.atr - previousStats.atr).toFixed(1))
         : null,
+    averageRankDelta:
+      previousStats?.averageRank != null && currentStats?.averageRank != null
+        ? Number((currentStats.averageRank - previousStats.averageRank).toFixed(1))
+        : null,
     coverageDelta:
       previousStats && currentStats ? currentStats.coverage - previousStats.coverage : null,
     packDelta:
@@ -92,6 +97,14 @@ export function formatRankDelta(delta: number | null): string {
   if (delta == null) return "—"
   if (delta === 0) return "0"
   return delta < 0 ? `+${Math.abs(delta)}` : `−${delta}`
+}
+
+/** Rank numbers: lower is better. Negative delta = improved. */
+export function rankChangeDirection(delta: number | null): "up" | "down" | "flat" | null {
+  if (delta == null) return null
+  if (delta < 0) return "up"
+  if (delta > 0) return "down"
+  return "flat"
 }
 
 export function pickCompareKeyword(current: ScanRun, previous: ScanRun, preferred?: string): string {

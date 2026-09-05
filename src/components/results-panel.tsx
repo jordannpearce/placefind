@@ -1,14 +1,18 @@
 "use client"
 
+import { ArrowDown, ArrowUp, Minus } from "lucide-react"
+
 import { ListingCard } from "@/components/business-name"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { rankTone } from "@/lib/rank"
-import { formatRankDelta } from "@/lib/scan-compare"
+import { formatRankDelta, rankChangeDirection } from "@/lib/scan-compare"
 import type { ScanComparison } from "@/lib/scan-compare"
+import { formatWhen } from "@/lib/storage"
 import type { KeywordStatRow, PointResult, ScanStats } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 type ResultsPanelProps = {
   stats: ScanStats | null
@@ -53,7 +57,11 @@ export function ResultsPanel({
         <StatCard label="Coverage" value={`${stats.coverage}%`} hint={`${stats.found} of ${stats.points} pins`} />
       </div>
 
-      <Tabs defaultValue="pin" className="min-h-0 flex-1">
+      <Tabs
+        key={comparison ? `${comparison.previous.id}-${comparison.current.id}` : "solo"}
+        defaultValue={comparison ? "compare" : "pin"}
+        className="min-h-0 flex-1"
+      >
         <TabsList className="w-full">
           <TabsTrigger value="pin">Selected pin</TabsTrigger>
           <TabsTrigger value="rivals">Competitors</TabsTrigger>
@@ -149,70 +157,171 @@ export function ResultsPanel({
 }
 
 function CompareDetail({ comparison }: { comparison: ScanComparison }) {
-  const atrHint =
-    comparison.atrDelta == null
-      ? "Need ranks on both scans"
-      : comparison.atrDelta < 0
-        ? "Lower ATR is better"
-        : comparison.atrDelta > 0
-          ? "ATR got worse"
-          : "ATR unchanged"
+  const avgDir = rankChangeDirection(comparison.averageRankDelta)
+  const atrDir = rankChangeDirection(comparison.atrDelta)
 
   return (
     <div className="flex min-h-0 flex-col gap-3 pt-2">
-      <p className="text-[11px] leading-4 text-muted-foreground">
-        Current vs {new Date(comparison.previous.createdAt).toLocaleString(undefined, {
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        })}{" "}
-        for “{comparison.keyword}”. Green pins improved (moved closer to #1).
-      </p>
+      <RankDirectionBanner
+        delta={comparison.averageRankDelta}
+        label="Average rank"
+        keyword={comparison.keyword}
+      />
       <div className="grid grid-cols-2 gap-2">
-        <StatCard
-          label="ATR change"
-          value={formatRankDelta(comparison.atrDelta)}
-          hint={atrHint}
+        <ScanSnapshot
+          title="Previous"
+          when={formatWhen(comparison.previous.createdAt)}
+          stats={comparison.previousStats}
         />
-        <StatCard
-          label="Coverage"
-          value={
-            comparison.coverageDelta == null
-              ? "—"
-              : `${comparison.coverageDelta > 0 ? "+" : ""}${comparison.coverageDelta}%`
-          }
-          hint="Share of pins that found the listing"
+        <ScanSnapshot
+          title="Current"
+          when={formatWhen(comparison.current.createdAt)}
+          stats={comparison.currentStats}
         />
-        <StatCard label="Improved" value={String(comparison.improved)} hint="Better rank" />
-        <StatCard label="Declined" value={String(comparison.declined)} hint="Worse rank" />
       </div>
-      <ScrollArea className="h-[min(360px,42vh)] pr-3">
+      <div className="grid grid-cols-2 gap-2">
+        <TrendCard label="Avg rank" delta={comparison.averageRankDelta} direction={avgDir} />
+        <TrendCard label="ATR" delta={comparison.atrDelta} direction={atrDir} />
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        {comparison.improved} pins improved · {comparison.declined} declined · {comparison.unchanged}{" "}
+        unchanged
+      </p>
+      <ScrollArea className="h-[min(280px,36vh)] pr-3">
         <div className="flex flex-col gap-1.5">
-          {comparison.points.map((point) => (
-            <div
-              key={point.id}
-              className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs"
-            >
-              <span className="font-mono text-[11px] text-muted-foreground">{point.id}</span>
-              <span>
-                {point.previousRank ?? "—"} → {point.currentRank ?? "—"}
-              </span>
-              <span
-                className={
-                  point.delta != null && point.delta < 0
-                    ? "font-medium text-emerald-700"
-                    : point.delta != null && point.delta > 0
-                      ? "font-medium text-red-700"
-                      : "text-muted-foreground"
-                }
+          {comparison.points.map((point) => {
+            const direction = rankChangeDirection(point.delta)
+            return (
+              <div
+                key={point.id}
+                className="grid grid-cols-[auto_1fr_1fr_auto] items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs"
               >
-                {point.appeared ? "new" : point.disappeared ? "lost" : formatRankDelta(point.delta)}
-              </span>
-            </div>
-          ))}
+                <span className="font-mono text-[11px] text-muted-foreground">{point.id}</span>
+                <span className="text-muted-foreground">#{point.previousRank ?? "—"}</span>
+                <span className="font-medium">#{point.currentRank ?? "—"}</span>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-0.5 font-medium",
+                    direction === "up" && "text-emerald-700",
+                    direction === "down" && "text-red-700",
+                    (!direction || direction === "flat") && "text-muted-foreground"
+                  )}
+                >
+                  {point.appeared ? (
+                    "new"
+                  ) : point.disappeared ? (
+                    "lost"
+                  ) : (
+                    <>
+                      {direction === "up" ? <ArrowUp className="size-3" /> : null}
+                      {direction === "down" ? <ArrowDown className="size-3" /> : null}
+                      {direction === "flat" ? <Minus className="size-3" /> : null}
+                      {formatRankDelta(point.delta)}
+                    </>
+                  )}
+                </span>
+              </div>
+            )
+          })}
         </div>
       </ScrollArea>
+    </div>
+  )
+}
+
+function RankDirectionBanner({
+  delta,
+  label,
+  keyword,
+}: {
+  delta: number | null
+  label: string
+  keyword: string
+}) {
+  const direction = rankChangeDirection(delta)
+  const improved = direction === "up"
+  const declined = direction === "down"
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-xl border px-3 py-2.5",
+        improved && "border-emerald-200 bg-emerald-50 text-emerald-900",
+        declined && "border-red-200 bg-red-50 text-red-900",
+        !improved && !declined && "bg-muted/40"
+      )}
+    >
+      {improved ? <ArrowUp className="size-5 shrink-0" /> : null}
+      {declined ? <ArrowDown className="size-5 shrink-0" /> : null}
+      {direction === "flat" || direction == null ? <Minus className="size-5 shrink-0 text-muted-foreground" /> : null}
+      <div>
+        <p className="text-sm font-medium">
+          {direction == null
+            ? `${label} needs ranks on both scans`
+            : improved
+              ? `${label} up ${Math.abs(delta ?? 0)}`
+              : declined
+                ? `${label} down ${Math.abs(delta ?? 0)}`
+                : `${label} unchanged`}
+        </p>
+        <p className="text-[11px] opacity-80">“{keyword}” · green up is a better (lower) rank</p>
+      </div>
+    </div>
+  )
+}
+
+function ScanSnapshot({
+  title,
+  when,
+  stats,
+}: {
+  title: string
+  when: string
+  stats: ScanStats | null
+}) {
+  return (
+    <div className="rounded-xl border bg-card px-3 py-2.5">
+      <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{title}</p>
+      <p className="text-[11px] text-muted-foreground">{when}</p>
+      <p className="mt-1 font-heading text-2xl leading-tight">
+        {stats?.averageRank?.toFixed(1) ?? "—"}
+      </p>
+      <p className="text-[11px] text-muted-foreground">
+        avg rank · ATR {stats?.atr?.toFixed(1) ?? "—"} · pack {stats?.top3Share ?? 0}%
+      </p>
+    </div>
+  )
+}
+
+function TrendCard({
+  label,
+  delta,
+  direction,
+}: {
+  label: string
+  delta: number | null
+  direction: ReturnType<typeof rankChangeDirection>
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border px-3 py-2.5",
+        direction === "up" && "border-emerald-200 bg-emerald-50",
+        direction === "down" && "border-red-200 bg-red-50"
+      )}
+    >
+      <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
+      <p
+        className={cn(
+          "mt-0.5 inline-flex items-center gap-1 font-heading text-xl leading-tight",
+          direction === "up" && "text-emerald-700",
+          direction === "down" && "text-red-700"
+        )}
+      >
+        {direction === "up" ? <ArrowUp className="size-4" /> : null}
+        {direction === "down" ? <ArrowDown className="size-4" /> : null}
+        {direction === "flat" ? <Minus className="size-4 text-muted-foreground" /> : null}
+        {delta == null ? "—" : formatRankDelta(delta)}
+      </p>
     </div>
   )
 }
