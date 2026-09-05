@@ -79,22 +79,50 @@ export function resolveDataForSeoAuth(user?: Partial<DataForSeoAuth> | null): Da
 }
 
 /**
+ * Admin-hosted Maps keys for Starter. Never returned to the client.
+ * Prefer the first active admin's saved login, then DATAFORSEO_* env.
+ */
+export async function hostedDataForSeoAuth(): Promise<DataForSeoAuth | null> {
+  try {
+    const { readDb } = await import("@/lib/db")
+    const db = await readDb()
+    for (const admin of db.users.filter((user) => user.role === "admin" && user.status === "active")) {
+      const workspace = db.workspaces[admin.id]
+      const auth = resolveDataForSeoAuth({
+        login: admin.dfsLogin || workspace?.settings.login,
+        password: admin.dfsPassword || workspace?.settings.password,
+      })
+      if (auth) return auth
+    }
+  } catch {
+    // Fall through to env keys.
+  }
+  return envDataForSeoAuth()
+}
+
+/**
  * Keys for this request:
- * 1. Complete login+password on the request (the caller is saving/testing their own).
- * 2. The viewed account's saved keys (impersonation uses the viewed user only).
- * 3. Env keys only when the viewed user is the admin acting as themselves.
+ * 1. Starter accounts with software access always use hosted admin/env keys.
+ *    Posted login/password from Starter is ignored so they cannot see or override the key.
+ * 2. Complete login+password on the request (Pro/Advanced/admin saving or testing their own).
+ * 3. The viewed account's saved keys (impersonation uses the viewed user only).
+ * 4. Env keys only when the viewed user is the admin acting as themselves.
  *
- * Regular users never inherit admin or DATAFORSEO_* env credentials.
+ * Regular Pro/Advanced users never inherit admin or DATAFORSEO_* env credentials.
  */
 export async function resolveRequestAuth(input?: {
   login?: string
   password?: string
 } | null): Promise<DataForSeoAuth | null> {
-  const fromBody = resolveDataForSeoAuth(input)
-  if (fromBody) return fromBody
   try {
     const { requireAdmin, requireUser } = await import("@/lib/auth-guard")
+    const { usesHostedMaps } = await import("@/lib/scan-quota")
     const session = await requireUser()
+    if (session && usesHostedMaps(session.user)) {
+      return hostedDataForSeoAuth()
+    }
+    const fromBody = resolveDataForSeoAuth(input)
+    if (fromBody) return fromBody
     if (!session) return null
     const fromUser = resolveDataForSeoAuth({
       login: session.user.dfsLogin || session.workspace.settings.login,
@@ -108,7 +136,7 @@ export async function resolveRequestAuth(input?: {
     }
     return null
   } catch {
-    return null
+    return resolveDataForSeoAuth(input)
   }
 }
 
@@ -149,10 +177,10 @@ export function mapsLiveTask(input: {
   }
 }
 
-export function dataForSeoErrorMessage(
-  payload: DataForSeoResponse | null | undefined,
-  httpStatus?: number
-): string | null {
+/** Maps pack was empty at this pin. The request succeeded — treat as not found. */
+export const EMPTY_SERP_STATUS = 40102
+
+function payloadStatus(payload: DataForSeoResponse | null | undefined) {
   const task = payload?.tasks?.[0]
   const taskCode = Number(task?.status_code ?? 0)
   const topCode = Number(payload?.status_code ?? 0)
@@ -167,6 +195,20 @@ export function dataForSeoErrorMessage(
     .toString()
     .replace(/\.$/, "")
     .trim()
+  return { task, code, message }
+}
+
+export function isEmptySearchResults(payload: DataForSeoResponse | null | undefined) {
+  const { code, message } = payloadStatus(payload)
+  return code === EMPTY_SERP_STATUS || /no search results/i.test(message)
+}
+
+export function dataForSeoErrorMessage(
+  payload: DataForSeoResponse | null | undefined,
+  httpStatus?: number
+): string | null {
+  if (isEmptySearchResults(payload)) return null
+  const { code, message } = payloadStatus(payload)
 
   if (code >= 40000) {
     return message ? `DataForSEO ${code}: ${message}` : `DataForSEO error ${code}`
@@ -253,6 +295,20 @@ export async function fetchMapsPoint(input: {
   })
 
   const payload = await readDataForSeoJson(response)
+  if (isEmptySearchResults(payload)) {
+    return matchTarget({
+      id: input.pointId,
+      lat: input.lat,
+      lng: input.lng,
+      locationCoordinate,
+      listings: [],
+      targetBusiness: input.targetBusiness,
+      targetPlaceId: input.targetPlaceId,
+      targetCid: input.targetCid,
+      targetLat: input.targetLat,
+      targetLng: input.targetLng,
+    })
+  }
   const dfsError = dataForSeoErrorMessage(payload, response.status)
   if (dfsError) {
     throw new Error(dfsError)

@@ -203,6 +203,8 @@ export type AppSettings = {
   resendAudienceId: string
   /** USD charged to a Pro/Advanced agency when a Get Found lead is assigned. */
   costPerLeadUsd: number
+  extraScanProductId: string
+  extraScanPriceId: string
 }
 
 export type LeadStatus = "new" | "assigned" | "invoiced" | "paid"
@@ -267,6 +269,10 @@ export type User = {
   /** `agency` is a Pro-plan agency account. Role stays `user` unless they are staff. */
   plan: PlanId
   extraCampaigns: number
+  extraScanCredits: number
+  scansUsed: number
+  scanPeriodStart: string | null
+  scanSessionUntil: string | null
   marketingOptIn: boolean
   company: string
   agencyId: string
@@ -314,6 +320,17 @@ export type UserWorkspace = {
   scans: WorkspaceScans
 }
 
+export type ScanQuotaSnapshot = {
+  applies: boolean
+  included: number
+  used: number
+  extraCredits: number
+  remaining: number | null
+  periodStart: string | null
+}
+
 export type PublicUser = Omit<User, "passwordHash" | "dfsPassword"> & {
   hasDfsPassword: boolean
+  usesHostedMaps: boolean
+  scanQuota: ScanQuotaSnapshot
 }

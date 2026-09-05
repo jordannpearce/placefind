@@ -10,6 +10,7 @@ import { previewUrl, sendAuthMail } from "@/lib/mail"
 import { hashPassword, randomToken } from "@/lib/password"
 import { provisionUserFromPaddle } from "@/lib/paddle-fulfillment"
 import { clampExtraCampaigns, isPlanId, PLANS } from "@/lib/plans"
+import { defaultScanQuotaFields, scanQuotaSnapshot, setExtraScanCredits, usesHostedMaps } from "@/lib/scan-quota"
 import type { PlanId, User, UserRole, UserStatus } from "@/lib/types"
 
 export type CreateManagedUserInput = {
@@ -20,6 +21,7 @@ export type CreateManagedUserInput = {
   agencyName?: string
   plan?: PlanId | string
   extraCampaigns?: number
+  extraScanCredits?: number
   role?: UserRole | string
   status?: UserStatus | string
   marketingOptIn?: boolean
@@ -55,6 +57,7 @@ export function createManagedUser(db: Database, input: CreateManagedUserInput): 
     status,
     plan,
     extraCampaigns: 0,
+    ...defaultScanQuotaFields(),
     marketingOptIn: Boolean(input.marketingOptIn),
     company: input.company?.trim() || agency.name,
     agencyId: agency.id,
@@ -66,6 +69,7 @@ export function createManagedUser(db: Database, input: CreateManagedUserInput): 
     trialEndsAt: input.trialEndsAt ?? null,
   }
   created.extraCampaigns = clampExtraCampaigns(created.plan, input.extraCampaigns)
+  if (input.extraScanCredits !== undefined) setExtraScanCredits(created, input.extraScanCredits)
   db.users.push(created)
   provisionUserFromPaddle(db, created)
   findOrCreateWorkspace(db, created.id)
@@ -83,10 +87,14 @@ export function createManagedUser(db: Database, input: CreateManagedUserInput): 
 export function serializeAdminUsers(db: Database) {
   const agencies = Object.fromEntries(db.agencies.map((agency) => [agency.id, agency.name]))
   return db.users.map((user) => {
-    const { passwordHash: _hash, dfsPassword, ...rest } = user
+    const { passwordHash: _hash, dfsPassword, dfsLogin, ...rest } = user
+    const hosted = usesHostedMaps(user)
     return {
       ...rest,
-      hasDfsPassword: Boolean(dfsPassword),
+      dfsLogin: hosted ? "" : dfsLogin,
+      hasDfsPassword: hosted ? false : Boolean(dfsPassword),
+      usesHostedMaps: hosted,
+      scanQuota: scanQuotaSnapshot(user),
       agencyName: (user.agencyId && agencies[user.agencyId]) || "Independent",
       campaignCount: db.workspaces[user.id]?.campaigns.length ?? 0,
     }
