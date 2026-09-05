@@ -100,21 +100,21 @@ export function AiVisibilityBuy({
     }
   }, [])
 
-  function setField<K extends keyof AiBrandFormValues>(key: K, value: AiBrandFormValues[K]) {
-    setValues((current) => ({ ...current, [key]: value }))
+  function formValues(form: HTMLFormElement | null, fallback = values): AiBrandFormValues {
+    return {
+      name: readNamedValue(form, "companyName", "ai-company-name", fallback.name),
+      street: readNamedValue(form, "street", "ai-street", fallback.street),
+      city: readNamedValue(form, "city", "ai-city", fallback.city),
+      state: readNamedValue(form, "state", "ai-state", fallback.state),
+      zip: readNamedValue(form, "zip", "ai-zip", fallback.zip),
+      phone: readNamedValue(form, "phone", "ai-phone", fallback.phone),
+      website: readNamedValue(form, "website", "ai-website", fallback.website),
+      competitors: readNamedValue(form, "competitors", "ai-competitors", fallback.competitors),
+    }
   }
 
-  function formValues(form: HTMLFormElement | null): AiBrandFormValues {
-    return {
-      name: readNamedValue(form, "companyName", "ai-company-name", values.name),
-      street: readNamedValue(form, "street", "ai-street", values.street),
-      city: readNamedValue(form, "city", "ai-city", values.city),
-      state: readNamedValue(form, "state", "ai-state", values.state),
-      zip: readNamedValue(form, "zip", "ai-zip", values.zip),
-      phone: readNamedValue(form, "phone", "ai-phone", values.phone),
-      website: readNamedValue(form, "website", "ai-website", values.website),
-      competitors: readNamedValue(form, "competitors", "ai-competitors", values.competitors),
-    }
+  function syncField(form: HTMLFormElement | null, patch: Partial<AiBrandFormValues> = {}) {
+    setValues((current) => ({ ...formValues(form, current), ...patch }))
   }
 
   async function buy(form: HTMLFormElement | null) {
@@ -123,7 +123,7 @@ export function AiVisibilityBuy({
     setMessage("")
     try {
       const next = formValues(form)
-      setValues(next)
+      syncField(form)
       if (next.name.trim().length < 2) {
         throw new Error("Enter the company name.")
       }
@@ -185,6 +185,9 @@ export function AiVisibilityBuy({
       </p>
       <form
         className="space-y-3"
+        onInput={(event) => {
+          if (event.currentTarget instanceof HTMLFormElement) syncField(event.currentTarget)
+        }}
         onSubmit={(event) => {
           event.preventDefault()
           void buy(event.currentTarget)
@@ -197,8 +200,8 @@ export function AiVisibilityBuy({
               id="ai-company-name"
               name="companyName"
               value={values.name}
-              onChange={(event) => setField("name", event.target.value)}
-              onInput={(event) => setField("name", (event.target as HTMLInputElement).value)}
+              onChange={(event) => syncField(event.currentTarget.form)}
+              onInput={(event) => syncField(event.currentTarget.form)}
               placeholder="Acme Plumbing"
               autoComplete="organization"
             />
@@ -209,8 +212,8 @@ export function AiVisibilityBuy({
               id="ai-website"
               name="website"
               value={values.website}
-              onChange={(event) => setField("website", event.target.value)}
-              onInput={(event) => setField("website", (event.target as HTMLInputElement).value)}
+              onChange={(event) => syncField(event.currentTarget.form)}
+              onInput={(event) => syncField(event.currentTarget.form)}
               placeholder="https://acmeplumbing.com"
               autoComplete="url"
             />
@@ -221,8 +224,8 @@ export function AiVisibilityBuy({
               id="ai-street"
               name="street"
               value={values.street}
-              onChange={(event) => setField("street", event.target.value)}
-              onInput={(event) => setField("street", (event.target as HTMLInputElement).value)}
+              onChange={(event) => syncField(event.currentTarget.form)}
+              onInput={(event) => syncField(event.currentTarget.form)}
               placeholder="1200 Congress Ave"
               autoComplete="address-line1"
             />
@@ -233,8 +236,8 @@ export function AiVisibilityBuy({
               id="ai-city"
               name="city"
               value={values.city}
-              onChange={(event) => setField("city", event.target.value)}
-              onInput={(event) => setField("city", (event.target as HTMLInputElement).value)}
+              onChange={(event) => syncField(event.currentTarget.form)}
+              onInput={(event) => syncField(event.currentTarget.form)}
               placeholder="Austin"
               autoComplete="address-level2"
             />
@@ -242,7 +245,14 @@ export function AiVisibilityBuy({
           <div className="space-y-1.5">
             <Label htmlFor="ai-state">State</Label>
             <input type="hidden" name="state" value={values.state} />
-            <UsStateSelect id="ai-state" value={values.state} onChange={(next) => setField("state", next)} />
+            <UsStateSelect
+              id="ai-state"
+              value={values.state}
+              onChange={(next) => {
+                const form = document.getElementById("ai-company-name")?.closest("form") ?? null
+                syncField(form instanceof HTMLFormElement ? form : null, { state: next })
+              }}
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ai-zip">ZIP</Label>
@@ -250,8 +260,8 @@ export function AiVisibilityBuy({
               id="ai-zip"
               name="zip"
               value={values.zip}
-              onChange={(event) => setField("zip", event.target.value)}
-              onInput={(event) => setField("zip", (event.target as HTMLInputElement).value)}
+              onChange={(event) => syncField(event.currentTarget.form)}
+              onInput={(event) => syncField(event.currentTarget.form)}
               placeholder="78701"
               autoComplete="postal-code"
             />
@@ -263,8 +273,8 @@ export function AiVisibilityBuy({
               name="phone"
               type="tel"
               value={values.phone}
-              onChange={(event) => setField("phone", event.target.value)}
-              onInput={(event) => setField("phone", (event.target as HTMLInputElement).value)}
+              onChange={(event) => syncField(event.currentTarget.form)}
+              onInput={(event) => syncField(event.currentTarget.form)}
               placeholder="(512) 555-0142"
               autoComplete="tel"
             />
@@ -276,7 +286,8 @@ export function AiVisibilityBuy({
             id="ai-competitors"
             name="competitors"
             value={values.competitors}
-            onChange={(event) => setField("competitors", event.target.value)}
+            onChange={(event) => syncField(event.currentTarget.form)}
+            onInput={(event) => syncField(event.currentTarget.form)}
             placeholder="Rival Plumbing, City Drain Co"
             rows={2}
           />
