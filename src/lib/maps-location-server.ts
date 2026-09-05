@@ -147,7 +147,7 @@ export async function resolveBrandScanLocation(
   })
   return {
     location: geo.location || fallback,
-    lat: geo.lat ?? brand.lat,
-    lng: geo.lng ?? brand.lng,
+    lat: geo.lat ?? stored.lat,
+    lng: geo.lng ?? stored.lng,
   }
 }

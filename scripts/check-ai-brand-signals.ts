@@ -12,7 +12,12 @@ import {
   updateAssignedBrandProfile,
   upsertBrandPrompt,
 } from "../src/lib/ai-visibility.ts"
-import { canonicalAiLocation, composeBrandAddress, parseLegacyAddress } from "../src/lib/maps-location.ts"
+import {
+  canonicalAiLocation,
+  composeBrandAddress,
+  parseLegacyAddress,
+  usableBrandCoords,
+} from "../src/lib/maps-location.ts"
 import { AI_SCANS_PER_PROMPT } from "../src/lib/plans.ts"
 import {
   analyzeAnswer,
@@ -59,6 +64,10 @@ assert.equal(parsed.city, "Austin")
 assert.equal(parsed.state, "TX")
 assert.equal(missingBrandLocation({ city: "", state: "TX" }), "Enter the city.")
 assert.equal(canonicalAiLocation("Austin", "TX"), "Austin,Texas,United States")
+assert.deepEqual(usableBrandCoords(0, 0), { lat: null, lng: null })
+assert.deepEqual(usableBrandCoords("", ""), { lat: null, lng: null })
+assert.deepEqual(usableBrandCoords(30.2672, -97.7431), { lat: 30.2672, lng: -97.7431 })
+assert.equal(normalizeAiBrand({ ...brand, lat: 0, lng: 0 })?.lat, null)
 assert.equal(scanLocationForBrand(parsed), "Austin,Texas,United States")
 assert.equal(missingBrandLocation({ city: "Austin", state: "" }), "Choose a state.")
 assert.equal(composeBrandAddress(parsed), "1200 Congress Ave, Austin, TX 78701")
