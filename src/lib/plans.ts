@@ -25,7 +25,7 @@ export const PLANS: Record<
     id: "starter",
     name: "Starter",
     price: 20,
-    blurb: "One brand, one location. Five live Maps scans each month — no API key to enter.",
+    blurb: "One brand, one location. Five Maps scans each month.",
     campaigns: 1,
     maxCampaigns: 1,
     extraSlotPrice: 0,
@@ -34,11 +34,11 @@ export const PLANS: Record<
     features: [
       "1 campaign — one brand and one location",
       "Hard limit: you cannot add a second campaign",
-      "5 live Maps scans each month",
+      "5 Maps scans each month",
       "Extra scans $5 each when you need more",
       "3 keywords on that campaign",
       "Grids up to 7×7",
-      "Live Maps included — no API key to enter",
+      "Maps scans included",
     ],
   },
   agency: {

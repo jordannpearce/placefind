@@ -4,7 +4,7 @@ import { fetchMapsPoint, getScanMode, resolveRequestAuth } from "@/lib/dataforse
 import { readDb } from "@/lib/db"
 import { formatCoordinate } from "@/lib/grid"
 import { mockDelayMs, mockScanPoint } from "@/lib/mock-scan"
-import { hasActiveScanSession, SCAN_QUOTA_EXHAUSTED, usesHostedMaps } from "@/lib/scan-quota"
+import { hasActiveScanSession, SCAN_QUOTA_EXHAUSTED, starterSafeMessage, usesHostedMaps } from "@/lib/scan-quota"
 import type { DeviceType, ScanPointResponse } from "@/lib/types"
 
 export const maxDuration = 30
@@ -114,7 +114,8 @@ export async function POST(request: Request) {
     })
     return Response.json({ ...result, mode } satisfies ScanPointResponse)
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Scan failed"
+    const raw = error instanceof Error ? error.message : "Scan failed"
+    const message = hosted ? starterSafeMessage(raw) : raw
     return Response.json(
       {
         id: pointId,

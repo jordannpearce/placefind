@@ -120,10 +120,10 @@ export default function WhyGridsPage() {
             who actually sits in the pack.
           </p>
           <p className="mt-4 text-[15px] leading-7 text-foreground/90">
-            Starter is one brand and one location, with five live Maps scans each month — no API
-            key to enter. Extra scans are $5. Pro covers five to ten campaigns on your own
-            DataForSEO key. Advanced is fifty. Without a key on Pro or Advanced, sample Austin
-            coffee rankings still teach the workflow — they are not a live market report.
+            Starter is one brand and one location, with five Maps scans each month. Extra scans
+            are $5. Pro covers five to ten campaigns. Advanced is fifty. Sample Austin coffee
+            rankings on Pro or Advanced are for learning the workflow — they are not a live
+            market report.
           </p>
           <Link href="/signup" className={buttonVariants({ size: "lg", className: "mt-8" })}>
             Create a workspace

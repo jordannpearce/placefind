@@ -81,8 +81,8 @@ export default function HomePage() {
               body: "Track coffee, espresso, and coffee shop on the same lattice. Compare ATR, local-pack share, and coverage after a scan.",
             },
             {
-              title: "Live Maps on Starter",
-              body: "Starter includes live Maps scans — no API key to enter. Pro and Advanced paste their own DataForSEO key. Without a key, those plans can run sample Austin coffee rankings so you can learn the workflow.",
+              title: "Maps scans on Starter",
+              body: "Starter includes five Maps scans each month. Extra scans are $5. Pro and Advanced run more campaigns and connect their own Maps API when they want live ranks.",
             },
           ].map((item) => (
             <div key={item.title}>
