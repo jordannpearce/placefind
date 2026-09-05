@@ -49,7 +49,7 @@ export function AiVisibilityApp() {
 
   const brand = data?.brands.find((item) => item.id === brandId) ?? data?.brands[0]
   const scans = useMemo(
-    () => (data?.scans || []).filter((scan) => !brand || scan.brandId === brand.id),
+    () => (data?.scans || []).filter((scan) => brand && scan.brandId === brand.id),
     [data?.scans, brand]
   )
   const selected = scans.find((scan) => scan.id === selectedScanId) ?? scans[0] ?? null

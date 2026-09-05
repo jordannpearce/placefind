@@ -98,6 +98,7 @@ export function normalizeAiScans(raw: unknown): AiScanRun[] {
   if (!Array.isArray(raw)) return []
   return raw
     .filter((item) => item && typeof item === "object" && typeof (item as AiScanRun).id === "string")
+    .filter((item) => (item as AiScanRun).brandId !== SAMPLE_BRAND_ID)
     .slice(0, MAX_AI_SCANS)
     .map((item) => {
       const scan = item as AiScanRun

@@ -21,7 +21,7 @@ export async function GET() {
 
   return NextResponse.json({
     brands: user.aiBrands.map(brandQuotaView),
-    scans: user.aiScans,
+    scans: user.aiScans.filter((scan) => user.aiBrands.some((brand) => brand.id === scan.brandId)),
     canAddComplimentary: canManageAiComplimentary(user),
     liveConfigured: Boolean(apiKey),
     promptsPerBrand: AI_PROMPTS_PER_BRAND,
