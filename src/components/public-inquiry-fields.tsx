@@ -34,10 +34,10 @@ export function HoneypotField({
 }) {
   return (
     <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden="true">
-      <label htmlFor="website">Website</label>
+      <label htmlFor="hpWebsite">Company website</label>
       <input
-        id="website"
-        name="website"
+        id="hpWebsite"
+        name="hpWebsite"
         type="text"
         tabIndex={-1}
         autoComplete="off"

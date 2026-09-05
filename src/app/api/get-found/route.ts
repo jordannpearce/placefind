@@ -3,9 +3,9 @@ import { NextResponse } from "next/server"
 import { MISSING_MAIL_ERROR, SUPPORT_INBOX } from "@/lib/company"
 import { leadInboxEmail } from "@/lib/email-templates"
 import { sendSupportInbox } from "@/lib/mail"
-import { isHoneypotTripped, parsePublicInquiry } from "@/lib/public-forms"
+import { isHoneypotTripped, parseGetFoundInquiry } from "@/lib/public-forms"
 import { clientIp, consumeRateLimit } from "@/lib/rate-limit"
-import { persistLeadFallback, upsertMarketingContact } from "@/lib/resend-audience"
+import { persistLead, upsertMarketingContact } from "@/lib/resend-audience"
 
 export async function POST(request: Request) {
   let body: Record<string, unknown>
@@ -36,13 +36,11 @@ export async function POST(request: Request) {
     )
   }
 
-  const parsed = parsePublicInquiry(body)
+  const parsed = parseGetFoundInquiry(body)
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
   const audience = await upsertMarketingContact(parsed.data)
-  if (!audience.synced) {
-    await persistLeadFallback(parsed.data, false)
-  }
+  await persistLead(parsed.data, audience.synced)
 
   if (audience.error === "MAIL_NOT_CONFIGURED") {
     return NextResponse.json({ error: MISSING_MAIL_ERROR }, { status: 503 })

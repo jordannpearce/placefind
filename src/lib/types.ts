@@ -185,7 +185,13 @@ export type AppSettings = {
   resendApiKey: string
   resendFrom: string
   resendAudienceId: string
+  /** USD charged to a Pro/Advanced agency when a Get Found lead is assigned. */
+  costPerLeadUsd: number
 }
+
+export type LeadStatus = "new" | "assigned" | "invoiced" | "paid"
+export type LeadInvoiceStatus = "none" | "invoiced" | "failed" | "paid"
+export type LocationCount = "1" | "2-5" | "6+"
 
 export type MarketingLead = {
   id: string
@@ -196,6 +202,21 @@ export type MarketingLead = {
   city: string
   state: string
   comments: string
+  website: string
+  gbpListing: string
+  primaryCategory: string
+  keyword: string
+  locationCount: LocationCount | ""
+  status: LeadStatus
+  assignedToUserId: string
+  assignedAt: string | null
+  leadPrice: number | null
+  invoiceStatus: LeadInvoiceStatus
+  invoiceError: string
+  invoiceDryRun: boolean
+  paddleTransactionId: string
+  paddleInvoiceId: string
+  paddleInvoiceUrl: string
   source: "get-found"
   audienceSynced: boolean
   createdAt: string

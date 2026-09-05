@@ -9,7 +9,7 @@ import { SUPPORT_INBOX } from "@/lib/company"
 
 export function ContactForm() {
   const [inquiry, setInquiry] = useState(emptyInquiry)
-  const [website, setWebsite] = useState("")
+  const [hpWebsite, setHpWebsite] = useState("")
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -22,7 +22,7 @@ export function ContactForm() {
       const response = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...inquiry, website }),
+        body: JSON.stringify({ ...inquiry, hpWebsite }),
       })
       const data = (await response.json()) as { error?: string }
       if (!response.ok) throw new Error(data.error || "We couldn’t send your message.")
@@ -56,7 +56,7 @@ export function ContactForm() {
 
   return (
     <form className="relative space-y-4 rounded-2xl border bg-card p-6" onSubmit={onSubmit}>
-      <HoneypotField value={website} onChange={setWebsite} />
+      <HoneypotField value={hpWebsite} onChange={setHpWebsite} />
       <InquiryFields
         value={inquiry}
         onChange={setInquiry}

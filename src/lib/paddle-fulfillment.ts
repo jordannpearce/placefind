@@ -19,6 +19,7 @@ import {
 } from "./paddle-access"
 import { resolvePlanFromCatalog } from "./paddle-catalog"
 import { clampExtraCampaigns } from "./plans"
+import { markLeadPaid } from "./leads"
 import type { PaddleCustomer, PaddleSubscription, PlanId, User } from "./types"
 
 function nowIso() {
@@ -220,9 +221,25 @@ export async function handleSubscriptionEvent(
   }
 }
 
+function customDataRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null
+}
+
 export async function handleTransactionCompleted(db: Database, event: TransactionCompletedEvent) {
   const customerId = event.data.customerId || ""
   if (customerId) upsertCustomer(db, customerId, "")
+
+  const custom = customDataRecord(event.data.customData)
+  const leadId = typeof custom?.leadId === "string" ? custom.leadId : ""
+  if (custom?.kind === "get_found_lead" && leadId) {
+    const lead = db.leads.find((item) => item.id === leadId)
+    if (lead) {
+      markLeadPaid(lead)
+      if (event.data.id) lead.paddleTransactionId = event.data.id
+      if (event.data.invoiceId) lead.paddleInvoiceId = event.data.invoiceId
+    }
+    return
+  }
 
   const item = event.data.items[0]
   const priceId = item?.price?.id || ""

@@ -1,10 +1,9 @@
 import { Resend } from "resend"
 
 import { readDb, updateDb } from "./db"
+import { applyInquiryToLead, leadFromInquiry } from "./leads"
 import { resolveResendConfig } from "./mail"
-import { splitName, type PublicInquiry } from "./public-forms"
-import { randomToken } from "./password"
-import type { MarketingLead } from "./types"
+import { splitName, type GetFoundInquiry, type PublicInquiry } from "./public-forms"
 
 const AUDIENCE_NAME = "GridPins marketing"
 
@@ -70,27 +69,26 @@ export async function upsertMarketingContact(inquiry: PublicInquiry): Promise<{ 
   }
 }
 
-export async function persistLeadFallback(inquiry: PublicInquiry, audienceSynced: boolean) {
-  const lead: MarketingLead = {
-    id: `lead_${Date.now()}_${randomToken().slice(0, 8)}`,
-    name: inquiry.name,
-    email: inquiry.email,
-    phone: inquiry.phone,
-    businessName: inquiry.businessName,
-    city: inquiry.city,
-    state: inquiry.state,
-    comments: inquiry.comments,
-    source: "get-found",
-    audienceSynced,
-    createdAt: new Date().toISOString(),
-  }
+export async function persistLead(inquiry: GetFoundInquiry, audienceSynced: boolean) {
+  const created = leadFromInquiry(inquiry, audienceSynced)
 
-  await updateDb((db) => {
-    const existing = db.leads.findIndex((item) => item.email === inquiry.email)
-    if (existing >= 0) db.leads[existing] = { ...db.leads[existing], ...lead, id: db.leads[existing].id }
-    else db.leads.unshift(lead)
+  const lead = await updateDb((db) => {
+    const existing = db.leads.find(
+      (item) => item.email === inquiry.email && item.status === "new" && !item.assignedToUserId
+    )
+    if (existing) {
+      applyInquiryToLead(existing, inquiry, audienceSynced)
+      return existing
+    }
+    db.leads.unshift(created)
     db.leads = db.leads.slice(0, 500)
+    return created
   })
 
   return lead
+}
+
+/** @deprecated Use persistLead. Kept so older call sites still compile during the swap. */
+export async function persistLeadFallback(inquiry: GetFoundInquiry, audienceSynced: boolean) {
+  return persistLead(inquiry, audienceSynced)
 }

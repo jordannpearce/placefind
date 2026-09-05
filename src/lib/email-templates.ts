@@ -285,6 +285,11 @@ export function leadInboxEmail(input: {
   city: string
   state: string
   comments: string
+  website?: string
+  gbpListing?: string
+  primaryCategory?: string
+  keyword?: string
+  locationCount?: string
 }) {
   return {
     subject: `GBP help opt-in: ${input.businessName} — ${input.name}`,
@@ -296,9 +301,67 @@ export function leadInboxEmail(input: {
          ["Email", input.email],
          ["Phone", input.phone],
          ["Business", input.businessName],
+         ["Website", input.website || "Not provided"],
+         ["GBP listing", input.gbpListing || "Not provided"],
+         ["Category", input.primaryCategory || "Not provided"],
+         ["Keyword", input.keyword || "Not provided"],
+         ["Locations", input.locationCount || "Not provided"],
          ["City", input.city],
          ["State", input.state],
          ["What they need", input.comments || "Not specified"],
+       ])}`
+    ),
+  }
+}
+
+export function leadAssignedAgencyEmail(input: {
+  agencyName: string
+  amountUsd: number
+  invoiceUrl?: string
+  dryRun?: boolean
+  lead: {
+    name: string
+    email: string
+    phone: string
+    businessName: string
+    website?: string
+    gbpListing?: string
+    primaryCategory?: string
+    keyword?: string
+    locationCount?: string
+    city: string
+    state: string
+    comments?: string
+  }
+}) {
+  const amount = `$${input.amountUsd.toFixed(2)}`
+  const payLine = input.invoiceUrl
+    ? `<p>Pay the ${escapeHtml(amount)} invoice here: <a href="${escapeHtml(input.invoiceUrl)}" style="color:#2f6b5a;">${escapeHtml(input.invoiceUrl)}</a></p>`
+    : `<p>You owe ${escapeHtml(amount)} for this lead. If a Paddle invoice link is not here yet, check your Paddle inbox or write ${escapeHtml("hello@info.gridpins.com")}.</p>`
+  const dryLine = input.dryRun
+    ? `<p style="font-size:13px;color:#6b7c74;">This notice was recorded without creating a live Paddle charge.</p>`
+    : ""
+  return {
+    subject: `New Get Found lead assigned — ${input.lead.businessName} (${amount})`,
+    html: wrap(
+      "A lead was assigned to you",
+      `<p>Hi ${escapeHtml(input.agencyName)},</p>
+       <p>GridPins assigned you a Get Found lead. The lead price is <strong>${escapeHtml(amount)}</strong>.</p>
+       ${payLine}
+       ${dryLine}
+       ${definitionList([
+         ["Business", input.lead.businessName],
+         ["Contact", input.lead.name],
+         ["Email", input.lead.email],
+         ["Phone", input.lead.phone],
+         ["Website", input.lead.website || "Not provided"],
+         ["GBP listing", input.lead.gbpListing || "Not provided"],
+         ["Category", input.lead.primaryCategory || "Not provided"],
+         ["Keyword", input.lead.keyword || "Not provided"],
+         ["Locations", input.lead.locationCount || "Not provided"],
+         ["City", input.lead.city],
+         ["State", input.lead.state],
+         ["Notes", input.lead.comments || "None"],
        ])}`
     ),
   }

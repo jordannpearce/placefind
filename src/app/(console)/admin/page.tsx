@@ -33,9 +33,14 @@ export default async function AdminPage() {
             outbox
           </p>
         </div>
-        <Link href="/admin/emails" className={buttonVariants({ variant: "outline" })}>
-          Emails & Resend
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/leads" className={buttonVariants({ variant: "outline" })}>
+            Leads
+          </Link>
+          <Link href="/admin/emails" className={buttonVariants({ variant: "outline" })}>
+            Emails & Resend
+          </Link>
+        </div>
       </div>
       <div className="mt-8">
         <AdminAgencies

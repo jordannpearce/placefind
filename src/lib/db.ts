@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { Pool, type QueryResultRow } from "pg"
 
+import { DEFAULT_COST_PER_LEAD_USD, normalizeLead, parseCostPerLeadUsd, parseStoredLeads } from "./leads"
 import { hashPassword, verifyPassword } from "./password"
 import { parseTrialEndsAt } from "./paddle-access"
 import { clampExtraCampaigns, isPlanId } from "./plans"
@@ -80,40 +81,15 @@ function emptyDb(): Database {
     emails: [],
     workspaces: {},
     agencies: [],
-    settings: { resendApiKey: "", resendFrom: DEFAULT_RESEND_FROM, resendAudienceId: "" },
+    settings: {
+      resendApiKey: "",
+      resendFrom: DEFAULT_RESEND_FROM,
+      resendAudienceId: "",
+      costPerLeadUsd: DEFAULT_COST_PER_LEAD_USD,
+    },
     leads: [],
     customers: [],
     subscriptions: [],
-  }
-}
-
-function normalizeLead(raw: Partial<MarketingLead>): MarketingLead | null {
-  if (!raw.email?.trim()) return null
-  return {
-    id: raw.id || `lead_${Date.now()}`,
-    name: raw.name || "",
-    email: raw.email.trim().toLowerCase(),
-    phone: raw.phone || "",
-    businessName: raw.businessName || "",
-    city: raw.city || "",
-    state: raw.state || "",
-    comments: raw.comments || "",
-    source: "get-found",
-    audienceSynced: Boolean(raw.audienceSynced),
-    createdAt: raw.createdAt || new Date().toISOString(),
-  }
-}
-
-function parseStoredLeads(value?: string): MarketingLead[] {
-  if (!value?.trim()) return []
-  try {
-    const parsed = JSON.parse(value) as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .map((item) => normalizeLead(item as Partial<MarketingLead>))
-      .filter((item): item is MarketingLead => Boolean(item))
-  } catch {
-    return []
   }
 }
 
@@ -286,6 +262,7 @@ function hydrate(raw: Partial<Database>): Database {
       resendApiKey: raw.settings?.resendApiKey ?? "",
       resendFrom: defaultResendFrom(raw.settings?.resendFrom),
       resendAudienceId: raw.settings?.resendAudienceId ?? "",
+      costPerLeadUsd: parseCostPerLeadUsd(raw.settings?.costPerLeadUsd),
     },
     leads: (raw.leads ?? []).map((lead) => normalizeLead(lead)).filter((lead): lead is MarketingLead => Boolean(lead)),
     customers: (raw.customers ?? [])
@@ -402,6 +379,36 @@ async function ensureSchema() {
         );
         CREATE INDEX IF NOT EXISTS customers_email_idx ON customers (email);
         CREATE INDEX IF NOT EXISTS subscriptions_customer_id_idx ON subscriptions (customer_id);
+        CREATE TABLE IF NOT EXISTS leads (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL DEFAULT '',
+          email TEXT NOT NULL,
+          phone TEXT NOT NULL DEFAULT '',
+          business_name TEXT NOT NULL DEFAULT '',
+          city TEXT NOT NULL DEFAULT '',
+          state TEXT NOT NULL DEFAULT '',
+          comments TEXT NOT NULL DEFAULT '',
+          website TEXT NOT NULL DEFAULT '',
+          gbp_listing TEXT NOT NULL DEFAULT '',
+          primary_category TEXT NOT NULL DEFAULT '',
+          keyword TEXT NOT NULL DEFAULT '',
+          location_count TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'new',
+          assigned_to_user_id TEXT NOT NULL DEFAULT '',
+          assigned_at TIMESTAMPTZ,
+          lead_price NUMERIC,
+          invoice_status TEXT NOT NULL DEFAULT 'none',
+          invoice_error TEXT NOT NULL DEFAULT '',
+          invoice_dry_run BOOLEAN NOT NULL DEFAULT FALSE,
+          paddle_transaction_id TEXT NOT NULL DEFAULT '',
+          paddle_invoice_id TEXT NOT NULL DEFAULT '',
+          paddle_invoice_url TEXT NOT NULL DEFAULT '',
+          source TEXT NOT NULL DEFAULT 'get-found',
+          audience_synced BOOLEAN NOT NULL DEFAULT FALSE,
+          created_at TIMESTAMPTZ NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS leads_created_at_idx ON leads (created_at DESC);
+        CREATE INDEX IF NOT EXISTS leads_email_idx ON leads (email);
       `)
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS extra_campaigns INTEGER NOT NULL DEFAULT 0`)
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS paddle_customer_id TEXT NOT NULL DEFAULT ''`)
@@ -413,7 +420,7 @@ async function ensureSchema() {
 
 async function loadFromPostgres(): Promise<Database> {
   await ensureSchema()
-  const [users, tokens, emails, workspaces, agencies, settingsRows, customers, subscriptions] = await Promise.all([
+  const [users, tokens, emails, workspaces, agencies, settingsRows, customers, subscriptions, leadRows] = await Promise.all([
     query<{
       id: string
       name: string
@@ -470,6 +477,34 @@ async function loadFromPostgres(): Promise<Database> {
       created_at: Date
       updated_at: Date
     }>("SELECT * FROM subscriptions"),
+    query<{
+      id: string
+      name: string
+      email: string
+      phone: string
+      business_name: string
+      city: string
+      state: string
+      comments: string
+      website: string
+      gbp_listing: string
+      primary_category: string
+      keyword: string
+      location_count: string
+      status: string
+      assigned_to_user_id: string
+      assigned_at: Date | null
+      lead_price: string | number | null
+      invoice_status: string
+      invoice_error: string
+      invoice_dry_run: boolean
+      paddle_transaction_id: string
+      paddle_invoice_id: string
+      paddle_invoice_url: string
+      source: string
+      audience_synced: boolean
+      created_at: Date
+    }>("SELECT * FROM leads ORDER BY created_at DESC"),
   ])
 
   const settingsMap = Object.fromEntries(settingsRows.rows.map((row) => [row.key, row.value]))
@@ -532,8 +567,43 @@ async function loadFromPostgres(): Promise<Database> {
       resendApiKey: settingsMap.resendApiKey || "",
       resendFrom: defaultResendFrom(settingsMap.resendFrom),
       resendAudienceId: settingsMap.resendAudienceId || "",
+      costPerLeadUsd: parseCostPerLeadUsd(settingsMap.costPerLeadUsd),
     },
-    leads: parseStoredLeads(settingsMap.marketingLeads),
+    leads:
+      leadRows.rows.length > 0
+        ? leadRows.rows
+            .map((row) =>
+              normalizeLead({
+                id: row.id,
+                name: row.name,
+                email: row.email,
+                phone: row.phone,
+                businessName: row.business_name,
+                city: row.city,
+                state: row.state,
+                comments: row.comments,
+                website: row.website,
+                gbpListing: row.gbp_listing,
+                primaryCategory: row.primary_category,
+                keyword: row.keyword,
+                locationCount: row.location_count as MarketingLead["locationCount"],
+                status: row.status as MarketingLead["status"],
+                assignedToUserId: row.assigned_to_user_id,
+                assignedAt: row.assigned_at ? row.assigned_at.toISOString() : null,
+                leadPrice: row.lead_price == null ? null : Number(row.lead_price),
+                invoiceStatus: row.invoice_status as MarketingLead["invoiceStatus"],
+                invoiceError: row.invoice_error,
+                invoiceDryRun: row.invoice_dry_run,
+                paddleTransactionId: row.paddle_transaction_id,
+                paddleInvoiceId: row.paddle_invoice_id,
+                paddleInvoiceUrl: row.paddle_invoice_url,
+                source: "get-found",
+                audienceSynced: row.audience_synced,
+                createdAt: row.created_at.toISOString(),
+              })
+            )
+            .filter((lead): lead is MarketingLead => Boolean(lead))
+        : parseStoredLeads(settingsMap.marketingLeads),
     customers: customers.rows.map((row) => ({
       customerId: row.customer_id,
       email: row.email,
@@ -567,6 +637,7 @@ async function saveToPostgres(db: Database) {
     await client.query("DELETE FROM customers")
     await client.query("DELETE FROM users")
     await client.query("DELETE FROM agencies")
+    await client.query("DELETE FROM leads")
     await client.query("DELETE FROM app_settings")
     for (const agency of db.agencies) {
       await client.query("INSERT INTO agencies (id, name, created_at) VALUES ($1, $2, $3)", [
@@ -664,9 +735,49 @@ async function saveToPostgres(db: Database) {
       db.settings.resendAudienceId,
     ])
     await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
-      "marketingLeads",
-      JSON.stringify(db.leads),
+      "costPerLeadUsd",
+      String(parseCostPerLeadUsd(db.settings.costPerLeadUsd)),
     ])
+    for (const lead of db.leads.slice(0, 500)) {
+      await client.query(
+        `INSERT INTO leads (
+          id, name, email, phone, business_name, city, state, comments, website, gbp_listing,
+          primary_category, keyword, location_count, status, assigned_to_user_id, assigned_at,
+          lead_price, invoice_status, invoice_error, invoice_dry_run, paddle_transaction_id,
+          paddle_invoice_id, paddle_invoice_url, source, audience_synced, created_at
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26
+        )`,
+        [
+          lead.id,
+          lead.name,
+          lead.email,
+          lead.phone,
+          lead.businessName,
+          lead.city,
+          lead.state,
+          lead.comments,
+          lead.website,
+          lead.gbpListing,
+          lead.primaryCategory,
+          lead.keyword,
+          lead.locationCount,
+          lead.status,
+          lead.assignedToUserId,
+          lead.assignedAt,
+          lead.leadPrice,
+          lead.invoiceStatus,
+          lead.invoiceError,
+          lead.invoiceDryRun,
+          lead.paddleTransactionId,
+          lead.paddleInvoiceId,
+          lead.paddleInvoiceUrl,
+          lead.source,
+          lead.audienceSynced,
+          lead.createdAt,
+        ]
+      )
+    }
     await client.query("COMMIT")
   } catch (error) {
     await client.query("ROLLBACK")

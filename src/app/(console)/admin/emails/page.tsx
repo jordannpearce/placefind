@@ -24,9 +24,14 @@ export default async function AdminEmailsPage() {
             Configure Resend, then pick accounts for marketing, updates, and notifications.
           </p>
         </div>
-        <Link href="/admin" className={buttonVariants({ variant: "outline" })}>
-          Users
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin" className={buttonVariants({ variant: "outline" })}>
+            Users
+          </Link>
+          <Link href="/admin/leads" className={buttonVariants({ variant: "outline" })}>
+            Leads
+          </Link>
+        </div>
       </div>
       <div className="mt-8">
         <AdminResend
