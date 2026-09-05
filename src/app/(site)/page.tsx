@@ -81,8 +81,8 @@ export default function HomePage() {
               body: "Track coffee, espresso, and coffee shop on the same lattice. Compare ATR, local-pack share, and coverage after a scan.",
             },
             {
-              title: "Your DataForSEO key",
-              body: "Agencies paste their own API login. Without a key, paid and tester accounts can run sample Austin coffee rankings so you can learn the workflow.",
+              title: "Live Maps on Starter",
+              body: "Starter includes live Maps scans — no API key to enter. Pro and Advanced paste their own DataForSEO key. Without a key, those plans can run sample Austin coffee rankings so you can learn the workflow.",
             },
           ].map((item) => (
             <div key={item.title}>

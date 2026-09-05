@@ -5,6 +5,7 @@ import { findOrCreateAgency, updateDb } from "@/lib/db"
 import { billingEmail } from "@/lib/email-templates"
 import { sendMail } from "@/lib/mail"
 import { clampExtraCampaigns, isPlanId, PLANS } from "@/lib/plans"
+import { usesHostedMaps } from "@/lib/scan-quota"
 import { publicUser, writeSession } from "@/lib/session"
 import type { PlanId } from "@/lib/types"
 
@@ -40,9 +41,11 @@ export async function PUT(request: Request) {
       if (found.company) found.agencyId = findOrCreateAgency(db, found.company).id
     }
     if (typeof body.marketingOptIn === "boolean") found.marketingOptIn = body.marketingOptIn
-    if (typeof body.dfsLogin === "string") found.dfsLogin = body.dfsLogin.trim()
-    if (typeof body.dfsPassword === "string" && body.dfsPassword.length > 0) {
-      found.dfsPassword = body.dfsPassword
+    if (!usesHostedMaps(found)) {
+      if (typeof body.dfsLogin === "string") found.dfsLogin = body.dfsLogin.trim()
+      if (typeof body.dfsPassword === "string" && body.dfsPassword.length > 0) {
+        found.dfsPassword = body.dfsPassword
+      }
     }
     if (body.plan && isPlanId(body.plan) && PLANS[body.plan]) found.plan = body.plan
     found.extraCampaigns = clampExtraCampaigns(

@@ -5,6 +5,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ExtraScanBuy } from "@/components/extra-scan-buy"
 import {
   campaignLimit,
   EXTRA_SLOT_PRICE,
@@ -12,6 +13,7 @@ import {
   monthlyTotal,
   PLANS,
   PLAN_ORDER,
+  STARTER_INCLUDED_SCANS,
 } from "@/lib/plans"
 import type { PlanId, PublicUser } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -154,28 +156,34 @@ export function AccountForm({ user }: { user: PublicUser }) {
         ) : (
           <p className="text-xs text-muted-foreground">
             {PLANS[plan].name} covers {limit} campaign{limit === 1 ? "" : "s"} at ${total}/month.
-            Extra $5 slots are only on Pro.
+            {plan === "starter"
+              ? ` ${STARTER_INCLUDED_SCANS} live scans included each month. Extra scans are $5 each.`
+              : " Extra $5 campaign slots are only on Pro."}
           </p>
         )}
       </section>
 
-      <section className="space-y-3 rounded-2xl border bg-card p-5">
-        <h2 className="font-heading text-2xl">DataForSEO</h2>
-        <p className="text-sm text-muted-foreground">
-          Optional. Live Maps scans bill to this account. Leave blank to keep using sample rankings.
-        </p>
-        <Field label="API login">
-          <Input value={dfsLogin} onChange={(event) => setDfsLogin(event.target.value)} />
-        </Field>
-        <Field label="API password">
-          <Input
-            type="password"
-            value={dfsPassword}
-            onChange={(event) => setDfsPassword(event.target.value)}
-            placeholder={user.hasDfsPassword ? "Saved · enter a new password to replace" : "API password"}
-          />
-        </Field>
-      </section>
+      {user.usesHostedMaps ? (
+        <ExtraScanBuy quota={user.scanQuota} />
+      ) : (
+        <section className="space-y-3 rounded-2xl border bg-card p-5">
+          <h2 className="font-heading text-2xl">DataForSEO</h2>
+          <p className="text-sm text-muted-foreground">
+            Optional. Live Maps scans bill to this account. Leave blank to keep using sample rankings.
+          </p>
+          <Field label="API login">
+            <Input value={dfsLogin} onChange={(event) => setDfsLogin(event.target.value)} />
+          </Field>
+          <Field label="API password">
+            <Input
+              type="password"
+              value={dfsPassword}
+              onChange={(event) => setDfsPassword(event.target.value)}
+              placeholder={user.hasDfsPassword ? "Saved · enter a new password to replace" : "API password"}
+            />
+          </Field>
+        </section>
+      )}
 
       <label className="flex items-start gap-2 text-sm leading-5">
         <input

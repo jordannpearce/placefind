@@ -65,6 +65,7 @@ import type {
   PointResult,
   ScanConfig,
   ScanPointResponse,
+  ScanQuotaSnapshot,
   WorkspaceScans,
 } from "@/lib/types"
 import { MAX_SCAN_HISTORY } from "@/lib/types"
@@ -136,6 +137,8 @@ export function TrackerApp() {
   })
   const [canBypassCampaignLimit, setCanBypassCampaignLimit] = useState(false)
   const [billingLock, setBillingLock] = useState<{ locked: boolean; billingUrl: string } | null>(null)
+  const [usesHostedMaps, setUsesHostedMaps] = useState(false)
+  const [scanQuota, setScanQuota] = useState<ScanQuotaSnapshot | null>(null)
   const abortRef = useRef(false)
   const draftRef = useRef<KeywordResults>({})
 
@@ -198,19 +201,24 @@ export function TrackerApp() {
   const previousResults = compareRun?.results[config.activeKeyword] ?? {}
 
   useEffect(() => {
+    if (!hydratedFromServer) return
     let cancelled = false
     fetch("/api/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        apiLogin: workspace.settings.login,
-        apiPassword: workspace.settings.password,
-      }),
+      body: JSON.stringify(
+        usesHostedMaps
+          ? {}
+          : {
+              apiLogin: settings.login,
+              apiPassword: settings.password,
+            }
+      ),
     })
       .then((response) => response.json())
-      .then((data: { live?: boolean }) => {
+      .then((data: { live?: boolean; hostedLive?: boolean }) => {
         if (cancelled) return
-        const live = Boolean(data.live) || workspace.live
+        const live = Boolean(data.hostedLive || data.live) || workspace.live
         setLiveConfigured(live)
         if (live) {
           setModeLabel("live")
@@ -221,7 +229,13 @@ export function TrackerApp() {
     return () => {
       cancelled = true
     }
-  }, [workspace.live, workspace.settings.login, workspace.settings.password])
+  }, [
+    hydratedFromServer,
+    settings.login,
+    settings.password,
+    usesHostedMaps,
+    workspace.live,
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -240,6 +254,9 @@ export function TrackerApp() {
           canBypassCampaignLimit?: boolean
           softwareAccess?: boolean
           billingUrl?: string
+          usesHostedMaps?: boolean
+          hostedLive?: boolean
+          scanQuota?: ScanQuotaSnapshot
           code?: string
         } | null
         if (response.status === 402 || data?.softwareAccess === false || data?.code === "billing_required") {
@@ -266,6 +283,9 @@ export function TrackerApp() {
           canBypassCampaignLimit?: boolean
           softwareAccess?: boolean
           billingUrl?: string
+          usesHostedMaps?: boolean
+          hostedLive?: boolean
+          scanQuota?: ScanQuotaSnapshot
         } | null) => {
           if (cancelled || !data) {
             setHydratedFromServer(true)
@@ -277,11 +297,16 @@ export function TrackerApp() {
           if (typeof data.canBypassCampaignLimit === "boolean") {
             setCanBypassCampaignLimit(data.canBypassCampaignLimit)
           }
+          if (typeof data.usesHostedMaps === "boolean") {
+            setUsesHostedMaps(data.usesHostedMaps)
+          }
+          if (data.scanQuota) setScanQuota(data.scanQuota)
+          const hostedLive = Boolean(data.hostedLive)
           if (Array.isArray(data.campaigns)) {
             setCampaigns(data.campaigns)
             saveCampaigns(data.campaigns)
             const serverLive = Boolean(
-              (data.settings?.login && data.settings?.password) || data.hasDfsPassword
+              hostedLive || (data.settings?.login && data.settings?.password) || data.hasDfsPassword
             )
             if (data.campaigns.length === 0) {
               setActiveCampaignId("")
@@ -303,17 +328,28 @@ export function TrackerApp() {
             }
           }
           if (data.settings) {
-            const settingsNext = {
-              login: data.settings.login || data.dfsLogin || "",
-              password: data.settings.password || "",
-            }
+            const settingsNext = data.usesHostedMaps
+              ? { login: "", password: "" }
+              : {
+                  login: data.settings.login || data.dfsLogin || "",
+                  password: data.settings.password || "",
+                }
             setSettings(settingsNext)
             saveSettings(settingsNext)
-            if (settingsNext.login && (settingsNext.password || data.hasDfsPassword)) {
+            if (
+              hostedLive ||
+              (settingsNext.login && (settingsNext.password || data.hasDfsPassword))
+            ) {
               setLiveConfigured(true)
               setModeLabel("live")
               setConfig((current) => ({ ...current, forceMock: false }))
             }
+          } else if (hostedLive) {
+            setSettings({ login: "", password: "" })
+            saveSettings({ login: "", password: "" })
+            setLiveConfigured(true)
+            setModeLabel("live")
+            setConfig((current) => ({ ...current, forceMock: false }))
           }
           if (data.scans) {
             const incoming = normalizeWorkspaceScans(
@@ -457,6 +493,25 @@ export function TrackerApp() {
     const keywords = (scope === "active" ? [config.activeKeyword] : config.keywords).filter(Boolean)
     if (!activeCampaignId || !config.targetBusiness.trim() || keywords.length === 0) return
 
+    const liveScan = !config.forceMock && liveConfigured
+    if (usesHostedMaps && liveScan) {
+      try {
+        const quotaResponse = await fetch("/api/me/scan-quota", { method: "POST" })
+        const quotaData = (await quotaResponse.json()) as {
+          error?: string
+          quota?: ScanQuotaSnapshot
+        }
+        if (quotaData.quota) setScanQuota(quotaData.quota)
+        if (!quotaResponse.ok) {
+          setScanError(quotaData.error || "You've used this month's scans.")
+          return
+        }
+      } catch {
+        setScanError("Could not reserve a scan. Try again.")
+        return
+      }
+    }
+
     abortRef.current = false
     setScanning(true)
     setScanError(null)
@@ -532,8 +587,12 @@ export function TrackerApp() {
                   device: config.device,
                   depth: config.depth,
                   forceMock: config.forceMock,
-                  apiLogin: settings.login || undefined,
-                  apiPassword: settings.password || undefined,
+                  ...(usesHostedMaps
+                    ? {}
+                    : {
+                        apiLogin: settings.login || undefined,
+                        apiPassword: settings.password || undefined,
+                      }),
                 }),
               })
               let payload: ScanPointResponse & { error?: string }
@@ -647,7 +706,7 @@ export function TrackerApp() {
         return next
       })
     }
-  }, [activeCampaignId, config, liveConfigured, modeLabel, persistScans, points, settings])
+  }, [activeCampaignId, config, liveConfigured, modeLabel, persistScans, points, settings, usesHostedMaps])
 
   const cancelScan = useCallback(() => {
     abortRef.current = true
@@ -746,8 +805,12 @@ export function TrackerApp() {
         name: config.targetBusiness,
         city: config.businessCity,
         state: config.businessState,
-        apiLogin: settings.login || undefined,
-        apiPassword: settings.password || undefined,
+        ...(usesHostedMaps
+          ? {}
+          : {
+              apiLogin: settings.login || undefined,
+              apiPassword: settings.password || undefined,
+            }),
       }),
     })
     const data = (await response.json()) as { hits?: BusinessCandidate[]; error?: string }
@@ -789,6 +852,8 @@ export function TrackerApp() {
       campaignLimit={planLimits.campaignLimit}
       campaignLimitError={campaignLimitError}
       canBypassCampaignLimit={canBypassCampaignLimit}
+      usesHostedMaps={usesHostedMaps}
+      scanQuota={scanQuota}
       savedScans={history}
       viewingScanId={viewingRun?.id ?? ""}
       compareScanId={compareScanId}
@@ -866,14 +931,16 @@ export function TrackerApp() {
           >
             {modeLabel === "live" ? "DataForSEO live" : "Sample data"}
           </span>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setSettingsOpen(true)}
-            aria-label="DataForSEO API settings"
-          >
-            <Settings />
-          </Button>
+          {usesHostedMaps ? null : (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="DataForSEO API settings"
+            >
+              <Settings />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-sm"
@@ -1069,30 +1136,32 @@ export function TrackerApp() {
             <li>Color the square by rank so the map shows where you own the local pack.</li>
           </ol>
           <p className="text-xs text-muted-foreground">
-            Add your DataForSEO login in Settings, or leave keys empty to run sample Austin
-            coffee rankings. Each campaign stores a brand, location, keywords, grid, radius, and
-            schedule. Switch keywords on the map after a scan to compare ranks.
+            {usesHostedMaps
+              ? "Starter includes live Maps scans — no API key to enter. Extra scans are $5 on Account. Each campaign stores a brand, location, keywords, grid, radius, and schedule. Switch keywords on the map after a scan to compare ranks."
+              : "Add your DataForSEO login in Settings, or leave keys empty to run sample Austin coffee rankings. Each campaign stores a brand, location, keywords, grid, radius, and schedule. Switch keywords on the map after a scan to compare ranks."}
           </p>
         </DialogContent>
       </Dialog>
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        settings={settings}
-        onSave={(next) => {
-          setSettings(next)
-          saveSettings(next)
-          const live = Boolean(next.login && next.password)
-          setLiveConfigured(live)
-          setConfig((current) => ({ ...current, forceMock: !live }))
-          setModeLabel(live ? "live" : "mock")
-          void fetch("/api/account", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ dfsLogin: next.login, dfsPassword: next.password || undefined }),
-          })
-        }}
-      />
+      {usesHostedMaps ? null : (
+        <SettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          settings={settings}
+          onSave={(next) => {
+            setSettings(next)
+            saveSettings(next)
+            const live = Boolean(next.login && next.password)
+            setLiveConfigured(live)
+            setConfig((current) => ({ ...current, forceMock: !live }))
+            setModeLabel(live ? "live" : "mock")
+            void fetch("/api/account", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ dfsLogin: next.login, dfsPassword: next.password || undefined }),
+            })
+          }}
+        />
+      )}
     </div>
   )
 }

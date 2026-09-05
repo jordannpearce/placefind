@@ -1,7 +1,10 @@
+import { requireUser } from "@/lib/auth-guard"
 import { rejectUnlessSoftwareAccess } from "@/lib/billing-gate"
 import { fetchMapsPoint, getScanMode, resolveRequestAuth } from "@/lib/dataforseo"
+import { readDb } from "@/lib/db"
 import { formatCoordinate } from "@/lib/grid"
 import { mockDelayMs, mockScanPoint } from "@/lib/mock-scan"
+import { hasActiveScanSession, SCAN_QUOTA_EXHAUSTED, usesHostedMaps } from "@/lib/scan-quota"
 import type { DeviceType, ScanPointResponse } from "@/lib/types"
 
 export const maxDuration = 30
@@ -65,11 +68,19 @@ export async function POST(request: Request) {
     targetLat: Number.isFinite(targetLat) ? targetLat : undefined,
     targetLng: Number.isFinite(targetLng) ? targetLng : undefined,
   }
-  const auth = await resolveRequestAuth({
-    login: body.apiLogin,
-    password: body.apiPassword,
-  })
+  const session = await requireUser()
+  const hosted = Boolean(session && usesHostedMaps(session.user))
+  const auth = await resolveRequestAuth(
+    hosted ? null : { login: body.apiLogin, password: body.apiPassword }
+  )
   const mode = getScanMode(body.forceMock && Boolean(body.apiLogin && body.apiPassword), auth)
+  if (hosted && mode === "live") {
+    const db = await readDb()
+    const user = db.users.find((item) => item.id === session!.user.id)
+    if (!user || !hasActiveScanSession(user)) {
+      return Response.json({ error: SCAN_QUOTA_EXHAUSTED, code: "scan_quota" }, { status: 402 })
+    }
+  }
 
   try {
     if (mode === "mock") {

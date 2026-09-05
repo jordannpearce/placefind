@@ -65,8 +65,10 @@ export default async function PricingPage({
         </div>
       ) : null}
       <p className="mt-3 max-w-2xl text-muted-foreground">
-        Three plans. Same grid tracker. Starter is one brand and one location. Pro is five campaigns
-        with optional extra slots. Advanced is fifty campaigns for shops that run many listings.
+        Three plans. Same grid tracker. Starter is one brand, one location, and five live Maps
+        scans each month — no API key to enter. Extra scans are $5. Pro is five campaigns with
+        optional extra slots and your own DataForSEO key. Advanced is fifty campaigns for shops
+        that run many listings.
         The total you see is what Paddle returns for your country — we do not recalculate it.
         Payments are processed by Paddle. Refunds follow the{" "}
         <Link href="/refunds" className="text-primary hover:underline">
