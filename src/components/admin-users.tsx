@@ -560,15 +560,26 @@ export function AdminUsers({
                   {user.company ? (
                     <p className="text-[11px] text-muted-foreground">{user.company}</p>
                   ) : null}
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="outline"
-                    className="mt-2"
-                    onClick={() => openEdit(user)}
-                  >
-                    Edit
-                  </Button>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button type="button" size="xs" variant="outline" onClick={() => openEdit(user)}>
+                      Edit
+                    </Button>
+                    {canDelete(user) ? (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="destructive"
+                        disabled={deletingId === user.id || pending}
+                        onClick={() => requestDelete(user)}
+                      >
+                        {deletingId === user.id ? "Deleting…" : "Delete"}
+                      </Button>
+                    ) : (
+                      <span className="self-center text-[11px] text-muted-foreground">
+                        {user.id === currentUserId ? "You" : "Last admin"}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-3 py-2">
                   <select
