@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { aiBrandStatusCopy, aiBrandStatusLabel } from "@/lib/ai-visibility"
 import { AI_ENGINES, scanBrandShowing, scanCompetitorsShowing, signalLabels } from "@/lib/cloro"
 import { AI_PROMPTS_PER_BRAND, AI_SCANS_PER_PROMPT } from "@/lib/plans"
 import type { AiBrand, AiMatchSignals, AiPromptQuota, AiSavedPrompt, AiScanRun } from "@/lib/types"
@@ -204,7 +205,9 @@ export function AiVisibilityApp() {
             >
               <div className="flex items-start justify-between gap-2">
                 <p className="font-medium">{item.name}</p>
-                <Badge variant={item.status === "active" ? "default" : "secondary"}>{item.status}</Badge>
+                <Badge variant={item.status === "active" ? "default" : "secondary"}>
+                  {aiBrandStatusLabel(item.status)}
+                </Badge>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">{item.website || item.domain || "No website"}</p>
               {item.street ? <p className="mt-1 text-xs text-muted-foreground">{item.street}</p> : null}
@@ -223,6 +226,17 @@ export function AiVisibilityApp() {
               <p className="text-[11px] text-muted-foreground">
                 prompts saved · {AI_SCANS_PER_PROMPT} scans each
               </p>
+              {item.status !== "active" ? (
+                <p className="mt-2 text-[11px] text-destructive">
+                  {item.status === "canceled"
+                    ? "This brand is canceled"
+                    : item.status === "suspended"
+                      ? "This brand is suspended"
+                      : item.status === "past_due"
+                        ? "This brand is past due"
+                        : "This brand is paused"}
+                </p>
+              ) : null}
               <p className="mt-2 text-[11px] text-muted-foreground">
                 {item.id === brand?.id
                   ? "Showing profile and saved prompts below"
@@ -249,6 +263,9 @@ export function AiVisibilityApp() {
                 Review the saved settings, then check the {AI_PROMPTS_PER_BRAND} prompt slots for
                 this brand. Each saved prompt has {AI_SCANS_PER_PROMPT} scans.
               </p>
+              {brand.status !== "active" ? (
+                <p className="mt-2 text-sm text-destructive">{aiBrandStatusCopy(brand.status)}</p>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               {editing ? (
@@ -399,11 +416,15 @@ export function AiVisibilityApp() {
                     >
                       {pending === `save-${index}` ? "Saving…" : saved ? "Update prompt" : "Save prompt"}
                     </Button>
-                    {saved && brand.status === "active" ? (
+                    {saved ? (
                       <Button
                         type="button"
                         size="sm"
-                        disabled={pending === "scan" || saved.scansRemaining <= 0}
+                        disabled={
+                          pending === "scan" ||
+                          saved.scansRemaining <= 0 ||
+                          brand.status !== "active"
+                        }
                         onClick={() => {
                           setPromptId(saved.id)
                           void runScan()
@@ -411,9 +432,11 @@ export function AiVisibilityApp() {
                       >
                         {pending === "scan" && selectedPrompt?.id === saved.id
                           ? "Scanning…"
-                          : saved.scansRemaining <= 0
-                            ? "4 scans used"
-                            : `Scan · ${saved.scansRemaining} left`}
+                          : brand.status !== "active"
+                            ? "Scan disabled"
+                            : saved.scansRemaining <= 0
+                              ? "4 scans used"
+                              : `Scan · ${saved.scansRemaining} left`}
                       </Button>
                     ) : null}
                   </div>

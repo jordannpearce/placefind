@@ -10,7 +10,49 @@ import type {
   User,
 } from "./types"
 
-const STATUSES: AiBrandStatus[] = ["active", "canceled", "past_due", "paused"]
+export const AI_BRAND_STATUSES: AiBrandStatus[] = ["active", "canceled", "past_due", "paused", "suspended"]
+export const ADMIN_AI_BRAND_STATUSES: AiBrandStatus[] = ["active", "paused", "suspended", "canceled"]
+const STATUSES = AI_BRAND_STATUSES
+
+export function isAiBrandStatus(value: unknown): value is AiBrandStatus {
+  return typeof value === "string" && STATUSES.includes(value as AiBrandStatus)
+}
+
+export function isAdminAiBrandStatus(value: unknown): value is AiBrandStatus {
+  return typeof value === "string" && ADMIN_AI_BRAND_STATUSES.includes(value as AiBrandStatus)
+}
+
+export function aiBrandStatusLabel(status: AiBrandStatus) {
+  if (status === "active") return "Active"
+  if (status === "paused") return "Paused"
+  if (status === "suspended") return "Suspended"
+  if (status === "canceled") return "Canceled"
+  return "Past due"
+}
+
+export function aiBrandStatusCopy(status: AiBrandStatus) {
+  if (status === "paused") return "This brand is paused. History stays available; new scans are blocked."
+  if (status === "suspended") return "This brand is suspended. History stays available; new scans are blocked."
+  if (status === "canceled") return "This brand is canceled. History stays available; new scans are blocked."
+  if (status === "past_due") return "This brand is past due. History stays available; new scans are blocked."
+  return ""
+}
+
+export function aiBrandScanBlockedMessage(status: AiBrandStatus) {
+  if (status === "paused") {
+    return "This brand is paused. New scans are blocked until an administrator enables it."
+  }
+  if (status === "suspended") {
+    return "This brand is suspended. New scans are blocked until an administrator enables it."
+  }
+  if (status === "canceled") {
+    return "This brand is canceled. New scans are blocked."
+  }
+  if (status === "past_due") {
+    return "This brand is past due. New scans are blocked."
+  }
+  return "This brand is not active. New scans are blocked."
+}
 const SAMPLE_BRAND_ID = "ai_brand_admin_sample"
 
 function trimText(value: unknown, max = 120) {
@@ -217,6 +259,9 @@ export function consumePromptScan(
   brand: AiBrand,
   promptId: string
 ): { ok: true; prompt: AiSavedPrompt } | { ok: false; error: string } {
+  if (brand.status !== "active") {
+    return { ok: false, error: aiBrandScanBlockedMessage(brand.status) }
+  }
   const prompt = (brand.prompts ?? []).find((item) => item.id === promptId)
   if (!prompt) return { ok: false, error: "Save this prompt before scanning." }
   if (prompt.scansUsed >= AI_SCANS_PER_PROMPT) {
@@ -344,6 +389,15 @@ export function applyBrandProfileUpdate(existing: AiBrand, located: BrandProfile
     promptPeriodStart: existing.promptPeriodStart,
     createdAt: existing.createdAt,
   })
+}
+
+export function setAiBrandStatus(user: User, brandId: string, status: AiBrandStatus): AiBrand | null {
+  if (!isAiBrandStatus(status)) return null
+  if (!Array.isArray(user.aiBrands)) user.aiBrands = []
+  const brand = user.aiBrands.find((item) => item.id === brandId.trim())
+  if (!brand) return null
+  brand.status = status
+  return brand
 }
 
 export function updateAssignedBrandProfile(

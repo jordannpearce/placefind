@@ -27,8 +27,8 @@ export async function POST(request: Request) {
       const user = next.users.find((row) => row.id === auth.user.id)
       if (!user) return null
       const brand = user.aiBrands.find((item) => item.id === body.brandId)
-      if (!brand || brand.status !== "active") {
-        const error = new Error("Choose an active AI Visibility brand.") as Error & { status?: number }
+      if (!brand) {
+        const error = new Error("Choose an AI Visibility brand.") as Error & { status?: number }
         error.status = 400
         throw error
       }

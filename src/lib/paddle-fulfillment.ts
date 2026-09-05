@@ -123,6 +123,7 @@ function brandStatusFromSubscription(status: string): AiBrandStatus {
   if (normalized === "active") return "active"
   if (normalized === "paused") return "paused"
   if (normalized === "past_due") return "past_due"
+  if (normalized === "suspended") return "suspended"
   return "canceled"
 }
 

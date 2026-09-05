@@ -20,8 +20,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { UsStateSelect } from "@/components/us-state-select"
+import { aiBrandStatusLabel } from "@/lib/ai-visibility"
 import { PLANS } from "@/lib/plans"
-import type { AiBrand, PlanId, UserStatus } from "@/lib/types"
+import type { AiBrand, AiBrandStatus, PlanId, UserStatus } from "@/lib/types"
 
 type AssignUser = {
   id: string
@@ -89,6 +90,11 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
   const [editError, setEditError] = useState("")
   const [editMessage, setEditMessage] = useState("")
   const [confirmDelete, setConfirmDelete] = useState<AssignedBrand | null>(null)
+  const [confirmStatus, setConfirmStatus] = useState<{
+    brand: AssignedBrand
+    status: Extract<AiBrandStatus, "suspended" | "canceled">
+  } | null>(null)
+  const [statusPending, setStatusPending] = useState("")
 
   const users = useMemo(
     () => payload.users.slice().sort((a, b) => (a.company || a.name).localeCompare(b.company || b.name)),
@@ -233,6 +239,43 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
     }
   }
 
+  async function updateBrandStatus(brand: AssignedBrand, status: AiBrandStatus) {
+    const key = `${brand.ownerUserId}:${brand.id}`
+    setStatusPending(key)
+    setError("")
+    setMessage("")
+    try {
+      const response = await fetch("/api/admin/ai-brands", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: brand.ownerUserId, brandId: brand.id, status }),
+      })
+      const next = (await response.json()) as Payload & { error?: string; paddleNote?: string }
+      if (!response.ok) throw new Error(next.error || "Could not update the brand status.")
+      setPayload((current) => ({ ...current, brands: next.brands }))
+      setConfirmStatus(null)
+      const owner = brand.ownerCompany || brand.ownerName
+      const label = aiBrandStatusLabel(status).toLowerCase()
+      setMessage(
+        next.paddleNote ||
+          `${brand.name} is ${label} on ${owner}. Their Maps plan is unchanged.`
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update the brand status.")
+    } finally {
+      setStatusPending("")
+    }
+  }
+
+  function requestStatusChange(brand: AssignedBrand, status: AiBrandStatus) {
+    setError("")
+    if (status === "suspended" || status === "canceled") {
+      setConfirmStatus({ brand, status })
+      return
+    }
+    void updateBrandStatus(brand, status)
+  }
+
   return (
     <section className="space-y-5 rounded-2xl border bg-card p-5">
       <div>
@@ -245,7 +288,8 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
           agency members are all eligible. Assign to one account or an entire agency (duplicates
           are skipped). Edit any brand below. Delete removes it from that workspace. Prompt scans
           check the company name, street, phone, and website, and use city plus state for the local
-          Maps location.
+          Maps location. Enable, pause, suspend, or cancel any brand without touching that account’s
+          Maps plan.
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
           Recipients still need GridPins software access (paid plan, complimentary software, or an
@@ -425,6 +469,7 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
                   <th className="px-3 py-2 font-medium">Brand</th>
                   <th className="px-3 py-2 font-medium">Assigned to</th>
                   <th className="px-3 py-2 font-medium">Agency</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
                   <th className="px-3 py-2 font-medium">Prompts</th>
                   <th className="px-3 py-2 font-medium">Actions</th>
                 </tr>
@@ -454,6 +499,12 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
                       </td>
                       <td className="px-3 py-3 text-xs text-muted-foreground">{brand.agencyName}</td>
                       <td className="px-3 py-3 text-xs">
+                        <p className="font-medium">{aiBrandStatusLabel(brand.status)}</p>
+                        {brand.status !== "active" ? (
+                          <p className="text-[11px] text-muted-foreground">Scans blocked</p>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-3 text-xs">
                         {brand.quota.remaining}/{brand.quota.included}
                         {brand.complimentary ? (
                           <p className="text-[11px] text-muted-foreground">Free / promotional ($0)</p>
@@ -468,6 +519,42 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
                             onClick={() => startEdit(brand)}
                           >
                             {editingKey === key ? "Editing" : "Edit"}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={statusPending === key || brand.status === "active"}
+                            onClick={() => requestStatusChange(brand, "active")}
+                          >
+                            Enable
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={statusPending === key || brand.status === "paused"}
+                            onClick={() => requestStatusChange(brand, "paused")}
+                          >
+                            Pause
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={statusPending === key || brand.status === "suspended"}
+                            onClick={() => requestStatusChange(brand, "suspended")}
+                          >
+                            Suspend
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={statusPending === key || brand.status === "canceled"}
+                            onClick={() => requestStatusChange(brand, "canceled")}
+                          >
+                            Cancel
                           </Button>
                           <Button
                             type="button"
@@ -527,6 +614,48 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
           ) : null}
         </div>
       )}
+
+      <Dialog open={Boolean(confirmStatus)} onOpenChange={(open) => !open && setConfirmStatus(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmStatus?.status === "canceled" ? "Cancel this brand?" : "Suspend this brand?"}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmStatus
+                ? confirmStatus.status === "canceled"
+                  ? confirmStatus.brand.complimentary
+                    ? `Cancel ${confirmStatus.brand.name} on ${confirmStatus.brand.ownerCompany || confirmStatus.brand.ownerName}? The complimentary brand stays on their list as canceled. New scans stop. Their Maps plan is unchanged.`
+                    : `Cancel ${confirmStatus.brand.name} on ${confirmStatus.brand.ownerCompany || confirmStatus.brand.ownerName}? The brand stays visible as canceled and new scans stop. Admin canceled access on GridPins — the Paddle subscription is not changed from here. Their Maps plan is unchanged.`
+                  : `Suspend ${confirmStatus.brand.name} on ${confirmStatus.brand.ownerCompany || confirmStatus.brand.ownerName}? The brand and history stay on the account. New scans stop until you enable it. Their Maps plan is unchanged.`
+                : "This stops new AI Visibility scans."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-2">
+            <Button type="button" variant="outline" onClick={() => setConfirmStatus(null)}>
+              Keep current status
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={
+                !confirmStatus ||
+                statusPending === `${confirmStatus.brand.ownerUserId}:${confirmStatus.brand.id}`
+              }
+              onClick={() => confirmStatus && void updateBrandStatus(confirmStatus.brand, confirmStatus.status)}
+            >
+              {confirmStatus &&
+              statusPending === `${confirmStatus.brand.ownerUserId}:${confirmStatus.brand.id}`
+                ? confirmStatus.status === "canceled"
+                  ? "Canceling…"
+                  : "Suspending…"
+                : confirmStatus?.status === "canceled"
+                  ? "Cancel plan"
+                  : "Suspend brand"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(confirmDelete)} onOpenChange={(open) => !open && setConfirmDelete(null)}>
         <DialogContent className="sm:max-w-md">

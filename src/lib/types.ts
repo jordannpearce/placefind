@@ -202,7 +202,7 @@ export type AiCompetitor = {
   domain: string
 }
 
-export type AiBrandStatus = "active" | "canceled" | "past_due" | "paused"
+export type AiBrandStatus = "active" | "canceled" | "past_due" | "paused" | "suspended"
 
 export type AiSavedPrompt = {
   id: string

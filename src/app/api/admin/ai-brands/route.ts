@@ -3,11 +3,13 @@ import { NextResponse } from "next/server"
 import {
   brandAssignmentTargets,
   grantComplimentaryBrand,
+  isAdminAiBrandStatus,
   isBrandAssignableAccount,
   listAssignedBrands,
   missingBrandLocation,
   parseBrandForm,
   removeAssignedBrand,
+  setAiBrandStatus,
   updateAssignedBrandProfile,
   userHasMatchingBrand,
 } from "@/lib/ai-visibility"
@@ -147,7 +149,12 @@ export async function PATCH(request: Request) {
   const admin = await requireAdmin()
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  let body: Parameters<typeof parseBrandForm>[0] & { userId?: string; brandId?: string; id?: string }
+  let body: Parameters<typeof parseBrandForm>[0] & {
+    userId?: string
+    brandId?: string
+    id?: string
+    status?: string
+  }
   try {
     body = (await request.json()) as typeof body
   } catch {
@@ -158,6 +165,54 @@ export async function PATCH(request: Request) {
   const brandId = (body.brandId || body.id || "").trim()
   if (!userId || !brandId) {
     return NextResponse.json({ error: "Choose a brand to update." }, { status: 400 })
+  }
+
+  const requestedStatus = typeof body.status === "string" ? body.status.trim() : ""
+  const profileName = (body.name || body.companyName || body.brandName || "").trim()
+  if (requestedStatus && !profileName) {
+    if (!isAdminAiBrandStatus(requestedStatus)) {
+      return NextResponse.json(
+        { error: "Choose Enable, Pause, Suspend, or Cancel." },
+        { status: 400 }
+      )
+    }
+    try {
+      const result = await updateDb((next) => {
+        const user = next.users.find((row) => row.id === userId)
+        if (!user) {
+          const error = new Error("Account not found.") as Error & { status?: number }
+          error.status = 404
+          throw error
+        }
+        const updated = setAiBrandStatus(user, brandId, requestedStatus)
+        if (!updated) {
+          const error = new Error("Brand not found on that account.") as Error & { status?: number }
+          error.status = 404
+          throw error
+        }
+        const complimentary = updated.subscriptionId === "complimentary"
+        const paddleNote =
+          requestedStatus === "canceled" && !complimentary && updated.subscriptionId
+            ? "Admin canceled access on GridPins. The Paddle subscription was not changed from here."
+            : ""
+        return {
+          brand: {
+            ...updated,
+            ownerUserId: user.id,
+          },
+          brands: listAssignedBrands(next.users, next.agencies),
+          complimentary,
+          paddleNote,
+        }
+      })
+      return NextResponse.json({ ok: true, ...result })
+    } catch (error) {
+      const status = typeof (error as { status?: number }).status === "number" ? (error as { status: number }).status : 500
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Could not update the brand." },
+        { status }
+      )
+    }
   }
 
   const parsed = parseBrandForm(body)

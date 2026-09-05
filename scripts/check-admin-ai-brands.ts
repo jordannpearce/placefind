@@ -2,13 +2,18 @@ import assert from "node:assert/strict"
 
 import {
   brandAssignmentTargets,
+  consumePromptScan,
   grantComplimentaryBrand,
+  isAdminAiBrandStatus,
   isBrandAssignableAccount,
   listAssignedBrands,
+  normalizeAiBrand,
   parseBrandForm,
   removeAssignedBrand,
   removeComplimentaryBrand,
+  setAiBrandStatus,
   updateAssignedBrandProfile,
+  upsertBrandPrompt,
   userHasMatchingBrand,
 } from "../src/lib/ai-visibility.ts"
 import { pickAccessSubscription } from "../src/lib/paddle-access.ts"
@@ -337,5 +342,66 @@ const agencyMemberGrant = grantComplimentaryBrand(
 )
 assert(agencyMemberGrant)
 assert.equal(agencyMemberGrant.subscriptionId, "complimentary")
+
+const statusOwner = user({ id: "user_status", email: "status@example.com", name: "Lee", company: "Lee SEO" })
+const statusBrand = grantComplimentaryBrand(statusOwner, parsed)
+assert(statusBrand)
+assert.equal(statusBrand.status, "active")
+assert.equal(isAdminAiBrandStatus("paused"), true)
+assert.equal(isAdminAiBrandStatus("suspended"), true)
+assert.equal(isAdminAiBrandStatus("canceled"), true)
+assert.equal(isAdminAiBrandStatus("active"), true)
+assert.equal(isAdminAiBrandStatus("past_due"), false)
+assert.equal(setAiBrandStatus(statusOwner, statusBrand.id, "paused")?.status, "paused")
+assert.equal(statusOwner.aiBrands[0]?.status, "paused")
+assert.equal(setAiBrandStatus(statusOwner, statusBrand.id, "active")?.status, "active")
+assert.equal(setAiBrandStatus(statusOwner, statusBrand.id, "suspended")?.status, "suspended")
+assert.equal(normalizeAiBrand({ ...statusOwner.aiBrands[0], status: "suspended" })?.status, "suspended")
+assert.equal(setAiBrandStatus(statusOwner, statusBrand.id, "canceled")?.status, "canceled")
+assert.equal(setAiBrandStatus(statusOwner, "missing", "paused"), null)
+
+const scanOwner = user({ id: "user_scan", email: "scan-status@example.com", name: "Kim", company: "Kim SEO" })
+const scanBrand = grantComplimentaryBrand(scanOwner, parsed)
+assert(scanBrand)
+const prompt = upsertBrandPrompt(scanBrand, "Who would you recommend for this service downtown?")
+assert.equal(prompt.ok, true)
+if (prompt.ok) {
+  assert.equal(consumePromptScan(scanBrand, prompt.prompt.id).ok, true)
+  scanBrand.prompts[0]!.scansUsed = 0
+  setAiBrandStatus(scanOwner, scanBrand.id, "paused")
+  const pausedScan = consumePromptScan(scanBrand, prompt.prompt.id)
+  assert.equal(pausedScan.ok, false)
+  assert.match(pausedScan.ok ? "" : pausedScan.error, /paused/)
+  setAiBrandStatus(scanOwner, scanBrand.id, "canceled")
+  const canceledScan = consumePromptScan(scanBrand, prompt.prompt.id)
+  assert.equal(canceledScan.ok, false)
+  assert.match(canceledScan.ok ? "" : canceledScan.error, /canceled/)
+  setAiBrandStatus(scanOwner, scanBrand.id, "suspended")
+  const suspendedScan = consumePromptScan(scanBrand, prompt.prompt.id)
+  assert.equal(suspendedScan.ok, false)
+  assert.match(suspendedScan.ok ? "" : suspendedScan.error, /suspended/)
+}
+
+const mapsSub: PaddleSubscription = {
+  subscriptionId: "sub_maps",
+  customerId: "ctm_maps",
+  status: "active",
+  priceId: "pri_maps",
+  productId: "pro_maps",
+  kind: "plan",
+  scheduledChangeAction: null,
+  scheduledChangeAt: null,
+  createdAt: "2026-09-05T00:00:00.000Z",
+  updatedAt: "2026-09-05T00:00:00.000Z",
+}
+const canceledAiSub: PaddleSubscription = {
+  ...mapsSub,
+  subscriptionId: "sub_ai_canceled",
+  status: "canceled",
+  kind: "ai_visibility",
+  updatedAt: "2026-09-06T00:00:00.000Z",
+}
+assert.equal(pickAccessSubscription([mapsSub, canceledAiSub])?.subscriptionId, "sub_maps")
+assert.equal(pickAccessSubscription([mapsSub, canceledAiSub])?.kind, "plan")
 
 console.log("admin ai brand assignment ok")

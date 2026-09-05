@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import {
   activeAiBrands,
+  aiBrandScanBlockedMessage,
   consumePromptScan,
   refundPromptScan,
   storeAiScan,
@@ -48,7 +49,12 @@ export async function POST(request: Request) {
       if (!user) return null
       const brand =
         user.aiBrands.find((item) => item.id === body.brandId) || activeAiBrands(user)[0] || null
-      if (!brand || brand.status !== "active") return null
+      if (!brand) return null
+      if (brand.status !== "active") {
+        const error = new Error(aiBrandScanBlockedMessage(brand.status)) as Error & { status?: number }
+        error.status = 403
+        throw error
+      }
       const consumed = consumePromptScan(brand, body.promptId || "")
       if (!consumed.ok) {
         const error = new Error(consumed.error) as Error & { status?: number }
