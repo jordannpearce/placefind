@@ -59,7 +59,10 @@ const agencies = [{ id: "agency_1", name: "North Agency" }]
 
 const parsed = parseBrandForm({
   name: "Oak Street Dental",
-  address: "400 Oak St, Austin, TX",
+  street: "400 Oak St",
+  city: "Austin",
+  state: "TX",
+  zip: "78701",
   phone: "5125550199",
   website: "https://oakstreet.example",
   competitors: "Smile Co",
@@ -90,7 +93,11 @@ assert.equal(both.ok, false)
 const created = grantComplimentaryBrand(owner, parsed)
 assert(created)
 assert.equal(created.subscriptionId, "complimentary")
-assert.equal(created.address, "400 Oak St, Austin, TX")
+assert.equal(created.street, "400 Oak St")
+assert.equal(created.city, "Austin")
+assert.equal(created.state, "TX")
+assert.equal(created.address, "400 Oak St, Austin, TX 78701")
+assert.equal(created.location, "Austin,Texas,United States")
 assert.equal(owner.aiBrands.length, 1)
 assert.equal(userHasMatchingBrand(owner, parsed), true)
 

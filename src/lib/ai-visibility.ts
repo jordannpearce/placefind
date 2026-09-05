@@ -1,3 +1,5 @@
+import { type DataForSeoAuth } from "./dataforseo"
+import { canonicalAiLocation, normalizeBrandLocation, resolveCityStateLocation } from "./maps-location"
 import { AI_PROMPTS_PER_BRAND, AI_SCANS_PER_PROMPT, MAX_AI_SCANS } from "./plans"
 import type {
   AiBrand,
@@ -50,7 +52,14 @@ export function defaultAiVisibilityFields() {
 
 export type AiBrandInput = {
   name?: string
+  street?: string
+  city?: string
+  state?: string
+  zip?: string
   address?: string
+  lat?: number | null
+  lng?: number | null
+  location?: string
   phone?: string
   website?: string
   domain?: string
@@ -75,10 +84,18 @@ export function normalizeAiBrand(raw: Partial<AiBrand> | AiBrandInput | null | u
     ? raw.competitors.map(normalizeCompetitor).filter((item): item is AiCompetitor => Boolean(item)).slice(0, 8)
     : []
   const website = normalizeWebsite("website" in raw ? raw.website : "")
+  const place = normalizeBrandLocation(raw)
   return {
     id: id || `ai_brand_${Date.now()}`,
     name,
-    address: trimText("address" in raw ? raw.address : "", 200),
+    street: place.street,
+    city: place.city,
+    state: place.state,
+    zip: place.zip,
+    address: place.address,
+    lat: place.lat,
+    lng: place.lng,
+    location: place.location,
     phone: trimText("phone" in raw ? raw.phone : "", 40),
     website,
     domain: normalizeDomain(website || raw.domain),
@@ -130,9 +147,13 @@ export function normalizeAiScans(raw: unknown): AiScanRun[] {
       return {
         ...scan,
         promptId: typeof scan.promptId === "string" ? scan.promptId : "",
+        location: typeof scan.location === "string" ? scan.location : "",
         models: (scan.models || []).map((model) => ({
           ...model,
+          answer: typeof model.answer === "string" ? model.answer : "",
+          excerpt: typeof model.excerpt === "string" ? model.excerpt : "",
           signals: model.signals ?? { name: false, address: false, phone: false, website: false },
+          competitors: Array.isArray(model.competitors) ? model.competitors : [],
         })),
       }
     })
@@ -350,18 +371,93 @@ export function listAssignedBrands(
 export function parseBrandForm(body: {
   name?: string
   companyName?: string
+  street?: string
+  city?: string
+  state?: string
+  zip?: string
   address?: string
   phone?: string
   website?: string
   brandName?: string
   brandDomain?: string
   competitors?: unknown
+  lat?: number | null
+  lng?: number | null
+  location?: string
 }) {
+  const place = normalizeBrandLocation({
+    street: body.street,
+    city: body.city,
+    state: body.state,
+    zip: body.zip,
+    address: body.address,
+    lat: body.lat,
+    lng: body.lng,
+    location: body.location,
+  })
   return {
     name: body.companyName || body.name || body.brandName || "",
-    address: body.address || "",
+    street: place.street,
+    city: place.city,
+    state: place.state,
+    zip: place.zip,
+    address: place.address,
+    lat: place.lat,
+    lng: place.lng,
+    location: place.location,
     phone: body.phone || "",
     website: body.website || body.brandDomain || "",
     competitors: parseCompetitorsInput(body.competitors),
+  }
+}
+
+export function missingBrandLocation(parsed: Pick<ReturnType<typeof parseBrandForm>, "city" | "state">) {
+  if (parsed.city.trim().length < 2) return "Enter the city."
+  if (!parsed.state.trim()) return "Choose a state."
+  return ""
+}
+
+export async function withResolvedBrandLocation<T extends ReturnType<typeof parseBrandForm>>(
+  parsed: T,
+  auth?: DataForSeoAuth | null
+) {
+  if (!parsed.city.trim() || !parsed.state.trim()) return parsed
+  const geo = await resolveCityStateLocation({
+    city: parsed.city,
+    state: parsed.state,
+    auth,
+  })
+  return {
+    ...parsed,
+    lat: geo.lat,
+    lng: geo.lng,
+    location: geo.location || parsed.location,
+  }
+}
+
+export function scanLocationForBrand(brand: Pick<AiBrand, "city" | "state" | "location">) {
+  return brand.location || (brand.city && brand.state ? canonicalAiLocation(brand.city, brand.state) : "")
+}
+
+export async function resolveBrandScanLocation(
+  brand: AiBrand,
+  auth?: DataForSeoAuth | null
+): Promise<{ location: string; lat: number | null; lng: number | null }> {
+  const fallback = scanLocationForBrand(brand)
+  if (brand.lat != null && brand.lng != null && fallback) {
+    return { location: fallback, lat: brand.lat, lng: brand.lng }
+  }
+  if (!brand.city.trim() || !brand.state.trim()) {
+    return { location: fallback, lat: brand.lat, lng: brand.lng }
+  }
+  const geo = await resolveCityStateLocation({
+    city: brand.city,
+    state: brand.state,
+    auth,
+  })
+  return {
+    location: geo.location || fallback,
+    lat: geo.lat ?? brand.lat,
+    lng: geo.lng ?? brand.lng,
   }
 }

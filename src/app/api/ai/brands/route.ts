@@ -3,11 +3,14 @@ import { NextResponse } from "next/server"
 import {
   brandQuotaView,
   canManageAiComplimentary,
+  missingBrandLocation,
   normalizeAiBrand,
   parseBrandForm,
+  withResolvedBrandLocation,
 } from "@/lib/ai-visibility"
 import { requireUser } from "@/lib/auth-guard"
 import { billingRequiredResponse } from "@/lib/billing-gate"
+import { resolveRequestAuth } from "@/lib/dataforseo"
 import { readDb, updateDb } from "@/lib/db"
 import { userHasSoftwareAccess } from "@/lib/paddle-access"
 
@@ -38,13 +41,18 @@ export async function POST(request: Request) {
     if (parsed.name.trim().length < 2) {
       return NextResponse.json({ error: "Enter the company name." }, { status: 400 })
     }
+    const locationError = missingBrandLocation(parsed)
+    if (locationError) {
+      return NextResponse.json({ error: locationError }, { status: 400 })
+    }
+    const located = await withResolvedBrandLocation(parsed, await resolveRequestAuth())
 
     const user = await updateDb((next) => {
       const current = next.users.find((row) => row.id === auth.user.id)
       if (!current) return null
       if (!Array.isArray(current.aiBrands)) current.aiBrands = []
       const created = normalizeAiBrand({
-        ...parsed,
+        ...located,
         subscriptionId: "complimentary",
         status: "active",
       })

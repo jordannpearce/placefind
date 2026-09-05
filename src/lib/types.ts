@@ -215,7 +215,14 @@ export type AiSavedPrompt = {
 export type AiBrand = {
   id: string
   name: string
+  street: string
+  city: string
+  state: string
+  zip: string
   address: string
+  lat: number | null
+  lng: number | null
+  location: string
   phone: string
   website: string
   domain: string
@@ -260,6 +267,7 @@ export type AiModelResult = {
   mentionRank: number | null
   signals: AiMatchSignals
   excerpt: string
+  answer: string
   sources: AiSource[]
   competitors: AiCompetitorHit[]
   error: string | null
@@ -272,6 +280,7 @@ export type AiScanRun = {
   promptId: string
   prompt: string
   country: string
+  location: string
   createdAt: string
   mode: ScanMode
   models: AiModelResult[]

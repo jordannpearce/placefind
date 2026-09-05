@@ -115,7 +115,8 @@ export default async function PricingPage({
           the shortlist before someone opens Maps. Add AI Visibility on any plan for $199 per
           month per brand. Each brand includes 10 prompts you type yourself. Each prompt can be
           scanned 4 times, and those runs stay in history so you can compare visibility. Scans
-          check the company name, address, phone, and website you save with the brand. Add it
+          check the company name, street, phone, and website you save with the brand. City and
+          state set the local Maps location. Add it
           after you subscribe — from Account or the AI Visibility page in the workspace.
         </p>
         <p className="mt-4 text-sm">

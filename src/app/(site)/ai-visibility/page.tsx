@@ -95,7 +95,7 @@ export default function AiVisibilityMarketingPage() {
           <h2 className="font-heading text-3xl">How a prompt scan works</h2>
           <ol className="mt-6 space-y-4">
             {[
-              "Subscribe to AI Visibility for one brand — $199/month, on any GridPins plan. Add the company name, address, phone, and website.",
+              "Subscribe to AI Visibility for one brand — $199/month, on any GridPins plan. Add the company name, street, city, state, ZIP, phone, and website. City and state set the local Maps location.",
               "Type up to 10 individual prompts a customer would ask, and list competitors you want watched.",
               "Scan a saved prompt. Each prompt can run 4 times. GridPins reads the answers plus cited sources.",
               "Compare the history: whether the brand was found, which facts appeared, citations, and who else was named.",

@@ -1,4 +1,13 @@
-import type { AiBrand, AiCompetitor, AiEngineId, AiMatchSignals, AiModelResult, AiSource, ScanMode } from "./types"
+import type {
+  AiBrand,
+  AiCompetitor,
+  AiCompetitorHit,
+  AiEngineId,
+  AiMatchSignals,
+  AiModelResult,
+  AiSource,
+  ScanMode,
+} from "./types"
 
 export const AI_ENGINES: Array<{ id: AiEngineId; label: string }> = [
   { id: "chatgpt", label: "ChatGPT" },
@@ -24,7 +33,8 @@ type CloroResult = {
   sources?: CloroSource[]
 }
 
-export type BrandCheck = Pick<AiBrand, "name" | "address" | "phone" | "website" | "domain" | "competitors">
+export type BrandCheck = Pick<AiBrand, "name" | "address" | "phone" | "website" | "domain" | "competitors"> &
+  Partial<Pick<AiBrand, "street" | "city" | "state" | "zip" | "location">>
 
 function needle(value: string) {
   return value.trim().toLowerCase()
@@ -103,9 +113,17 @@ export function analyzeAnswer(input: {
   const sourceBlob = input.sources.map((source) => `${source.label || ""} ${source.url || ""}`).join(" ")
   const haystack = `${text} ${sourceBlob}`.toLowerCase()
   const domain = input.brand.domain || needle(input.brand.website).replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0]
+  const addressHay = [
+    input.brand.address,
+    input.brand.street,
+    [input.brand.city, input.brand.state].filter(Boolean).join(" "),
+    input.brand.zip,
+  ]
+    .filter(Boolean)
+    .join(" ")
   const signals: AiMatchSignals = {
     name: includesTerm(haystack, input.brand.name),
-    address: addressMentioned(haystack, input.brand.address),
+    address: addressMentioned(haystack, addressHay || input.brand.address),
     phone: phoneMentioned(`${text} ${sourceBlob}`, input.brand.phone),
     website: Boolean(domain) && (domainInUrl(haystack, domain) || includesTerm(haystack, domain)),
   }
@@ -143,6 +161,17 @@ export function analyzeAnswer(input: {
     (signals.phone && input.brand.phone) ||
     input.brand.name
 
+  const watched = input.brand.competitors.map((competitor) => ({
+    name: competitor.name,
+    domain: competitor.domain,
+    mentioned:
+      includesTerm(haystack, competitor.name) || domainInUrl(haystack, competitor.domain),
+    cited: sources.some(
+      (source) =>
+        domainInUrl(source.url, competitor.domain) || includesTerm(source.label, competitor.name)
+    ),
+  }))
+
   return {
     engine: input.engine,
     label: input.label,
@@ -151,19 +180,86 @@ export function analyzeAnswer(input: {
     mentionRank: mentioned ? mentionRank || 1 : null,
     signals,
     excerpt: mentioned ? excerptAround(text, excerptTerm) : text.slice(0, 220).trim(),
+    answer: clipAnswer(text),
     sources,
-    competitors: input.brand.competitors.map((competitor) => ({
-      name: competitor.name,
-      domain: competitor.domain,
-      mentioned:
-        includesTerm(haystack, competitor.name) || domainInUrl(haystack, competitor.domain),
-      cited: sources.some(
-        (source) =>
-          domainInUrl(source.url, competitor.domain) || includesTerm(source.label, competitor.name)
-      ),
-    })),
+    competitors: [...watched, ...discoveredCompetitors({ text, haystack, sources, brand: input.brand, watched })],
     error: input.error || null,
   }
+}
+
+export function clipAnswer(text: string) {
+  return text.trim().slice(0, 4000)
+}
+
+function sourceHost(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "")
+  } catch {
+    return ""
+  }
+}
+
+function looksLikeDirectory(label: string, url: string) {
+  return /wikipedia|yelp|tripadvisor|facebook|instagram|bbb\.org|angi\.com|thumbtack|yellowpages|superpages|nextdoor|google\.com|maps\.google|local directory|local listings|official site/.test(
+    `${label} ${url}`.toLowerCase()
+  )
+}
+
+function discoveredCompetitors(input: {
+  text: string
+  haystack: string
+  sources: AiSource[]
+  brand: BrandCheck
+  watched: AiCompetitorHit[]
+}): AiCompetitorHit[] {
+  const skip = new Set(
+    [input.brand.name, input.brand.domain, ...input.watched.map((item) => item.name), ...input.watched.map((item) => item.domain)]
+      .map((item) => needle(item))
+      .filter(Boolean)
+  )
+  const extras: AiCompetitorHit[] = []
+  for (const source of input.sources) {
+    if (source.citesBrand) continue
+    const label = (source.label || "").replace(/\s+[—-].*$/, "").trim()
+    const host = sourceHost(source.url)
+    if (looksLikeDirectory(label, source.url)) continue
+    const name = label.length >= 2 && label.length <= 80 ? label : host
+    if (!name || skip.has(needle(name)) || skip.has(needle(host))) continue
+    if (includesTerm(name, input.brand.name) || includesTerm(input.brand.name, name)) continue
+    extras.push({
+      name,
+      domain: host,
+      mentioned: includesTerm(input.haystack, name) || domainInUrl(input.haystack, host),
+      cited: true,
+    })
+    skip.add(needle(name))
+    if (host) skip.add(needle(host))
+    if (extras.length >= 8) break
+  }
+  return extras
+}
+
+export function scanBrandShowing(models: AiModelResult[]) {
+  return models.some((model) => model.mentioned)
+}
+
+export function scanCompetitorsShowing(models: AiModelResult[]) {
+  const names = new Map<string, AiCompetitorHit>()
+  for (const model of models) {
+    for (const item of model.competitors) {
+      if (!item.mentioned && !item.cited) continue
+      const key = needle(item.name) || needle(item.domain)
+      if (!key) continue
+      const prev = names.get(key)
+      names.set(key, {
+        name: prev?.name || item.name,
+        domain: prev?.domain || item.domain,
+        mentioned: Boolean(prev?.mentioned || item.mentioned),
+        cited: Boolean(prev?.cited || item.cited),
+      })
+    }
+  }
+  return Array.from(names.values())
 }
 
 function mockAnswer(engine: AiEngineId, brand: BrandCheck) {
@@ -229,11 +325,33 @@ export function mockCloroScan(input: { brand: BrandCheck; engines?: AiEngineId[]
   })
 }
 
+function engineGeoBody(input: {
+  engine: AiEngineId
+  prompt: string
+  country: string
+  location?: string
+  state?: string
+}) {
+  const body: Record<string, unknown> = {
+    prompt: input.prompt,
+    country: input.country,
+    include: { markdown: true },
+  }
+  if (input.engine === "aimode" && input.location) {
+    body.location = input.location
+  } else if (input.state) {
+    body.state = input.state
+  }
+  return body
+}
+
 async function fetchEngine(input: {
   apiKey: string
   engine: AiEngineId
   prompt: string
   country: string
+  location?: string
+  state?: string
 }): Promise<CloroResult> {
   const response = await fetch(`${CLORO_BASE}/${input.engine}`, {
     method: "POST",
@@ -241,11 +359,15 @@ async function fetchEngine(input: {
       Authorization: `Bearer ${input.apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      prompt: input.prompt,
-      country: input.country,
-      include: { markdown: true },
-    }),
+    body: JSON.stringify(
+      engineGeoBody({
+        engine: input.engine,
+        prompt: input.prompt,
+        country: input.country,
+        location: input.location,
+        state: input.state,
+      })
+    ),
     signal: AbortSignal.timeout(120_000),
   })
   const data = (await response.json().catch(() => null)) as
@@ -269,6 +391,7 @@ export async function runCloroPrompt(input: {
   country: string
   brand: BrandCheck
   engines?: AiEngineId[]
+  location?: string
 }): Promise<{ mode: ScanMode; models: AiModelResult[] }> {
   const engines = input.engines?.length ? input.engines : AI_ENGINES.map((item) => item.id)
   const key = input.apiKey.trim()
@@ -287,6 +410,8 @@ export async function runCloroPrompt(input: {
         engine,
         prompt: input.prompt,
         country: input.country,
+        location: input.location || input.brand.location,
+        state: input.brand.state,
       })
       return analyzeAnswer({
         engine,

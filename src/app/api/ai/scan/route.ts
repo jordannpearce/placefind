@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server"
 
-import { activeAiBrands, consumePromptScan, refundPromptScan, storeAiScan } from "@/lib/ai-visibility"
+import {
+  activeAiBrands,
+  consumePromptScan,
+  refundPromptScan,
+  resolveBrandScanLocation,
+  storeAiScan,
+} from "@/lib/ai-visibility"
 import { requireUser } from "@/lib/auth-guard"
 import { billingRequiredResponse } from "@/lib/billing-gate"
 import { resolveCloroApiKey, runCloroPrompt } from "@/lib/cloro"
+import { resolveRequestAuth } from "@/lib/dataforseo"
 import { readDb, updateDb } from "@/lib/db"
 import { userHasSoftwareAccess } from "@/lib/paddle-access"
 import { AI_SCANS_PER_PROMPT } from "@/lib/plans"
@@ -66,20 +73,29 @@ export async function POST(request: Request) {
   }
 
   try {
+    const geo = await resolveBrandScanLocation(reserved.brand, await resolveRequestAuth())
+    const brand = {
+      ...reserved.brand,
+      location: geo.location,
+      lat: geo.lat,
+      lng: geo.lng,
+    }
     const scan = await runCloroPrompt({
       apiKey,
       prompt: reserved.prompt.text,
       country,
-      brand: reserved.brand,
+      brand,
       engines: engines.length ? engines : ENGINES,
+      location: geo.location,
     })
     const run: AiScanRun = {
       id: `ai_scan_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      brandId: reserved.brand.id,
-      brandName: reserved.brand.name,
+      brandId: brand.id,
+      brandName: brand.name,
       promptId: reserved.prompt.id,
       prompt: reserved.prompt.text,
       country,
+      location: geo.location,
       createdAt: new Date().toISOString(),
       mode: scan.mode,
       models: scan.models,
@@ -87,9 +103,14 @@ export async function POST(request: Request) {
     const remaining = await updateDb((next) => {
       const user = next.users.find((row) => row.id === auth.user.id)
       if (!user) return 0
+      const saved = user.aiBrands.find((item) => item.id === brand.id)
+      if (saved) {
+        saved.location = geo.location
+        saved.lat = geo.lat
+        saved.lng = geo.lng
+      }
       storeAiScan(user, run)
-      const brand = user.aiBrands.find((item) => item.id === reserved?.brand.id)
-      const prompt = brand?.prompts.find((item) => item.id === reserved?.prompt.id)
+      const prompt = saved?.prompts.find((item) => item.id === reserved?.prompt.id)
       return prompt ? Math.max(0, AI_SCANS_PER_PROMPT - prompt.scansUsed) : 0
     })
     return NextResponse.json({ run, remaining })

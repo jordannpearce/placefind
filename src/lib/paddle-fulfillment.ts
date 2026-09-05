@@ -133,7 +133,14 @@ function upsertAiBrandFromSubscription(
     status: string
     brandName?: string
     brandDomain?: string
+    street?: string
+    city?: string
+    state?: string
+    zip?: string
     address?: string
+    location?: string
+    lat?: string
+    lng?: string
     phone?: string
     website?: string
     competitors?: unknown
@@ -142,10 +149,30 @@ function upsertAiBrandFromSubscription(
   const existing = user.aiBrands.find((brand) => brand.subscriptionId === input.subscriptionId)
   const status = brandStatusFromSubscription(input.status)
   const website = normalizeWebsite(input.website || input.brandDomain)
+  const place = {
+    street: input.street,
+    city: input.city,
+    state: input.state,
+    zip: input.zip,
+    address: input.address,
+    location: input.location,
+    lat: input.lat ? Number(input.lat) : null,
+    lng: input.lng ? Number(input.lng) : null,
+  }
   if (existing) {
     existing.status = status
     if (input.brandName?.trim()) existing.name = input.brandName.trim().slice(0, 80)
-    if (input.address?.trim()) existing.address = input.address.trim().slice(0, 200)
+    const next = normalizeAiBrand({ ...existing, ...place, name: existing.name, website: website || existing.website })
+    if (next) {
+      existing.street = next.street
+      existing.city = next.city
+      existing.state = next.state
+      existing.zip = next.zip
+      existing.address = next.address
+      existing.location = next.location
+      existing.lat = next.lat
+      existing.lng = next.lng
+    }
     if (input.phone?.trim()) existing.phone = input.phone.trim().slice(0, 40)
     if (website) {
       existing.website = website
@@ -160,7 +187,7 @@ function upsertAiBrandFromSubscription(
   const created = normalizeAiBrand({
     id: `ai_brand_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     name: input.brandName?.trim() || "Brand",
-    address: input.address || "",
+    ...place,
     phone: input.phone || "",
     website,
     domain: input.brandDomain || "",
@@ -313,7 +340,14 @@ export async function handleSubscriptionEvent(
         status: event.data.status,
         brandName: customText(custom, "brandName"),
         brandDomain: customText(custom, "brandDomain"),
+        street: customText(custom, "street"),
+        city: customText(custom, "city"),
+        state: customText(custom, "state"),
+        zip: customText(custom, "zip"),
         address: customText(custom, "address"),
+        location: customText(custom, "location"),
+        lat: customText(custom, "lat"),
+        lng: customText(custom, "lng"),
         phone: customText(custom, "phone"),
         website: customText(custom, "website"),
         competitors: custom?.competitors,
@@ -406,7 +440,14 @@ export async function handleTransactionCompleted(db: Database, event: Transactio
         status: "active",
         brandName: customText(custom, "brandName"),
         brandDomain: customText(custom, "brandDomain"),
+        street: customText(custom, "street"),
+        city: customText(custom, "city"),
+        state: customText(custom, "state"),
+        zip: customText(custom, "zip"),
         address: customText(custom, "address"),
+        location: customText(custom, "location"),
+        lat: customText(custom, "lat"),
+        lng: customText(custom, "lng"),
         phone: customText(custom, "phone"),
         website: customText(custom, "website"),
         competitors: custom?.competitors,

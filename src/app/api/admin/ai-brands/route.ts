@@ -4,11 +4,14 @@ import {
   brandAssignmentTargets,
   grantComplimentaryBrand,
   listAssignedBrands,
+  missingBrandLocation,
   parseBrandForm,
   removeComplimentaryBrand,
   userHasMatchingBrand,
+  withResolvedBrandLocation,
 } from "@/lib/ai-visibility"
 import { requireAdmin } from "@/lib/auth-guard"
+import { resolveRequestAuth } from "@/lib/dataforseo"
 import { readDb, updateDb } from "@/lib/db"
 
 export async function GET() {
@@ -51,6 +54,11 @@ export async function POST(request: Request) {
   if (parsed.name.trim().length < 2) {
     return NextResponse.json({ error: "Enter the company name." }, { status: 400 })
   }
+  const locationError = missingBrandLocation(parsed)
+  if (locationError) {
+    return NextResponse.json({ error: locationError }, { status: 400 })
+  }
+  const located = await withResolvedBrandLocation(parsed, await resolveRequestAuth())
 
   try {
     const result = await updateDb((next) => {
@@ -66,11 +74,11 @@ export async function POST(request: Request) {
       const granted: Array<{ userId: string; brandId: string }> = []
       const skipped: string[] = []
       for (const user of target.users) {
-        if (userHasMatchingBrand(user, parsed)) {
+        if (userHasMatchingBrand(user, located)) {
           skipped.push(user.email)
           continue
         }
-        const created = grantComplimentaryBrand(user, parsed)
+        const created = grantComplimentaryBrand(user, located)
         if (created) granted.push({ userId: user.id, brandId: created.id })
       }
       if (!granted.length) {

@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server"
 
-import { parseBrandForm } from "@/lib/ai-visibility"
+import { missingBrandLocation, parseBrandForm, withResolvedBrandLocation } from "@/lib/ai-visibility"
 import { ensureAiVisibilityCatalog } from "@/lib/ai-visibility-catalog"
 import { requireUser } from "@/lib/auth-guard"
 import { billingRequiredResponse } from "@/lib/billing-gate"
+import { resolveRequestAuth } from "@/lib/dataforseo"
 import { readDb, updateDb } from "@/lib/db"
 import { paddleClientToken, paddleJsEnvironment, publicAppUrl } from "@/lib/paddle"
 import { userHasSoftwareAccess } from "@/lib/paddle-access"
 import { assertClientTokenMatchesEnvironment } from "@/lib/paddle-env"
-import { AI_PROMPTS_PER_BRAND, AI_VISIBILITY_PRICE } from "@/lib/plans"
+import { AI_PROMPTS_PER_BRAND, AI_SCANS_PER_PROMPT, AI_VISIBILITY_PRICE } from "@/lib/plans"
 
 export async function GET() {
   const auth = await requireUser()
@@ -29,6 +30,7 @@ export async function GET() {
       productId: catalog.productId,
       unitPrice: AI_VISIBILITY_PRICE,
       promptsPerBrand: AI_PROMPTS_PER_BRAND,
+      scansPerPrompt: AI_SCANS_PER_PROMPT,
       clientToken,
       environment,
       successUrl: `${publicAppUrl()}/ai?addon=started`,
@@ -57,6 +59,11 @@ export async function POST(request: Request) {
   if (brandName.length < 2) {
     return NextResponse.json({ error: "Enter the company name this add-on will track." }, { status: 400 })
   }
+  const locationError = missingBrandLocation(parsed)
+  if (locationError) {
+    return NextResponse.json({ error: locationError }, { status: 400 })
+  }
+  const located = await withResolvedBrandLocation(parsed, await resolveRequestAuth())
 
   const db = await readDb()
   if (!userHasSoftwareAccess(auth.user, db)) {
@@ -81,11 +88,18 @@ export async function POST(request: Request) {
         kind: "ai_visibility",
         userId: auth.user.id,
         brandName,
-        brandDomain: parsed.website,
-        address: parsed.address,
-        phone: parsed.phone,
-        website: parsed.website,
-        competitors: parsed.competitors.map((item) => item.name).join(", "),
+        brandDomain: located.website,
+        street: located.street,
+        city: located.city,
+        state: located.state,
+        zip: located.zip,
+        address: located.address,
+        location: located.location,
+        lat: located.lat == null ? "" : String(located.lat),
+        lng: located.lng == null ? "" : String(located.lng),
+        phone: located.phone,
+        website: located.website,
+        competitors: located.competitors.map((item) => item.name).join(", "),
       },
     })
   } catch (error) {

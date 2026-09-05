@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { AI_ENGINES, signalLabels } from "@/lib/cloro"
+import { AI_ENGINES, scanBrandShowing, scanCompetitorsShowing, signalLabels } from "@/lib/cloro"
 import { AI_PROMPTS_PER_BRAND, AI_SCANS_PER_PROMPT } from "@/lib/plans"
 import type { AiBrand, AiMatchSignals, AiPromptQuota, AiSavedPrompt, AiScanRun } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -72,6 +72,7 @@ export function AiVisibilityApp() {
     [data?.scans, selectedPrompt]
   )
   const selected = history.find((scan) => scan.id === selectedScanId) ?? history[history.length - 1] ?? null
+  const selectedCompetitors = selected ? scanCompetitorsShowing(selected.models) : []
 
   async function savePrompt(index: number, existingId?: string) {
     if (!brand) return
@@ -153,7 +154,15 @@ export function AiVisibilityApp() {
                 <Badge variant={item.status === "active" ? "default" : "secondary"}>{item.status}</Badge>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">{item.website || item.domain || "No website"}</p>
-              {item.address ? <p className="mt-1 text-xs text-muted-foreground">{item.address}</p> : null}
+              {item.street ? <p className="mt-1 text-xs text-muted-foreground">{item.street}</p> : null}
+              {item.city || item.state ? (
+                <p className="text-xs text-muted-foreground">
+                  {[item.city, item.state, item.zip].filter(Boolean).join(", ")}
+                  {item.location ? " · local Maps location set" : ""}
+                </p>
+              ) : item.address ? (
+                <p className="mt-1 text-xs text-muted-foreground">{item.address}</p>
+              ) : null}
               {item.phone ? <p className="text-xs text-muted-foreground">{item.phone}</p> : null}
               <p className="mt-3 font-heading text-2xl">
                 {item.quota.used}/{item.quota.included}
@@ -175,9 +184,10 @@ export function AiVisibilityApp() {
           <div>
             <h2 className="font-heading text-2xl">Prompts</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Type each question a customer would ask. Save it, then scan. {brand.name} is scored
-              against the company name
-              {brand.address ? `, address` : ""}
+              Type each question a customer would ask. Save it, then scan. Results are local to{" "}
+              {[brand.city, brand.state].filter(Boolean).join(", ") || "the brand city"} using the
+              Maps location. {brand.name} is scored against the company name
+              {brand.street || brand.address ? `, street` : ""}
               {brand.phone ? `, phone` : ""}
               {brand.website || brand.domain ? `, and website` : ""}
               {brand.competitors.length
@@ -304,10 +314,13 @@ export function AiVisibilityApp() {
                 </thead>
                 <tbody>
                   <tr className="border-t">
-                    <td className="px-3 py-2 text-xs text-muted-foreground">Brand found</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">Brand showing</td>
                     {history.map((scan) => (
                       <td key={`${scan.id}-found`} className="px-3 py-2">
-                        {scan.models.filter((model) => model.mentioned).length}/{scan.models.length}
+                        {scanBrandShowing(scan.models) ? "Yes" : "No"}{" "}
+                        <span className="text-xs text-muted-foreground">
+                          ({scan.models.filter((model) => model.mentioned).length}/{scan.models.length})
+                        </span>
                       </td>
                     ))}
                   </tr>
@@ -328,10 +341,18 @@ export function AiVisibilityApp() {
                     ))}
                   </tr>
                   <tr className="border-t">
-                    <td className="px-3 py-2 text-xs text-muted-foreground">Competitors</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">Competitors showing</td>
                     {history.map((scan) => (
                       <td key={`${scan.id}-comp`} className="px-3 py-2 text-xs">
                         {competitorLine(scan) || "None"}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="border-t">
+                    <td className="px-3 py-2 text-xs text-muted-foreground">Location</td>
+                    {history.map((scan) => (
+                      <td key={`${scan.id}-loc`} className="px-3 py-2 text-xs">
+                        {locationLabel(scan.location, brand)}
                       </td>
                     ))}
                   </tr>
@@ -344,11 +365,44 @@ export function AiVisibilityApp() {
 
       {selected ? (
         <section className="space-y-4">
+          <div>
+            <h2 className="font-heading text-2xl">Prompt result</h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">{selected.prompt}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Searched from {locationLabel(selected.location, brand)}
+              {selected.mode === "live" ? " · live models" : " · sample answers"}
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border bg-card p-4">
+              <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                Brand showing
+              </p>
+              <p className="font-heading text-4xl">{scanBrandShowing(selected.models) ? "Yes" : "No"}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {selected.models.filter((model) => model.mentioned).length} of {selected.models.length}{" "}
+                models named {brand?.name || selected.brandName}.
+              </p>
+            </div>
+            <div className="rounded-2xl border bg-card p-4">
+              <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                Competitors showing
+              </p>
+              {selectedCompetitors.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {selectedCompetitors.map((item) => (
+                    <Badge key={item.name} variant={item.cited ? "default" : "secondary"}>
+                      {item.name}
+                      {item.cited ? " · cited" : ""}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">No competitors appeared in this scan.</p>
+              )}
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2">
-            <Stat
-              label="Brand found"
-              value={`${selected.models.filter((model) => model.mentioned).length}/${selected.models.length}`}
-            />
             <Stat
               label="Cited"
               value={`${selected.models.filter((model) => model.cited).length}/${selected.models.length}`}
@@ -363,7 +417,7 @@ export function AiVisibilityApp() {
                   <h3 className="font-heading text-2xl">{model.label}</h3>
                   <div className="flex flex-wrap gap-1.5">
                     <Badge variant={model.mentioned ? "default" : "secondary"}>
-                      {model.mentioned ? "Brand found" : "Brand missing"}
+                      {model.mentioned ? "Brand showing" : "Brand not showing"}
                     </Badge>
                     <Badge variant={model.cited ? "default" : "secondary"}>
                       {model.cited ? "Cited" : "No citation"}
@@ -378,20 +432,37 @@ export function AiVisibilityApp() {
                     ))}
                   </div>
                 </div>
-                {model.error ? (
-                  <p className="mt-2 text-sm text-destructive">{model.error}</p>
-                ) : (
-                  <p className="mt-3 text-sm leading-6 text-muted-foreground">{model.excerpt || "No excerpt."}</p>
-                )}
-                {model.competitors.some((item) => item.mentioned || item.cited) ? (
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Competitors:{" "}
-                    {model.competitors
-                      .filter((item) => item.mentioned || item.cited)
-                      .map((item) => `${item.name}${item.cited ? " (cited)" : ""}`)
-                      .join(" · ")}
+                <div className="mt-3">
+                  <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                    Competitors showing
                   </p>
-                ) : null}
+                  {model.competitors.some((item) => item.mentioned || item.cited) ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {model.competitors
+                        .filter((item) => item.mentioned || item.cited)
+                        .map((item) => (
+                          <Badge key={`${model.engine}-${item.name}`} variant="secondary">
+                            {item.name}
+                            {item.cited ? " · cited" : ""}
+                          </Badge>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-sm text-muted-foreground">None in this answer.</p>
+                  )}
+                </div>
+                {model.error ? (
+                  <p className="mt-3 text-sm text-destructive">{model.error}</p>
+                ) : (
+                  <div className="mt-4">
+                    <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                      Prompt result
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
+                      {model.answer || model.excerpt || "No answer returned."}
+                    </p>
+                  </div>
+                )}
                 {model.sources.length > 0 ? (
                   <ol className="mt-3 space-y-1 text-xs">
                     {model.sources.map((source) => (
@@ -436,13 +507,20 @@ export function AiVisibilityApp() {
 }
 
 function competitorLine(scan: AiScanRun) {
-  const names = new Set<string>()
-  for (const model of scan.models) {
-    for (const item of model.competitors) {
-      if (item.mentioned || item.cited) names.add(item.name)
-    }
+  return scanCompetitorsShowing(scan.models)
+    .map((item) => item.name)
+    .join(" · ")
+}
+
+function locationLabel(location: string | undefined, brand?: BrandRow | null) {
+  if (location?.trim()) {
+    return location
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part && part !== "United States")
+      .join(", ")
   }
-  return Array.from(names).join(" · ")
+  return [brand?.city, brand?.state].filter(Boolean).join(", ") || "City and state not set"
 }
 
 function factsFoundLabel(all: Array<AiMatchSignals | undefined>) {

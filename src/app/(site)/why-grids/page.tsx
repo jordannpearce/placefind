@@ -56,7 +56,7 @@ const SECTIONS = [
     title: "How a grid relates to AI answers",
     body: [
       "People now ask ChatGPT or Perplexity for a shortlist, then open Maps. The lattice still decides the sidewalk. The optional AI Visibility add-on ($199 per brand per month) tells you whether those models name you and which pages they cite. It does not replace a grid. It is a second surface.",
-      "Ten prompt scans a month is a fixed query set — branded, category, and “near me” — not a place to test every slogan. Keep the lattice for streets. Keep prompts for language.",
+      "Ten typed prompts, four scans each, is a fixed query set — branded, category, and “near me” — not a place to test every slogan. Keep the lattice for streets. Keep prompts for language.",
     ],
   },
 ]
