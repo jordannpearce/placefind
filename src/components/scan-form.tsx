@@ -348,7 +348,6 @@ export function ScanForm({
             } catch (error) {
               const raw = error instanceof Error ? error.message : "Search failed"
               setSearchError(usesHostedMaps && /dataforseo/i.test(raw) ? "Search failed. Try again." : raw)
-            }
             } finally {
               setSearching(false)
             }
