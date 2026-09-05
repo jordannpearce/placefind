@@ -16,35 +16,36 @@ export default function HomePage() {
   const demo = buildHomeDemoScan()
   return (
     <div>
-      <HomeTrackerDemo points={demo.points} allResults={demo.results} />
-
-      <section className="mx-auto max-w-6xl px-4 py-14 md:py-20">
-        <p className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">
-          Google Maps rank tracking
-        </p>
-        <h1 className="font-heading mt-3 max-w-4xl text-4xl leading-[1.05] tracking-tight md:text-6xl">
-          See where a listing ranks from every nearby street.
-        </h1>
-        <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground">
-          Maps is personal to the searcher’s pin. The map above is the same tracker layout a
-          workspace uses — sample Austin coffee ranks so you can click pins, switch keywords, and
-          read the pack. Live scans do that for your listing.
-        </p>
-        <div className="mt-7 flex flex-wrap gap-3">
-          <Link href="/signup" className={buttonVariants({ size: "lg" })}>
-            Create a workspace
-          </Link>
-          <Link href="/why-grids" className={buttonVariants({ variant: "outline", size: "lg" })}>
-            Why grids matter
-          </Link>
-          <Link href="/ai-visibility" className={buttonVariants({ variant: "outline", size: "lg" })}>
-            AI Visibility add-on
-          </Link>
+      <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 md:grid-cols-[1.1fr_0.9fr] md:py-24">
+        <div>
+          <p className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">
+            Google Maps rank tracking
+          </p>
+          <h1 className="font-heading mt-3 text-5xl leading-[1.05] tracking-tight md:text-6xl">
+            See where a listing ranks from every nearby street.
+          </h1>
+          <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">
+            Maps is personal to the searcher’s pin. The map is a live sample of the tracker —
+            Austin coffee ranks for Houndstooth so you can click pins and switch keywords. Live
+            scans do that for your listing.
+          </p>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link href="/signup" className={buttonVariants({ size: "lg" })}>
+              Create a workspace
+            </Link>
+            <Link href="/why-grids" className={buttonVariants({ variant: "outline", size: "lg" })}>
+              Why grids matter
+            </Link>
+            <Link href="/ai-visibility" className={buttonVariants({ variant: "outline", size: "lg" })}>
+              AI Visibility add-on
+            </Link>
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            New workspaces stay locked until you subscribe. Testers get a timed window from an
+            administrator.
+          </p>
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">
-          New workspaces stay locked until you subscribe. Testers get a timed window from an
-          administrator.
-        </p>
+        <HomeTrackerDemo points={demo.points} allResults={demo.results} />
       </section>
 
       <section className="border-y bg-card/60">
