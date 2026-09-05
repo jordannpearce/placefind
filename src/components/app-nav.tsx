@@ -19,15 +19,26 @@ const BILLING_LINKS = [
   { href: "/pricing", label: "Subscribe" },
 ]
 
+function navLinks(softwareAccess: boolean, showLeads: boolean) {
+  const links = softwareAccess ? [...PRODUCT_LINKS] : [...BILLING_LINKS]
+  if (showLeads && !links.some((link) => link.href === "/leads")) {
+    const insertAt = softwareAccess ? 3 : 0
+    links.splice(insertAt, 0, { href: "/leads", label: "Leads" })
+  }
+  return links
+}
+
 export function AppNav({
   name,
   isAdmin,
   softwareAccess = true,
+  showLeads = false,
   impersonating,
 }: {
   name: string
   isAdmin: boolean
   softwareAccess?: boolean
+  showLeads?: boolean
   impersonating: { name: string; email: string } | null
 }) {
   const pathname = usePathname()
@@ -66,7 +77,7 @@ export function AppNav({
             <Wordmark className="text-xl leading-none" />
           </Link>
           <nav className="hidden items-center gap-1 text-sm sm:flex">
-            {(softwareAccess ? PRODUCT_LINKS : BILLING_LINKS).map((link) => (
+            {navLinks(softwareAccess, showLeads).map((link) => (
               <Link
                 key={link.href}
                 href={link.href}

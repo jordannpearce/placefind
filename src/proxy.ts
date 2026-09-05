@@ -5,7 +5,7 @@ import { readDb } from "@/lib/db"
 import { billingPathForUser, userHasSoftwareAccess } from "@/lib/paddle-access"
 import { IMPERSONATE_COOKIE, verifySessionToken } from "@/lib/session-token"
 
-const PROTECTED = ["/dashboard", "/track", "/ai", "/account", "/admin"]
+const PROTECTED = ["/dashboard", "/track", "/ai", "/account", "/admin", "/leads"]
 const PRODUCT = ["/dashboard", "/track", "/ai"]
 
 export async function proxy(request: NextRequest) {
@@ -56,5 +56,7 @@ export const config = {
     "/account/:path*",
     "/admin",
     "/admin/:path*",
+    "/leads",
+    "/leads/:path*",
   ],
 }

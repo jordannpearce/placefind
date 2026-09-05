@@ -5,14 +5,17 @@ import {
   applyLeadAssignment,
   applyInquiryToLead,
   applyLeadStatus,
+  canViewAssignedLeads,
   costPerLeadUsd,
   createAdminLead,
   DEFAULT_COST_PER_LEAD_USD,
   isLeadStatus,
   leadAssignmentBlockedReason,
   leadFromInquiry,
+  leadsForAccount,
   markLeadPaid,
   parseCostPerLeadUsd,
+  publicLeadForAgency,
   removeLead,
   unassignLead,
 } from "../src/lib/leads.ts"
@@ -194,6 +197,22 @@ assert.equal(assignedCopy.businessName, "Lee Plumbing West")
 assert.equal(assignedCopy.assignedToUserId, pro.id)
 assert.equal(assignedCopy.paddleTransactionId, invoiceId)
 assert.equal(assignedCopy.status, "invoiced")
+
+const teammate = user({ id: "user_pro_2", email: "pro2@example.com", plan: "agency", agencyId: "agency_1" })
+const outsider = user({ id: "user_other", email: "other@example.com", plan: "agency", agencyId: "agency_2" })
+const roster = [starter, pro, teammate, advanced, outsider]
+const inbox = leadsForAccount(pro, roster, [lead])
+assert.equal(inbox.length, 1)
+assert.equal(inbox[0].assignedToUserId, advanced.id)
+const teammateInbox = leadsForAccount(teammate, roster, [lead])
+assert.equal(teammateInbox.length, 1, "agency teammates see assigned leads")
+const outsiderInbox = leadsForAccount(outsider, roster, [lead])
+assert.equal(outsiderInbox.length, 0)
+const card = publicLeadForAgency(lead, [advanced], advanced.id)
+assert.equal(card.emailedToViewer, true)
+assert.equal(card.businessName, "Lee Plumbing")
+assert.equal(canViewAssignedLeads(starter, [starter], []), false)
+assert.equal(canViewAssignedLeads(pro, [pro], [lead]), true)
 
 unassignLead(assignedCopy)
 assert.equal(assignedCopy.assignedToUserId, "")

@@ -1,10 +1,12 @@
 import Link from "next/link"
 
 import { AdminAgencies } from "@/components/admin-agencies"
+import { AdminAiBrands } from "@/components/admin-ai-brands"
 import { AdminCloro } from "@/components/admin-cloro"
 import { AdminUsers } from "@/components/admin-users"
 import { buttonVariants } from "@/components/ui/button"
 import { isAgencyAccount } from "@/lib/agency-account"
+import { listAssignedBrands } from "@/lib/ai-visibility"
 import { requireAdmin } from "@/lib/auth-guard"
 import { resolveCloroApiKey } from "@/lib/cloro"
 import { readDb } from "@/lib/db"
@@ -33,8 +35,8 @@ export default async function AdminPage() {
         <div>
           <h1 className="font-heading text-4xl tracking-tight">Admin</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {db.users.length} accounts · {db.agencies.length} agencies · {db.emails.length} emails in the
-            outbox
+            {db.users.length} accounts · {db.agencies.length} agencies · {db.emails.length} emails in
+            the outbox. Assign AI brands below or send Get Found leads from Leads.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -45,6 +47,30 @@ export default async function AdminPage() {
             Emails & Resend
           </Link>
         </div>
+      </div>
+      <div className="mt-8">
+        <AdminAiBrands
+          initial={{
+            brands: listAssignedBrands(db.users, db.agencies),
+            users: db.users
+              .filter((user) => user.role !== "admin")
+              .map((user) => ({
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                company: user.company,
+                plan: user.plan,
+                status: user.status,
+                agencyId: user.agencyId,
+              })),
+            agencies: db.agencies.map((agency) => ({
+              id: agency.id,
+              name: agency.name,
+              userCount: db.users.filter((user) => user.agencyId === agency.id && user.role !== "admin")
+                .length,
+            })),
+          }}
+        />
       </div>
       <div className="mt-8">
         <AdminCloro

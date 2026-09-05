@@ -243,6 +243,66 @@ export function applyLeadAssignment(
   }
 }
 
+export function agencyMemberIds(viewer: Pick<User, "id" | "agencyId" | "role">, users: User[]) {
+  const ids = new Set<string>([viewer.id])
+  if (!viewer.agencyId) return ids
+  for (const user of users) {
+    if (user.agencyId === viewer.agencyId && user.role !== "admin") ids.add(user.id)
+  }
+  return ids
+}
+
+/** Leads assigned (and therefore emailed) to this account or its agency group. */
+export function leadsForAccount(viewer: Pick<User, "id" | "agencyId" | "role">, users: User[], leads: MarketingLead[]) {
+  const ids = agencyMemberIds(viewer, users)
+  return leads
+    .filter((lead) => lead.assignedToUserId && ids.has(lead.assignedToUserId))
+    .slice()
+    .sort((a, b) => (b.assignedAt || b.createdAt).localeCompare(a.assignedAt || a.createdAt))
+}
+
+export function canViewAssignedLeads(viewer: Pick<User, "id" | "agencyId" | "role" | "plan" | "status">, users: User[], leads: MarketingLead[]) {
+  if (canReceivePaidLeads(viewer)) return true
+  return leadsForAccount(viewer, users, leads).length > 0
+}
+
+export function publicLeadForAgency(
+  lead: MarketingLead,
+  users: User[],
+  viewerId: string
+) {
+  const assignee = users.find((user) => user.id === lead.assignedToUserId)
+  return {
+    id: lead.id,
+    name: lead.name,
+    email: lead.email,
+    phone: lead.phone,
+    businessName: lead.businessName,
+    city: lead.city,
+    state: lead.state,
+    comments: lead.comments,
+    website: lead.website,
+    gbpListing: lead.gbpListing,
+    primaryCategory: lead.primaryCategory,
+    keyword: lead.keyword,
+    locationCount: lead.locationCount,
+    status: lead.status,
+    assignedAt: lead.assignedAt,
+    assignedToUserId: lead.assignedToUserId,
+    assignedToName: assignee?.name || "",
+    assignedToEmail: assignee?.email || "",
+    assignedToCompany: assignee?.company || "",
+    emailedToViewer: lead.assignedToUserId === viewerId,
+    leadPrice: lead.leadPrice,
+    invoiceStatus: lead.invoiceStatus,
+    invoiceDryRun: lead.invoiceDryRun,
+    paddleInvoiceUrl: lead.paddleInvoiceUrl,
+    createdAt: lead.createdAt,
+  }
+}
+
+export type AgencyLead = ReturnType<typeof publicLeadForAgency>
+
 export function markLeadPaid(lead: MarketingLead) {
   lead.status = "paid"
   lead.invoiceStatus = "paid"

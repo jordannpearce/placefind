@@ -180,6 +180,98 @@ export function brandQuotaView(brand: AiBrand) {
   }
 }
 
+export function grantComplimentaryBrand(user: User, input: AiBrandInput) {
+  const created = normalizeAiBrand({
+    ...input,
+    subscriptionId: "complimentary",
+    status: "active",
+    id: input.id || `ai_brand_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    promptsUsed: 0,
+    promptPeriodStart: periodStartIso(),
+    createdAt: new Date().toISOString(),
+  })
+  if (!created) return null
+  if (!Array.isArray(user.aiBrands)) user.aiBrands = []
+  user.aiBrands.push(created)
+  return created
+}
+
+export function userHasMatchingBrand(user: Pick<User, "aiBrands">, input: Pick<AiBrandInput, "name" | "website" | "domain">) {
+  const name = (input.name || "").trim().toLowerCase()
+  if (!name) return false
+  const domain = normalizeDomain(input.website || input.domain)
+  return (user.aiBrands ?? []).some((brand) => {
+    if (brand.name.trim().toLowerCase() !== name) return false
+    if (!domain) return true
+    return brand.domain === domain || normalizeDomain(brand.website) === domain
+  })
+}
+
+export function removeComplimentaryBrand(user: User, brandId: string) {
+  const id = brandId.trim()
+  const index = (user.aiBrands ?? []).findIndex(
+    (brand) => brand.id === id && brand.subscriptionId === "complimentary"
+  )
+  if (index < 0) return null
+  const [removed] = user.aiBrands.splice(index, 1)
+  return removed ?? null
+}
+
+export type BrandAssignmentTarget =
+  | { ok: true; users: User[]; label: string }
+  | { ok: false; error: string }
+
+export function brandAssignmentTargets(
+  users: User[],
+  agencies: Array<{ id: string; name: string }>,
+  input: { userId?: string; agencyId?: string }
+): BrandAssignmentTarget {
+  const userId = input.userId?.trim() || ""
+  const agencyId = input.agencyId?.trim() || ""
+  if (userId && agencyId) {
+    return { ok: false, error: "Choose either a user account or an agency, not both." }
+  }
+  if (userId) {
+    const user = users.find((row) => row.id === userId)
+    if (!user) return { ok: false, error: "Account not found." }
+    if (user.role === "admin") return { ok: false, error: "Assign brands to a user or agency account, not staff." }
+    if (user.status === "pending") return { ok: false, error: "That account is not active yet." }
+    return { ok: true, users: [user], label: user.company || user.name }
+  }
+  if (agencyId) {
+    const agency = agencies.find((row) => row.id === agencyId)
+    if (!agency) return { ok: false, error: "Agency not found." }
+    const members = users.filter(
+      (row) => row.agencyId === agencyId && row.role !== "admin" && row.status !== "pending"
+    )
+    if (!members.length) return { ok: false, error: "That agency has no accounts to assign." }
+    return { ok: true, users: members, label: agency.name }
+  }
+  return { ok: false, error: "Choose a user account or an agency." }
+}
+
+export function listAssignedBrands(
+  users: User[],
+  agencies: Array<{ id: string; name: string }>
+) {
+  const agencyName = Object.fromEntries(agencies.map((agency) => [agency.id, agency.name]))
+  return users
+    .flatMap((user) =>
+      (user.aiBrands ?? []).map((brand) => ({
+        ...brandQuotaView(brand),
+        ownerUserId: user.id,
+        ownerName: user.name,
+        ownerEmail: user.email,
+        ownerCompany: user.company,
+        ownerPlan: user.plan,
+        agencyId: user.agencyId,
+        agencyName: (user.agencyId && agencyName[user.agencyId]) || "Independent",
+        complimentary: brand.subscriptionId === "complimentary",
+      }))
+    )
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
 export function parseBrandForm(body: {
   name?: string
   companyName?: string

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { AppNav } from "@/components/app-nav"
 import { requireAdmin, requireUser } from "@/lib/auth-guard"
 import { readDb } from "@/lib/db"
+import { canViewAssignedLeads } from "@/lib/leads"
 import { userHasSoftwareAccess } from "@/lib/paddle-access"
 
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
@@ -19,6 +20,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
         name={acting.user.name}
         isAdmin={Boolean(admin)}
         softwareAccess={softwareAccess}
+        showLeads={canViewAssignedLeads(acting.user, db.users, db.leads)}
         impersonating={
           impersonating
             ? { name: acting.user.name, email: acting.user.email }

@@ -75,7 +75,8 @@ If those Paddle IDs are empty, GridPins can create the $199/month product. Witho
 - Dashboard of campaigns per brand and location
 - Tracker with multiple keywords, grid size, radius, and schedules
 - Account billing via Paddle (overlay checkout, webhooks, customer portal): Starter $20 (1 campaign, 5 hosted live scans/month, extra scans $5), Pro $50 (5 campaigns, extra slots $5 each up to 10, own Maps API key), Advanced $250 (50 campaigns, own Maps API key). Optional AI Visibility $199/month per brand (10 prompt scans). Set the Paddle default payment link to `https://gridpins.com/pricing`. Railway: `PADDLE_API_KEY`, `PADDLE_ENVIRONMENT=production`, `PADDLE_WEBHOOK_SECRET`, `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`, `NEXT_PUBLIC_PADDLE_PRICE_*`.
-- Admin: users, agencies, impersonation, Resend, Cloro API key, targeted mail
+- Admin: users, agencies, impersonation, Resend, Cloro API key, targeted mail. Admins can create AI Visibility brands (company name, address, phone, website) and assign them to a user account or every account in an agency.
+- Agency accounts have a Leads page for Get Found leads that were assigned and emailed to the agency.
 - Public homepage ships an interactive sample map beside the hero so visitors can click pins without signing in
 
 ## How a grid scan works
