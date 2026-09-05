@@ -7,7 +7,7 @@ import {
   spacingFromRadius,
 } from "../src/lib/grid"
 import { campaignToConfig, defaultCampaign } from "../src/lib/storage"
-import { normalizeWorkspaceScans } from "../src/lib/scan-results"
+import { latestKeywordResults, normalizeWorkspaceScans } from "../src/lib/scan-results"
 import type { GridSize, PointResult } from "../src/lib/types"
 
 function assert(condition: unknown, message: string) {
@@ -118,12 +118,13 @@ const hydrated = normalizeWorkspaceScans(
   },
   ["camp_houndstooth_austin"]
 )
+const hydratedPoints = latestKeywordResults(hydrated.camp_houndstooth_austin)
 assert(
-  hydrated.camp_houndstooth_austin.coffee.r0c0 && hydrated.camp_houndstooth_austin.coffee.r0c1,
+  hydratedPoints.coffee.r0c0 && hydratedPoints.coffee.r0c1,
   "hydrate must keep cells whose lat/lng arrived as strings"
 )
 assert(
-  typeof hydrated.camp_houndstooth_austin.coffee.r0c0.lat === "number",
+  typeof hydratedPoints.coffee.r0c0.lat === "number",
   "hydrated lat is a number"
 )
 

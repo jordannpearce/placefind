@@ -2,7 +2,7 @@ import { dataForSeoErrorMessage, listingsFromTask, mapsLiveTask, matchTarget } f
 import { buildGrid, formatCoordinate, spacingFromRadius } from "../src/lib/grid"
 import { mockScanPoint } from "../src/lib/mock-scan"
 import { listingMatchesTarget, pinMark } from "../src/lib/rank"
-import { mergeWorkspaceScans, normalizeWorkspaceScans } from "../src/lib/scan-results"
+import { latestKeywordResults, mergeWorkspaceScans, normalizeWorkspaceScans } from "../src/lib/scan-results"
 import type { Listing } from "../src/lib/types"
 
 function assert(condition: unknown, message: string) {
@@ -96,15 +96,25 @@ const campaignKeyed = normalizeWorkspaceScans(
   ["camp_houndstooth_austin"]
 )
 assert(
-  campaignKeyed.camp_houndstooth_austin.coffee.r0c0.found,
+  latestKeywordResults(campaignKeyed.camp_houndstooth_austin).coffee.r0c0.found,
   "campaign-keyed workspace scans stay campaign-keyed"
 )
 
 const bare = normalizeWorkspaceScans({ coffee: { r0c0: matched } }, ["camp_houndstooth_austin"])
-assert(bare.camp_houndstooth_austin?.coffee.r0c0.found, "bare KeywordResults attach to the active campaign")
+assert(
+  latestKeywordResults(bare.camp_houndstooth_austin).coffee.r0c0.found,
+  "bare KeywordResults attach to the active campaign"
+)
 
-const wiped = mergeWorkspaceScans({ camp_houndstooth_austin: { coffee: { r0c0: matched } } }, {})
-assert(wiped.camp_houndstooth_austin.coffee.r0c0.found, "empty server scans must not wipe local results")
+const seeded = normalizeWorkspaceScans(
+  { camp_houndstooth_austin: { coffee: { r0c0: matched } } },
+  ["camp_houndstooth_austin"]
+)
+const wiped = mergeWorkspaceScans(seeded, {})
+assert(
+  latestKeywordResults(wiped.camp_houndstooth_austin).coffee.r0c0.found,
+  "empty server scans must not wipe local results"
+)
 
 console.log("ok DataForSEO parse + workspace scan shape")
 

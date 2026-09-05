@@ -156,6 +156,22 @@ export type Campaign = {
 
 export type KeywordResults = Record<string, Record<string, PointResult>>
 
+export const MAX_SCAN_HISTORY = 30
+
+export type ScanRun = {
+  id: string
+  createdAt: string
+  gridSize: GridSize
+  radiusMiles: number
+  center: { lat: number; lng: number }
+  keywords: string[]
+  mode: ScanMode
+  results: KeywordResults
+}
+
+export type CampaignScanHistory = ScanRun[]
+export type WorkspaceScans = Record<string, CampaignScanHistory>
+
 export type KeywordStatRow = {
   keyword: string
   stats: ScanStats
@@ -295,7 +311,7 @@ export type UserWorkspace = {
   campaigns: Campaign[]
   settings: ApiSettings
   activeCampaignId: string
-  scans: Record<string, KeywordResults>
+  scans: WorkspaceScans
 }
 
 export type PublicUser = Omit<User, "passwordHash" | "dfsPassword"> & {

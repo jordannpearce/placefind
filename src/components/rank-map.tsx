@@ -16,6 +16,8 @@ import "leaflet/dist/leaflet.css"
 import { ListingCard } from "@/components/business-name"
 import { cellBounds } from "@/lib/grid"
 import { pinMark, rankTone } from "@/lib/rank"
+import { formatRankDelta } from "@/lib/scan-compare"
+import type { PointDelta } from "@/lib/scan-compare"
 import type { GridPoint, PointResult } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -29,6 +31,7 @@ type RankMapProps = {
   targetBusiness: string
   onSelect: (id: string) => void
   onPickCenter: (lat: number, lng: number) => void
+  compareDeltas?: PointDelta[] | null
 }
 
 function FitToGrid({ points }: { points: GridPoint[] }) {
@@ -124,7 +127,13 @@ export default function RankMap({
   targetBusiness,
   onSelect,
   onPickCenter,
+  compareDeltas,
 }: RankMapProps) {
+  const deltas = useMemo(() => {
+    const map = new Map<string, PointDelta>()
+    for (const row of compareDeltas ?? []) map.set(row.id, row)
+    return map
+  }, [compareDeltas])
   const center = useMemo(() => {
     if (points.length === 0) return { lat: 30.2672, lng: -97.7431 }
     const mid = points[Math.floor(points.length / 2)]
@@ -181,12 +190,38 @@ export default function RankMap({
           loading,
           scanned,
         })
+        const delta = deltas.get(point.id)
+        const compareLabel =
+          delta && !loading
+            ? delta.appeared
+              ? "new"
+              : delta.disappeared
+                ? "lost"
+                : formatRankDelta(delta.delta)
+            : label
+        const compareFill =
+          delta && !loading
+            ? delta.delta != null && delta.delta < 0
+              ? "#166534"
+              : delta.delta != null && delta.delta > 0
+                ? "#b91c1c"
+                : delta.appeared
+                  ? "#166534"
+                  : delta.disappeared
+                    ? "#b91c1c"
+                    : fill
+            : fill
 
         return (
           <Marker
-            key={`${point.id}-${label}-${fill}-${selected}`}
+            key={`${point.id}-${compareLabel}-${compareFill}-${selected}`}
             position={[point.lat, point.lng]}
-            icon={pinIcon(fill, loading || !scanned ? "#0f172a" : tone.text, label, selected)}
+            icon={pinIcon(
+              compareFill,
+              loading || !scanned ? "#0f172a" : delta ? "#ffffff" : tone.text,
+              compareLabel,
+              selected
+            )}
             eventHandlers={{
               click: () => onSelect(point.id),
             }}
