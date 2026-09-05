@@ -66,6 +66,41 @@ const missingKeyword = parseGetFoundInquiry({
 })
 assert.equal(missingKeyword.ok, false)
 
+const emptyListing = parseGetFoundInquiry({
+  name: "Jordan Lee",
+  email: "owner@example.com",
+  phone: "5125550100",
+  businessName: "Lee Plumbing",
+  city: "Austin",
+  state: "TX",
+  website: "",
+  gbpListing: "",
+  primaryCategory: "Plumber",
+  keyword: "emergency plumber",
+  locationCount: "1",
+})
+assert.equal(emptyListing.ok, true)
+if (emptyListing.ok) {
+  assert.equal(emptyListing.data.gbpListing, "")
+  assert.equal(emptyListing.data.website, "")
+}
+
+const omittedListing = parseGetFoundInquiry({
+  name: "Jordan Lee",
+  email: "owner@example.com",
+  phone: "5125550100",
+  businessName: "Lee Plumbing",
+  city: "Austin",
+  state: "TX",
+  primaryCategory: "Plumber",
+  keyword: "emergency plumber",
+  locationCount: "1",
+})
+assert.equal(omittedListing.ok, true)
+if (omittedListing.ok) {
+  assert.equal(omittedListing.data.gbpListing, "")
+}
+
 assert.equal(parseCostPerLeadUsd(undefined), DEFAULT_COST_PER_LEAD_USD)
 assert.equal(parseCostPerLeadUsd("75.5"), 75.5)
 assert.equal(parseCostPerLeadUsd(0), 0)

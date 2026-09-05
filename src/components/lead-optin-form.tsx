@@ -107,14 +107,13 @@ export function LeadOptInForm() {
             disabled={pending}
           />
         </Field>
-        <Field label="Google Business Profile URL or listing name" htmlFor="lead-gbp">
+        <Field label="Google Business Profile URL or listing name (optional)" htmlFor="lead-gbp">
           <Input
             id="lead-gbp"
             name="gbpListing"
             placeholder="maps.google.com/… or Joe’s Plumbing"
             value={gbpListing}
             onChange={(event) => setGbpListing(event.target.value)}
-            required
             disabled={pending}
           />
         </Field>
@@ -185,8 +184,8 @@ export function LeadOptInForm() {
         </p>
       ) : (
         <p className="text-xs leading-5 text-muted-foreground">
-          Name, email, phone, business, city, state, listing, category, keyword, and locations are
-          required. Consent is required to submit.
+          Name, email, phone, business, city, state, category, keyword, and locations are required.
+          Website and Google listing are optional. Consent is required to submit.
         </p>
       )}
       <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={pending}>

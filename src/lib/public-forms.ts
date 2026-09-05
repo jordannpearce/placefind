@@ -99,13 +99,13 @@ export function parseGetFoundInquiry(
   const website = parseWebsite(body.website)
   if (!website.ok) return website
 
-  const gbpListing = asString(body.gbpListing)
+  const gbpListing = asString(body.gbpListing) || asString(body.gbpUrl)
   const primaryCategory = asString(body.primaryCategory)
   const keyword = asString(body.keyword)
   const locationCount = body.locationCount
 
-  if (gbpListing.length < 2) {
-    return { ok: false, error: "Google Business Profile URL or listing name is required." }
+  if (gbpListing.length > 500) {
+    return { ok: false, error: "Google Business Profile URL or listing name is too long." }
   }
   if (primaryCategory.length < 2) {
     return { ok: false, error: "Primary category / type of business is required." }
