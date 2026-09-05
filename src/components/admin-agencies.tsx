@@ -294,7 +294,7 @@ export function AdminAgencies({
         <p className="mt-1 text-sm text-muted-foreground">
           An agency account is a user on the Pro (agency) plan. Add one with a password or an invite.
           A trial timer is the only free-use path — otherwise they stay locked until Paddle is
-          active. They do not inherit admin DataForSEO keys.
+          active. They do not inherit admin Maps API keys.
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <Field label="Name">

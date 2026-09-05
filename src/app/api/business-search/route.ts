@@ -77,7 +77,7 @@ export async function POST(request: Request) {
           ? "No listings matched that name in this city. Check the spelling, or pick a closer city."
           : hosted
             ? "No listings found. Confirm the business name, city, and state."
-            : "No listings found. Add DataForSEO keys in Settings to search live Google Maps, or confirm the name, city, and state."),
+            : "No listings found. Add Maps API keys in Settings to search live Google Maps, or confirm the name, city, and state."),
     })
   }
 
@@ -206,7 +206,7 @@ async function searchLiveMaps(
     hits.sort((a, b) => Number(namesMatch(b.title, name)) - Number(namesMatch(a.title, name)))
     return { hits, error: null }
   } catch {
-    return { hits: [], error: "Could not reach DataForSEO Maps search." }
+    return { hits: [], error: "Could not reach Maps search." }
   }
 }
 

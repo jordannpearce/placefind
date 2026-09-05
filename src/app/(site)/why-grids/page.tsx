@@ -42,7 +42,7 @@ const SECTIONS = [
     title: "When to scan again",
     body: [
       "After you change hours, categories, photos, or the primary name. After a competitor opens. After Google’s periodic local shifts. Daily or weekly schedules exist so you catch drift before the monthly report.",
-      "Do not scan a 13×13 on every typo. Each pin is a live Maps task on your DataForSEO account. Use a smaller grid to learn a location, then densify when you are deciding whether to spend on a neighborhood.",
+      "Do not scan a 13×13 on every typo. Each pin is a live Maps task. Use a smaller grid to learn a location, then densify when you are deciding whether to spend on a neighborhood.",
     ],
   },
 ]

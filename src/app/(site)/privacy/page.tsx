@@ -11,14 +11,14 @@ export default function PrivacyPage() {
   return (
     <LegalDoc
       title="Privacy Policy"
-      updated="September 2, 2026"
+      updated="September 5, 2026"
       lede="This policy explains what GridPins collects when you visit gridpins.com, create a workspace, run a grid scan, or receive mail from us."
     >
       <section className="space-y-3">
         <H>Information we collect</H>
         <P>
           Account data includes your name, email, password hash, company or agency, plan, and
-          optional DataForSEO login. Campaign data includes brand names, listing details, keywords,
+          optional Maps API login. Campaign data includes brand names, listing details, keywords,
           grid settings, and scan results you generate. If you write to us, we keep that
           correspondence. Contact and Get found forms collect name, email, phone, business name,
           city, state, and comments; those submissions go to hello@info.gridpins.com. Get found
@@ -44,9 +44,9 @@ export default function PrivacyPage() {
         <P>
           Hosting and the production database run on our cloud infrastructure. Transactional email
           may be sent through our email provider when that service is configured; otherwise messages
-          stay in an in-app outbox. Subscription payments are processed by Paddle. Live Maps lookups
-          go to DataForSEO with the credentials you provide. Those providers process data on our or
-          your instructions under their own terms.
+          stay in an in-app outbox. Subscription payments are processed by Paddle. Live Maps
+          lookups go to the Maps API provider you connect, using the credentials you provide.
+          Those providers process data on our or your instructions under their own terms.
         </P>
       </section>
       <section className="space-y-3">

@@ -151,16 +151,16 @@ assert(
   dataForSeoErrorMessage({
     status_code: 20000,
     tasks: [{ status_code: 40501, status_message: "Invalid Field: 'location_coordinate'." }],
-  }) === "DataForSEO 40501: Invalid Field: 'location_coordinate'",
+  }) === "Maps API 40501: Invalid Field: 'location_coordinate'",
   "task status_code wins over a top-level Ok"
 )
 assert(
   dataForSeoErrorMessage({ status_code: 40100, status_message: "Authorization Error." }, 401) ===
-    "DataForSEO 40100: Authorization Error",
+    "Maps API 40100: Authorization Error",
   "top-level auth errors keep the DFS code"
 )
 assert(
-  dataForSeoErrorMessage({}, 502) === "DataForSEO returned HTTP 502",
+  dataForSeoErrorMessage({}, 502) === "Maps API returned HTTP 502",
   "HTTP failures without a JSON body still surface"
 )
 assert(
@@ -271,7 +271,7 @@ assert(
 )
 
 assert(pinMark({ loading: true }) === "…", "loading pin is not blank")
-assert(pinMark({ error: "DataForSEO 40100: Authorization Error", scanned: true }) === "!", "error pin")
+assert(pinMark({ error: "Maps API 40100: Authorization Error", scanned: true }) === "!", "error pin")
 assert(pinMark({ rank: 7, scanned: true }) === "7", "ranked pin shows the number")
 assert(pinMark({ rank: null, scanned: true }) === "—", "outside-pack pin shows an em dash")
 assert(pinMark({ scanned: false }) === "·", "unscanned pin still has a glyph")

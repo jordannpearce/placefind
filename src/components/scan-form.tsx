@@ -342,7 +342,7 @@ export function ScanForm({
                 setSearchError(
                   liveConfigured || usesHostedMaps
                     ? "No listings came back from Maps for that name and city. Check spelling, or try the city only."
-                    : "No listings found. Save your DataForSEO keys in Settings, then search again — sample search only knows Austin coffee shops."
+                    : "No listings found. Save your Maps API keys in Settings, then search again — sample search only knows Austin coffee shops."
                 )
               }
             } catch (error) {
@@ -507,8 +507,8 @@ export function ScanForm({
           <span className="font-medium text-foreground">Use sample data</span>
           <span className="mt-0.5 block text-muted-foreground">
             {liveConfigured
-              ? "Skip DataForSEO and run the mock engine."
-              : "Add your DataForSEO keys in Settings to run live Maps scans."}
+              ? "Skip the live Maps API and run the mock engine."
+              : "Add your Maps API keys in Settings to run live Maps scans."}
           </span>
         </span>
       </label>
@@ -522,7 +522,7 @@ export function ScanForm({
           ? " against the mock engine."
           : usesHostedMaps
             ? "."
-            : ` to your DataForSEO account (~$${allCost.toFixed(3)}).`}
+            : ` to your Maps API account (~$${allCost.toFixed(3)}).`}
       </div>
       {usesHostedMaps && scanQuota?.applies ? (
         <p className="text-[11px] leading-4 text-muted-foreground">

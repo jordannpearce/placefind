@@ -933,7 +933,7 @@ export function TrackerApp() {
                   : "bg-amber-100 text-amber-900"
               )}
             >
-              {modeLabel === "live" ? "DataForSEO live" : "Sample data"}
+              {modeLabel === "live" ? "Maps live" : "Sample data"}
             </span>
           )}
           {usesHostedMaps ? null : (
@@ -941,7 +941,7 @@ export function TrackerApp() {
               variant="ghost"
               size="icon-sm"
               onClick={() => setSettingsOpen(true)}
-              aria-label="DataForSEO API settings"
+              aria-label="Maps API settings"
             >
               <Settings />
             </Button>
@@ -1124,7 +1124,7 @@ export function TrackerApp() {
             <DialogTitle>How a Maps grid scan works</DialogTitle>
             <DialogDescription>
               Google ranks local results differently from each GPS point. GridPins samples a
-              lattice of coordinates and asks DataForSEO for the Maps SERP at every pin.
+              lattice of coordinates and asks Maps for the local results at every pin.
             </DialogDescription>
           </DialogHeader>
           <ol className="list-decimal space-y-2 pl-4 text-sm">
@@ -1144,8 +1144,8 @@ export function TrackerApp() {
             <li>Color the square by rank so the map shows where you own the local pack.</li>
           </ol>
           <p className="text-xs text-muted-foreground">
-            Add your DataForSEO login in Settings, or leave keys empty to run sample Austin
-            coffee rankings. Each campaign stores a brand, location, keywords, grid, radius, and
+            Add your Maps API login in Settings, or leave keys empty to run sample Austin coffee
+            rankings. Each campaign stores a brand, location, keywords, grid, radius, and
             schedule. Switch keywords on the map after a scan to compare ranks.
           </p>
         </DialogContent>
