@@ -9,6 +9,7 @@ import {
   SCAN_QUOTA_EXHAUSTED,
   scanQuotaForRole,
   scanQuotaSnapshot,
+  starterSafeMessage,
   usesHostedMaps,
 } from "../src/lib/scan-quota.ts"
 import type { User } from "../src/lib/types.ts"
@@ -126,5 +127,11 @@ assert.equal(pro.extraScanCredits, 3)
 const enterprise = user({ plan: "enterprise" })
 assert.equal(usesHostedMaps(enterprise), false)
 assert.equal(consumeScanCredit(enterprise, now).ok, true)
+
+assert.equal(
+  starterSafeMessage("DataForSEO 40102: No Search Results"),
+  "This pin could not be scanned. Try again."
+)
+assert.equal(starterSafeMessage("No listings at this pin."), "No listings at this pin.")
 
 console.log("scan quota checks passed")

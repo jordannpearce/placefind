@@ -157,7 +157,7 @@ export function AccountForm({ user }: { user: PublicUser }) {
           <p className="text-xs text-muted-foreground">
             {PLANS[plan].name} covers {limit} campaign{limit === 1 ? "" : "s"} at ${total}/month.
             {plan === "starter"
-              ? ` ${STARTER_INCLUDED_SCANS} live scans included each month. Extra scans are $5 each.`
+              ? ` ${STARTER_INCLUDED_SCANS} Maps scans included each month. Extra scans are $5 each.`
               : " Extra $5 campaign slots are only on Pro."}
           </p>
         )}

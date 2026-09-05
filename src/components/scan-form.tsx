@@ -340,15 +340,15 @@ export function ScanForm({
               setHits(next)
               if (next.length === 0) {
                 setSearchError(
-                  liveConfigured
+                  liveConfigured || usesHostedMaps
                     ? "No listings came back from Maps for that name and city. Check spelling, or try the city only."
-                    : usesHostedMaps
-                      ? "No listings found. Live Maps is included — if hosted search is down, sample search only knows Austin coffee shops."
-                      : "No listings found. Save your DataForSEO keys in Settings, then search again — sample search only knows Austin coffee shops."
+                    : "No listings found. Save your DataForSEO keys in Settings, then search again — sample search only knows Austin coffee shops."
                 )
               }
             } catch (error) {
-              setSearchError(error instanceof Error ? error.message : "Search failed")
+              const raw = error instanceof Error ? error.message : "Search failed"
+              setSearchError(usesHostedMaps && /dataforseo/i.test(raw) ? "Search failed. Try again." : raw)
+            }
             } finally {
               setSearching(false)
             }
@@ -495,6 +495,7 @@ export function ScanForm({
         </Field>
       </div>
 
+      {usesHostedMaps ? null : (
       <label className="flex items-start gap-2 rounded-xl border bg-card/70 px-3 py-2.5 text-xs leading-5">
         <input
           type="checkbox"
@@ -506,14 +507,13 @@ export function ScanForm({
         <span>
           <span className="font-medium text-foreground">Use sample data</span>
           <span className="mt-0.5 block text-muted-foreground">
-            {usesHostedMaps
-              ? "Live Maps included — no key required."
-              : liveConfigured
-                ? "Skip DataForSEO and run the mock engine."
-                : "Add your DataForSEO keys in Settings to run live Maps scans."}
+            {liveConfigured
+              ? "Skip DataForSEO and run the mock engine."
+              : "Add your DataForSEO keys in Settings to run live Maps scans."}
           </span>
         </span>
       </label>
+      )}
 
       <div className="rounded-xl bg-muted/70 px-3 py-2.5 text-xs text-muted-foreground">
         {keywordCount > 1

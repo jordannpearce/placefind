@@ -9,6 +9,14 @@ export const SCAN_SESSION_MS = 45 * 60 * 1000
 export const SCAN_QUOTA_EXHAUSTED =
   "You've used this month's 5 included scans. Buy extra scans for $5 each on Account."
 
+/** Starter-facing copy must never name the Maps vendor. */
+export function starterSafeMessage(message: string) {
+  const text = message.trim()
+  if (!text) return "Scan failed"
+  if (/dataforseo/i.test(text)) return "This pin could not be scanned. Try again."
+  return text
+}
+
 export function usesHostedMaps(user: Pick<User, "role" | "plan">): boolean {
   return user.role !== "admin" && user.plan === "starter"
 }

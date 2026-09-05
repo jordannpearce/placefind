@@ -99,9 +99,8 @@ export function ExtraScanBuy({ quota }: ExtraScanBuyProps) {
     <section className="space-y-3 rounded-2xl border bg-card p-5">
       <h2 className="font-heading text-2xl">Live Maps scans</h2>
       <p className="text-sm text-muted-foreground">
-        Starter includes {STARTER_INCLUDED_SCANS} live grid scans each calendar month. Extra scans
-        are ${EXTRA_SCAN_PRICE} each and stay until you use them. Maps runs on GridPins — you do
-        not enter an API key.
+        Starter includes {STARTER_INCLUDED_SCANS} Maps grid scans each calendar month. Extra scans
+        are ${EXTRA_SCAN_PRICE} each and stay until you use them.
       </p>
       <p className="text-sm">
         {remaining} scan{remaining === 1 ? "" : "s"} left this month

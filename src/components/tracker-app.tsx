@@ -53,6 +53,7 @@ import {
   uniqueCampaignName,
 } from "@/lib/storage"
 import { campaignLimit as planCampaignLimit, campaignLimitMessage } from "@/lib/plans"
+import { starterSafeMessage } from "@/lib/scan-quota"
 import type {
   ApiSettings,
   BusinessCandidate,
@@ -612,7 +613,9 @@ export function TrackerApp() {
                 if (response.status === 401 || response.status === 402) {
                   abortRef.current = true
                 }
-                if (message !== "Cancelled") setScanError(message)
+                if (message !== "Cancelled") {
+                  setScanError(usesHostedMaps ? starterSafeMessage(message) : message)
+                }
                 return placeholderPoint({
                   id: point.id,
                   lat: point.lat,
@@ -624,7 +627,7 @@ export function TrackerApp() {
               }
               if (payload.mode) setModeLabel(payload.mode)
               if (payload.error && payload.error !== "Cancelled") {
-                setScanError(payload.error)
+                setScanError(usesHostedMaps ? starterSafeMessage(payload.error) : payload.error)
               }
               return { ...payload, id: payload.id || point.id }
             } catch (error) {
@@ -921,16 +924,18 @@ export function TrackerApp() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "hidden rounded-full px-2.5 py-1 text-[11px] font-medium sm:inline-flex",
-              modeLabel === "live"
-                ? "bg-emerald-100 text-emerald-800"
-                : "bg-amber-100 text-amber-900"
-            )}
-          >
-            {modeLabel === "live" ? "DataForSEO live" : "Sample data"}
-          </span>
+          {usesHostedMaps ? null : (
+            <span
+              className={cn(
+                "hidden rounded-full px-2.5 py-1 text-[11px] font-medium sm:inline-flex",
+                modeLabel === "live"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-amber-100 text-amber-900"
+              )}
+            >
+              {modeLabel === "live" ? "DataForSEO live" : "Sample data"}
+            </span>
+          )}
           {usesHostedMaps ? null : (
             <Button
               variant="ghost"
@@ -941,14 +946,16 @@ export function TrackerApp() {
               <Settings />
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setHelpOpen(true)}
-            aria-label="How grid tracking works"
-          >
-            <Info />
-          </Button>
+          {usesHostedMaps ? null : (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setHelpOpen(true)}
+              aria-label="How grid tracking works"
+            >
+              <Info />
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -1110,6 +1117,7 @@ export function TrackerApp() {
           {resultsPanel}
         </SheetContent>
       </Sheet>
+      {usesHostedMaps ? null : (
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -1136,12 +1144,13 @@ export function TrackerApp() {
             <li>Color the square by rank so the map shows where you own the local pack.</li>
           </ol>
           <p className="text-xs text-muted-foreground">
-            {usesHostedMaps
-              ? "Starter includes live Maps scans — no API key to enter. Extra scans are $5 on Account. Each campaign stores a brand, location, keywords, grid, radius, and schedule. Switch keywords on the map after a scan to compare ranks."
-              : "Add your DataForSEO login in Settings, or leave keys empty to run sample Austin coffee rankings. Each campaign stores a brand, location, keywords, grid, radius, and schedule. Switch keywords on the map after a scan to compare ranks."}
+            Add your DataForSEO login in Settings, or leave keys empty to run sample Austin
+            coffee rankings. Each campaign stores a brand, location, keywords, grid, radius, and
+            schedule. Switch keywords on the map after a scan to compare ranks.
           </p>
         </DialogContent>
       </Dialog>
+      )}
       {usesHostedMaps ? null : (
         <SettingsDialog
           open={settingsOpen}

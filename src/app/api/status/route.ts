@@ -1,7 +1,7 @@
 import { rejectUnlessSoftwareAccess } from "@/lib/billing-gate"
 import { requireUser } from "@/lib/auth-guard"
 import { resolveRequestAuth, verifyDataForSeoAuth } from "@/lib/dataforseo"
-import { usesHostedMaps } from "@/lib/scan-quota"
+import { starterSafeMessage, usesHostedMaps } from "@/lib/scan-quota"
 
 export async function GET() {
   const blocked = await rejectUnlessSoftwareAccess()
@@ -19,8 +19,8 @@ export async function GET() {
     mode: live ? "live" : "mock",
     message: hosted
       ? live
-        ? "Live Maps included — no API key required."
-        : "Hosted Maps is not available right now. You can still run sample data."
+        ? "Maps scans are ready."
+        : "Maps scans are unavailable right now."
       : live
         ? "DataForSEO credentials found."
         : "Add your DataForSEO login and password in Settings, or use sample data.",
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       mode: "mock",
       ok: false,
       message: hosted
-        ? "Hosted Maps is not available right now. You can still run sample data."
+        ? "Maps scans are unavailable right now."
         : "No DataForSEO credentials. Scans will use sample data.",
     })
   }
@@ -65,8 +65,8 @@ export async function POST(request: Request) {
     ok: check.ok,
     message: hosted
       ? check.ok
-        ? "Live Maps included — no API key required."
-        : check.message
+        ? "Maps scans are ready."
+        : starterSafeMessage(check.message)
       : check.message,
   })
 }
