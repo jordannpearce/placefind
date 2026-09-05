@@ -6,11 +6,18 @@ import {
   normalizeAiBrand,
   parseBrandForm,
   refundPromptScan,
+  scanLocationForBrand,
   upsertBrandPrompt,
 } from "../src/lib/ai-visibility.ts"
 import { canonicalAiLocation, composeBrandAddress, parseLegacyAddress } from "../src/lib/maps-location.ts"
 import { AI_SCANS_PER_PROMPT } from "../src/lib/plans.ts"
-import { analyzeAnswer, mockCloroScan, signalLabels } from "../src/lib/cloro.ts"
+import {
+  analyzeAnswer,
+  mockCloroScan,
+  scanBrandShowing,
+  scanCompetitorsShowing,
+  signalLabels,
+} from "../src/lib/cloro.ts"
 
 const brand = normalizeAiBrand({
   id: "ai_brand_test",
@@ -49,6 +56,8 @@ assert.equal(parsed.city, "Austin")
 assert.equal(parsed.state, "TX")
 assert.equal(missingBrandLocation({ city: "", state: "TX" }), "Enter the city.")
 assert.equal(canonicalAiLocation("Austin", "TX"), "Austin,Texas,United States")
+assert.equal(scanLocationForBrand(parsed), "Austin,Texas,United States")
+assert.equal(missingBrandLocation({ city: "Austin", state: "" }), "Choose a state.")
 assert.equal(composeBrandAddress(parsed), "1200 Congress Ave, Austin, TX 78701")
 assert.deepEqual(parseLegacyAddress("1200 Congress Ave, Austin, TX 78701"), {
   street: "1200 Congress Ave",

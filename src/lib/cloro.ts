@@ -1,6 +1,5 @@
 import type {
   AiBrand,
-  AiCompetitor,
   AiCompetitorHit,
   AiEngineId,
   AiMatchSignals,
@@ -182,7 +181,7 @@ export function analyzeAnswer(input: {
     excerpt: mentioned ? excerptAround(text, excerptTerm) : text.slice(0, 220).trim(),
     answer: clipAnswer(text),
     sources,
-    competitors: [...watched, ...discoveredCompetitors({ text, haystack, sources, brand: input.brand, watched })],
+    competitors: [...watched, ...discoveredCompetitors({ haystack, sources, brand: input.brand, watched })],
     error: input.error || null,
   }
 }
@@ -206,7 +205,6 @@ function looksLikeDirectory(label: string, url: string) {
 }
 
 function discoveredCompetitors(input: {
-  text: string
   haystack: string
   sources: AiSource[]
   brand: BrandCheck
@@ -326,7 +324,6 @@ export function mockCloroScan(input: { brand: BrandCheck; engines?: AiEngineId[]
 }
 
 function engineGeoBody(input: {
-  engine: AiEngineId
   prompt: string
   country: string
   location?: string
@@ -337,9 +334,10 @@ function engineGeoBody(input: {
     country: input.country,
     include: { markdown: true },
   }
-  if (input.engine === "aimode" && input.location) {
+  if (input.location) {
     body.location = input.location
-  } else if (input.state) {
+  }
+  if (input.state) {
     body.state = input.state
   }
   return body
@@ -361,7 +359,6 @@ async function fetchEngine(input: {
     },
     body: JSON.stringify(
       engineGeoBody({
-        engine: input.engine,
         prompt: input.prompt,
         country: input.country,
         location: input.location,
