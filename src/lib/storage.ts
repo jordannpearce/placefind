@@ -4,14 +4,15 @@ import {
   normalizeRadiusMiles,
   spacingFromRadius,
 } from "./grid"
-import { normalizeWorkspaceScans, toKeywordResults } from "./scan-results"
+import { latestKeywordResults, normalizeWorkspaceScans } from "./scan-results"
 import type {
   ApiSettings,
   Campaign,
   KeywordResults,
-  PointResult,
   ScanConfig,
+  ScanRun,
   ScheduleCadence,
+  WorkspaceScans,
 } from "./types"
 
 const SETTINGS_KEY = "gridpin.settings"
@@ -348,7 +349,7 @@ export function configToCampaignPatch(config: ScanConfig): Partial<Campaign> {
   }
 }
 
-export function loadAllScans(): Record<string, KeywordResults> {
+export function loadAllScans(): WorkspaceScans {
   if (typeof window === "undefined") return {}
   try {
     const raw = window.localStorage.getItem(SCANS_KEY)
@@ -359,25 +360,25 @@ export function loadAllScans(): Record<string, KeywordResults> {
   }
 }
 
+export function loadScanHistory(campaignId: string): ScanRun[] {
+  return loadAllScans()[campaignId] ?? []
+}
+
 export function loadScans(campaignId: string): KeywordResults {
-  return loadAllScans()[campaignId] ?? {}
+  return latestKeywordResults(loadScanHistory(campaignId))
 }
 
-export function saveAllScans(scans: Record<string, KeywordResults>) {
+export function saveAllScans(scans: WorkspaceScans) {
   if (typeof window === "undefined") return
-  const all: Record<string, Record<string, PointResult[]>> = {}
-  for (const [campaignId, byKeyword] of Object.entries(scans)) {
-    all[campaignId] = Object.fromEntries(
-      Object.entries(byKeyword).map(([keyword, byId]) => [keyword, Object.values(byId)])
-    )
-  }
-  window.localStorage.setItem(SCANS_KEY, JSON.stringify(all))
+  window.localStorage.setItem(SCANS_KEY, JSON.stringify(scans))
 }
 
-export function saveScans(campaignId: string, scans: KeywordResults) {
+export function saveScans(campaignId: string, scans: KeywordResults | ScanRun[]) {
   if (typeof window === "undefined") return
   const all = loadAllScans()
-  all[campaignId] = toKeywordResults(scans)
+  all[campaignId] = Array.isArray(scans)
+    ? scans
+    : normalizeWorkspaceScans({ [campaignId]: scans }, [campaignId])[campaignId] ?? []
   saveAllScans(all)
 }
 

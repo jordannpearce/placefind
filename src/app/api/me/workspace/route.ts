@@ -96,7 +96,7 @@ export async function PUT(request: Request) {
       )
       const next: typeof current.scans = {}
       for (const campaign of current.campaigns) {
-        next[campaign.id] = incoming[campaign.id] ?? current.scans[campaign.id] ?? {}
+        next[campaign.id] = incoming[campaign.id] ?? current.scans[campaign.id] ?? []
       }
       current.scans = next
     }

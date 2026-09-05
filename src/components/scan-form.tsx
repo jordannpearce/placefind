@@ -15,6 +15,7 @@ import type {
   DeviceType,
   GridSize,
   ScanConfig,
+  ScanRun,
   ScheduleCadence,
 } from "@/lib/types"
 
@@ -38,6 +39,11 @@ type ScanFormProps = {
   campaignLimit: number
   campaignLimitError: string | null
   canBypassCampaignLimit: boolean
+  savedScans: ScanRun[]
+  viewingScanId: string
+  compareScanId: string
+  onViewScan: (id: string) => void
+  onCompareScan: (id: string) => void
 }
 
 export function ScanForm({
@@ -60,6 +66,11 @@ export function ScanForm({
   campaignLimit,
   campaignLimitError,
   canBypassCampaignLimit,
+  savedScans,
+  viewingScanId,
+  compareScanId,
+  onViewScan,
+  onCompareScan,
 }: ScanFormProps) {
   const [hits, setHits] = useState<BusinessCandidate[]>([])
   const [searching, setSearching] = useState(false)
@@ -158,6 +169,38 @@ export function ScanForm({
                 Last scan {formatWhen(active.lastScanAt)}
                 {active.schedule !== "manual" ? ` · next ${formatWhen(active.nextScanAt)}` : ""}
               </p>
+            ) : null}
+            {savedScans.length > 0 ? (
+              <div className="mt-3 space-y-2 rounded-xl border bg-card px-3 py-2.5">
+                <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                  Saved scans
+                </p>
+                <NativeSelect
+                  value={viewingScanId || savedScans[0]?.id || ""}
+                  onChange={onViewScan}
+                  options={savedScans.map((run, index) => ({
+                    value: run.id,
+                    label: `${index === 0 ? "Latest · " : ""}${formatWhen(run.createdAt)} · ${run.gridSize}×${run.gridSize}${run.mode === "live" ? "" : " · sample"}`,
+                  }))}
+                />
+                <NativeSelect
+                  value={compareScanId}
+                  onChange={onCompareScan}
+                  options={[
+                    { value: "", label: "Compare with… none" },
+                    ...savedScans
+                      .filter((run) => run.id !== (viewingScanId || savedScans[0]?.id))
+                      .map((run) => ({
+                        value: run.id,
+                        label: formatWhen(run.createdAt),
+                      })),
+                  ]}
+                />
+                <p className="text-[11px] leading-4 text-muted-foreground">
+                  Open a past run, or pick a second scan to see rank changes on the map and in
+                  Results.
+                </p>
+              </div>
             ) : null}
             {due ? (
               <p className="mt-1 rounded-lg bg-amber-100 px-2 py-1 text-[11px] text-amber-950">

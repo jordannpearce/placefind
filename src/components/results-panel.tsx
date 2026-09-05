@@ -6,6 +6,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { rankTone } from "@/lib/rank"
+import { formatRankDelta } from "@/lib/scan-compare"
+import type { ScanComparison } from "@/lib/scan-compare"
 import type { KeywordStatRow, PointResult, ScanStats } from "@/lib/types"
 
 type ResultsPanelProps = {
@@ -16,6 +18,7 @@ type ResultsPanelProps = {
   keywordStats: KeywordStatRow[]
   activeKeyword: string
   onSelectKeyword: (keyword: string) => void
+  comparison?: ScanComparison | null
 }
 
 export function ResultsPanel({
@@ -26,6 +29,7 @@ export function ResultsPanel({
   keywordStats,
   activeKeyword,
   onSelectKeyword,
+  comparison = null,
 }: ResultsPanelProps) {
   if (!stats) {
     return (
@@ -53,6 +57,7 @@ export function ResultsPanel({
         <TabsList className="w-full">
           <TabsTrigger value="pin">Selected pin</TabsTrigger>
           <TabsTrigger value="rivals">Competitors</TabsTrigger>
+          {comparison ? <TabsTrigger value="compare">Compare</TabsTrigger> : null}
           {keywordStats.length > 1 ? <TabsTrigger value="keywords">Keywords</TabsTrigger> : null}
         </TabsList>
         <TabsContent value="pin" className="min-h-0">
@@ -64,6 +69,11 @@ export function ResultsPanel({
             </p>
           )}
         </TabsContent>
+        {comparison ? (
+          <TabsContent value="compare" className="min-h-0">
+            <CompareDetail comparison={comparison} />
+          </TabsContent>
+        ) : null}
         <TabsContent value="rivals" className="min-h-0">
           <ScrollArea className="h-[min(420px,50vh)] pr-3">
             <div className="flex flex-col gap-2 pt-2">
@@ -134,6 +144,75 @@ export function ResultsPanel({
           </TabsContent>
         ) : null}
       </Tabs>
+    </div>
+  )
+}
+
+function CompareDetail({ comparison }: { comparison: ScanComparison }) {
+  const atrHint =
+    comparison.atrDelta == null
+      ? "Need ranks on both scans"
+      : comparison.atrDelta < 0
+        ? "Lower ATR is better"
+        : comparison.atrDelta > 0
+          ? "ATR got worse"
+          : "ATR unchanged"
+
+  return (
+    <div className="flex min-h-0 flex-col gap-3 pt-2">
+      <p className="text-[11px] leading-4 text-muted-foreground">
+        Current vs {new Date(comparison.previous.createdAt).toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })}{" "}
+        for “{comparison.keyword}”. Green pins improved (moved closer to #1).
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <StatCard
+          label="ATR change"
+          value={formatRankDelta(comparison.atrDelta)}
+          hint={atrHint}
+        />
+        <StatCard
+          label="Coverage"
+          value={
+            comparison.coverageDelta == null
+              ? "—"
+              : `${comparison.coverageDelta > 0 ? "+" : ""}${comparison.coverageDelta}%`
+          }
+          hint="Share of pins that found the listing"
+        />
+        <StatCard label="Improved" value={String(comparison.improved)} hint="Better rank" />
+        <StatCard label="Declined" value={String(comparison.declined)} hint="Worse rank" />
+      </div>
+      <ScrollArea className="h-[min(360px,42vh)] pr-3">
+        <div className="flex flex-col gap-1.5">
+          {comparison.points.map((point) => (
+            <div
+              key={point.id}
+              className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs"
+            >
+              <span className="font-mono text-[11px] text-muted-foreground">{point.id}</span>
+              <span>
+                {point.previousRank ?? "—"} → {point.currentRank ?? "—"}
+              </span>
+              <span
+                className={
+                  point.delta != null && point.delta < 0
+                    ? "font-medium text-emerald-700"
+                    : point.delta != null && point.delta > 0
+                      ? "font-medium text-red-700"
+                      : "text-muted-foreground"
+                }
+              >
+                {point.appeared ? "new" : point.disappeared ? "lost" : formatRankDelta(point.delta)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { hashPassword, verifyPassword } from "./password"
 import { parseTrialEndsAt } from "./paddle-access"
 import { clampExtraCampaigns, isPlanId } from "./plans"
 import { purgeUserAccount } from "./purge-user"
+import { normalizeWorkspaceScans } from "./scan-results"
 import { defaultCampaigns } from "./storage"
 import type {
   Agency,
@@ -256,7 +257,18 @@ function hydrate(raw: Partial<Database>): Database {
     users: (raw.users ?? []).map((user) => normalizeUser(user)),
     tokens: raw.tokens ?? [],
     emails: raw.emails ?? [],
-    workspaces: raw.workspaces ?? {},
+    workspaces: Object.fromEntries(
+      Object.entries(raw.workspaces ?? {}).map(([userId, workspace]) => [
+        userId,
+        {
+          ...workspace,
+          scans: normalizeWorkspaceScans(
+            workspace.scans,
+            (workspace.campaigns ?? []).map((campaign) => campaign.id)
+          ),
+        },
+      ])
+    ),
     agencies: raw.agencies ?? [],
     settings: {
       resendApiKey: raw.settings?.resendApiKey ?? "",
@@ -554,7 +566,10 @@ async function loadFromPostgres(): Promise<Database> {
           campaigns: row.campaigns,
           settings: row.settings,
           activeCampaignId: row.active_campaign_id,
-          scans: row.scans,
+          scans: normalizeWorkspaceScans(
+            row.scans,
+            Array.isArray(row.campaigns) ? row.campaigns.map((campaign) => campaign.id) : []
+          ),
         },
       ])
     ),

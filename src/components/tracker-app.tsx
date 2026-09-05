@@ -21,7 +21,15 @@ import { Progress } from "@/components/ui/progress"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { buildGrid, spacingFromRadius, suggestedZoom } from "@/lib/grid"
 import { mapPool } from "@/lib/pool"
-import { mergeWorkspaceScans, normalizeWorkspaceScans, placeholderPoint } from "@/lib/scan-results"
+import { compareScanRuns } from "@/lib/scan-compare"
+import {
+  createScanRun,
+  keywordResultsHavePoints,
+  latestKeywordResults,
+  mergeWorkspaceScans,
+  normalizeWorkspaceScans,
+  placeholderPoint,
+} from "@/lib/scan-results"
 import { computeStats } from "@/lib/stats"
 import {
   blankCampaign,
@@ -32,9 +40,10 @@ import {
   loadActiveCampaignId,
   loadAllScans,
   loadCampaigns,
-  loadScans,
+  loadScanHistory,
   loadSettings,
   saveAllScans,
+  formatWhen,
   nextScanAt,
   saveActiveCampaignId,
   saveCampaigns,
@@ -53,7 +62,9 @@ import type {
   PlanId,
   ScanConfig,
   ScanPointResponse,
+  WorkspaceScans,
 } from "@/lib/types"
+import { MAX_SCAN_HISTORY } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const RankMap = dynamic(() => import("@/components/rank-map"), {
@@ -91,9 +102,10 @@ export function TrackerApp() {
   const [campaigns, setCampaigns] = useState<Campaign[]>(workspace.campaigns)
   const [activeCampaignId, setActiveCampaignId] = useState(workspace.activeId)
   const [settings, setSettings] = useState<ApiSettings>(workspace.settings)
-  const [scansByCampaign, setScansByCampaign] = useState<Record<string, KeywordResults>>(
-    workspace.scans
-  )
+  const [scansByCampaign, setScansByCampaign] = useState<WorkspaceScans>(workspace.scans)
+  const [draftResults, setDraftResults] = useState<KeywordResults>({})
+  const [viewingScanId, setViewingScanId] = useState("")
+  const [compareScanId, setCompareScanId] = useState("")
   const [hydratedFromServer, setHydratedFromServer] = useState(false)
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -122,13 +134,20 @@ export function TrackerApp() {
   const [canBypassCampaignLimit, setCanBypassCampaignLimit] = useState(false)
   const [billingLock, setBillingLock] = useState<{ locked: boolean; billingUrl: string } | null>(null)
   const abortRef = useRef(false)
+  const draftRef = useRef<KeywordResults>({})
 
   const points = useMemo(
     () => buildGrid(config.center.lat, config.center.lng, config.gridSize, config.spacingMiles),
     [config.center.lat, config.center.lng, config.gridSize, config.spacingMiles]
   )
 
-  const scansByKeyword = scansByCampaign[activeCampaignId] ?? {}
+  const history = scansByCampaign[activeCampaignId] ?? []
+  const viewingRun = history.find((run) => run.id === viewingScanId) ?? history[0] ?? null
+  const compareRun = history.find((run) => run.id === compareScanId) ?? null
+  const scansByKeyword =
+    scanning && Object.keys(draftResults).length > 0
+      ? draftResults
+      : viewingRun?.results ?? latestKeywordResults(history)
   const results = scansByKeyword[config.activeKeyword] ?? {}
   const resultList = useMemo(() => Object.values(results), [results])
   const stats = resultList.length > 0 ? computeStats(resultList, config.targetBusiness) : null
@@ -142,6 +161,28 @@ export function TrackerApp() {
     if (rows.length === 0) return []
     return [{ keyword, stats: computeStats(rows, config.targetBusiness) }]
   })
+  const comparison =
+    !scanning && viewingRun && compareRun && viewingRun.id !== compareRun.id
+      ? compareScanRuns(compareRun, viewingRun, config.activeKeyword, config.targetBusiness)
+      : null
+  const mapPoints = useMemo(() => {
+    if (scanning || !viewingRun) return points
+    if (
+      viewingRun.center.lat &&
+      viewingRun.center.lng &&
+      (viewingRun.gridSize !== config.gridSize ||
+        Math.abs(viewingRun.center.lat - config.center.lat) > 0.00001 ||
+        Math.abs(viewingRun.center.lng - config.center.lng) > 0.00001)
+    ) {
+      return buildGrid(
+        viewingRun.center.lat,
+        viewingRun.center.lng,
+        viewingRun.gridSize,
+        spacingFromRadius(viewingRun.radiusMiles, viewingRun.gridSize)
+      )
+    }
+    return points
+  }, [config.center.lat, config.center.lng, config.gridSize, points, scanning, viewingRun])
 
   useEffect(() => {
     let cancelled = false
@@ -266,7 +307,13 @@ export function TrackerApp() {
               data.scans,
               (data.campaigns ?? []).map((campaign) => campaign.id)
             )
-            setScansByCampaign((current) => mergeWorkspaceScans(current, incoming))
+            setScansByCampaign((current) => {
+              const merged = mergeWorkspaceScans(current, incoming)
+              const activeId = data.activeCampaignId || workspace.activeId
+              const latest = merged[activeId]?.[0]
+              if (latest) setViewingScanId(latest.id)
+              return merged
+            })
           }
           if (data.plan) {
             const extras = data.extraCampaigns ?? 0
@@ -330,21 +377,13 @@ export function TrackerApp() {
     }
   }, [activeCampaignId, billingLock?.locked, campaigns, hydratedFromServer, scansByCampaign, settings])
 
-  const persistScans = useCallback((scans: Record<string, KeywordResults>) => {
+  const persistScans = useCallback((scans: WorkspaceScans) => {
     saveAllScans(scans)
   }, [])
 
-  const updateActiveScans = useCallback(
-    (updater: (current: KeywordResults) => KeywordResults) => {
-      if (!activeCampaignId) return
-      setScansByCampaign((all) => {
-        const next = { ...all, [activeCampaignId]: updater(all[activeCampaignId] ?? {}) }
-        persistScans(next)
-        return next
-      })
-    },
-    [activeCampaignId, persistScans]
-  )
+  const updateDraft = useCallback((updater: (current: KeywordResults) => KeywordResults) => {
+    setDraftResults((current) => updater(current))
+  }, [])
 
   const patchConfig = useCallback((next: Partial<ScanConfig>) => {
     if (!activeCampaignId) return
@@ -368,7 +407,7 @@ export function TrackerApp() {
       return merged
     })
     if (next.keywords) {
-      updateActiveScans((current) => {
+      updateDraft((current) => {
         const kept: KeywordResults = {}
         for (const keyword of next.keywords ?? []) {
           if (current[keyword]) kept[keyword] = current[keyword]
@@ -377,10 +416,10 @@ export function TrackerApp() {
       })
     }
     if (next.center || next.gridSize || next.spacingMiles || next.radiusMiles) {
-      updateActiveScans(() => ({}))
+      setDraftResults({})
       setSelectedId(null)
     }
-  }, [activeCampaignId, persistScans, updateActiveScans])
+  }, [activeCampaignId, updateDraft])
 
   const pickCenter = useCallback(
     async (lat: number, lng: number) => {
@@ -418,23 +457,23 @@ export function TrackerApp() {
       keywordIndex: 1,
       keywordCount: keywords.length,
     })
-    setScansByCampaign((all) => {
-      const current = { ...(all[activeCampaignId] ?? {}) }
-      for (const keyword of keywords) {
-        current[keyword] = Object.fromEntries(
-          points.map((point) => [
-            point.id,
-            placeholderPoint({
-              id: point.id,
-              lat: point.lat,
-              lng: point.lng,
-              zoom: config.zoom,
-            }),
-          ])
-        )
-      }
-      return { ...all, [activeCampaignId]: current }
-    })
+    const seeded: KeywordResults = {}
+    for (const keyword of keywords) {
+      seeded[keyword] = Object.fromEntries(
+        points.map((point) => [
+          point.id,
+          placeholderPoint({
+            id: point.id,
+            lat: point.lat,
+            lng: point.lng,
+            zoom: config.zoom,
+          }),
+        ])
+      )
+    }
+    setDraftResults(seeded)
+    draftRef.current = seeded
+    setCompareScanId("")
 
     try {
       for (let index = 0; index < keywords.length; index += 1) {
@@ -529,15 +568,13 @@ export function TrackerApp() {
             }
           },
           (result) => {
-            setScansByCampaign((all) => {
-              const current = all[activeCampaignId] ?? {}
-              return {
-                ...all,
-                [activeCampaignId]: {
-                  ...current,
-                  [keyword]: { ...current[keyword], [result.id]: result },
-                },
+            setDraftResults((current) => {
+              const next = {
+                ...current,
+                [keyword]: { ...current[keyword], [result.id]: result },
               }
+              draftRef.current = next
+              return next
             })
             setLoadingIds((current) => {
               const next = new Set(current)
@@ -559,10 +596,29 @@ export function TrackerApp() {
         activeKeyword: keywords.includes(originalKeyword) ? originalKeyword : keywords[0],
       }))
       const finishedAt = new Date()
-      setScansByCampaign((all) => {
-        persistScans(all)
-        return all
-      })
+      const draft = draftRef.current
+      if (activeCampaignId && keywordResultsHavePoints(draft)) {
+        const run = createScanRun({
+          results: draft,
+          gridSize: config.gridSize,
+          radiusMiles: config.radiusMiles,
+          center: config.center,
+          keywords,
+          mode: modeLabel,
+          createdAt: finishedAt.toISOString(),
+        })
+        setScansByCampaign((all) => {
+          const next = {
+            ...all,
+            [activeCampaignId]: [run, ...(all[activeCampaignId] ?? [])].slice(0, MAX_SCAN_HISTORY),
+          }
+          persistScans(next)
+          return next
+        })
+        setViewingScanId(run.id)
+      }
+      setDraftResults({})
+      draftRef.current = {}
       setCampaigns((current) => {
         const next = current.map((campaign) =>
           campaign.id === activeCampaignId
@@ -578,7 +634,7 @@ export function TrackerApp() {
         return next
       })
     }
-  }, [activeCampaignId, config, liveConfigured, persistScans, points, settings])
+  }, [activeCampaignId, config, liveConfigured, modeLabel, persistScans, points, settings])
 
   const cancelScan = useCallback(() => {
     abortRef.current = true
@@ -593,7 +649,14 @@ export function TrackerApp() {
     setActiveCampaignId(id)
     saveActiveCampaignId(id)
     setConfig(campaignToConfig(campaign, config.forceMock))
-    setScansByCampaign((all) => (all[id] ? all : { ...all, [id]: loadScans(id) }))
+    setScansByCampaign((all) => {
+      if (all[id]) return all
+      const stored = loadScanHistory(id)
+      return stored.length ? { ...all, [id]: stored } : { ...all, [id]: [] }
+    })
+    setViewingScanId(scansByCampaign[id]?.[0]?.id ?? loadScanHistory(id)[0]?.id ?? "")
+    setCompareScanId("")
+    setDraftResults({})
     setSelectedId(null)
   }
 
@@ -614,7 +677,10 @@ export function TrackerApp() {
     setActiveCampaignId(campaign.id)
     saveActiveCampaignId(campaign.id)
     setConfig({ ...emptyConfig(), forceMock: config.forceMock })
-    setScansByCampaign((all) => ({ ...all, [campaign.id]: {} }))
+    setScansByCampaign((all) => ({ ...all, [campaign.id]: [] }))
+    setViewingScanId("")
+    setCompareScanId("")
+    setDraftResults({})
     setSelectedId(null)
   }
 
@@ -631,10 +697,13 @@ export function TrackerApp() {
       persistScans(copy)
       return copy
     })
+    setDraftResults({})
+    setCompareScanId("")
     if (next.length === 0) {
       setActiveCampaignId("")
       saveActiveCampaignId("")
       setConfig({ ...emptyConfig(), forceMock: config.forceMock })
+      setViewingScanId("")
       setSelectedId(null)
       return
     }
@@ -642,6 +711,7 @@ export function TrackerApp() {
     setActiveCampaignId(fallback.id)
     saveActiveCampaignId(fallback.id)
     setConfig(campaignToConfig(fallback, config.forceMock))
+    setViewingScanId(scansByCampaign[fallback.id]?.[0]?.id ?? "")
     setSelectedId(null)
   }
 
@@ -706,6 +776,11 @@ export function TrackerApp() {
       campaignLimit={planLimits.campaignLimit}
       campaignLimitError={campaignLimitError}
       canBypassCampaignLimit={canBypassCampaignLimit}
+      savedScans={history}
+      viewingScanId={viewingRun?.id ?? ""}
+      compareScanId={compareScanId}
+      onViewScan={setViewingScanId}
+      onCompareScan={setCompareScanId}
     />
   )
 
@@ -718,6 +793,7 @@ export function TrackerApp() {
       keywordStats={keywordStats}
       activeKeyword={config.activeKeyword}
       onSelectKeyword={(keyword) => patchConfig({ activeKeyword: keyword })}
+      comparison={comparison}
     />
   )
 
@@ -813,15 +889,20 @@ export function TrackerApp() {
         <main className="relative min-h-[70vh] p-3 md:p-4">
           <div className="relative h-[calc(100svh-6.5rem)] overflow-hidden rounded-[28px] border shadow-sm">
             <RankMap
-              points={points}
+              points={mapPoints}
               results={results}
               loadingIds={loadingIds}
               selectedId={selectedId}
-              spacingMiles={config.spacingMiles}
+              spacingMiles={
+                viewingRun && !scanning
+                  ? spacingFromRadius(viewingRun.radiusMiles, viewingRun.gridSize)
+                  : config.spacingMiles
+              }
               placingCenter={placingCenter}
               targetBusiness={config.targetBusiness}
               onSelect={setSelectedId}
               onPickCenter={pickCenter}
+              compareDeltas={comparison?.points ?? null}
             />
             <div className="pointer-events-none absolute inset-x-0 top-0 z-[400] flex justify-between p-3">
               <div className="pointer-events-auto rounded-2xl bg-background/90 px-3 py-2 text-xs shadow-sm ring-1 ring-foreground/10 backdrop-blur">
@@ -833,6 +914,10 @@ export function TrackerApp() {
                 <p className="text-muted-foreground">
                   {config.gridSize}×{config.gridSize} · {config.radiusMiles.toFixed(1)} mi radius ·{" "}
                   {config.keywords.length} keyword{config.keywords.length === 1 ? "" : "s"}
+                  {viewingRun
+                    ? ` · ${scanning ? "scanning" : formatWhen(viewingRun.createdAt)}`
+                    : ""}
+                  {comparison ? " · comparing" : ""}
                 </p>
                 {stats ? (
                   <p className="text-muted-foreground">
