@@ -4,12 +4,17 @@ import { canReceivePaidLeads, isAgencyAccount } from "../src/lib/agency-account.
 import {
   applyLeadAssignment,
   applyInquiryToLead,
+  applyLeadStatus,
   costPerLeadUsd,
+  createAdminLead,
   DEFAULT_COST_PER_LEAD_USD,
+  isLeadStatus,
   leadAssignmentBlockedReason,
   leadFromInquiry,
   markLeadPaid,
   parseCostPerLeadUsd,
+  removeLead,
+  unassignLead,
 } from "../src/lib/leads.ts"
 import { isHoneypotTripped, parseGetFoundInquiry, parsePublicInquiry } from "../src/lib/public-forms.ts"
 import type { User } from "../src/lib/types.ts"
@@ -167,5 +172,36 @@ assert.equal(lead.leadPrice, 65)
 markLeadPaid(lead)
 assert.equal(lead.status, "paid")
 assert.equal(lead.invoiceStatus, "paid")
+
+const adminLead = createAdminLead(inquiry.data)
+assert.equal(adminLead.status, "new")
+assert.equal(adminLead.audienceSynced, false)
+assert.equal(adminLead.assignedToUserId, "")
+assert.equal(isLeadStatus("invoiced"), true)
+assert.equal(isLeadStatus("bogus"), false)
+
+const assignedCopy = createAdminLead(inquiry.data)
+applyLeadAssignment(assignedCopy, pro, 50, { ok: true, dryRun: true, transactionId: "dry_lead_edit" })
+const invoiceId = assignedCopy.paddleTransactionId
+applyInquiryToLead(assignedCopy, { ...inquiry.data, businessName: "Lee Plumbing West" }, false)
+assert.equal(assignedCopy.businessName, "Lee Plumbing West")
+assert.equal(assignedCopy.assignedToUserId, pro.id)
+assert.equal(assignedCopy.paddleTransactionId, invoiceId)
+assert.equal(assignedCopy.status, "invoiced")
+
+unassignLead(assignedCopy)
+assert.equal(assignedCopy.assignedToUserId, "")
+assert.equal(assignedCopy.assignedAt, null)
+assert.equal(assignedCopy.status, "new")
+assert.equal(assignedCopy.paddleTransactionId, invoiceId)
+
+applyLeadStatus(assignedCopy, "paid")
+assert.equal(assignedCopy.status, "paid")
+assert.equal(assignedCopy.invoiceStatus, "paid")
+
+const bucket = [adminLead, assignedCopy]
+assert.equal(removeLead(bucket, adminLead.id)?.id, adminLead.id)
+assert.equal(bucket.length, 1)
+assert.equal(removeLead(bucket, "missing"), null)
 
 console.log("ok get-found leads model, form parse, and assignment invoice states")

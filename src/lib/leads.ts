@@ -15,9 +15,13 @@ import type {
 export const DEFAULT_COST_PER_LEAD_USD = 50
 export const MAX_COST_PER_LEAD_USD = 10_000
 
-const LEAD_STATUSES: LeadStatus[] = ["new", "assigned", "invoiced", "paid"]
+export const LEAD_STATUSES: LeadStatus[] = ["new", "assigned", "invoiced", "paid"]
 const INVOICE_STATUSES: LeadInvoiceStatus[] = ["none", "invoiced", "failed", "paid"]
 const LOCATION_COUNTS: LocationCount[] = ["1", "2-5", "6+"]
+
+export function isLeadStatus(value: unknown): value is LeadStatus {
+  return typeof value === "string" && LEAD_STATUSES.includes(value as LeadStatus)
+}
 
 export function parseCostPerLeadUsd(value: unknown): number {
   const n = typeof value === "number" ? value : Number(typeof value === "string" ? value.trim() : value)
@@ -145,6 +149,35 @@ export function applyInquiryToLead(lead: MarketingLead, inquiry: GetFoundInquiry
   lead.keyword = inquiry.keyword
   lead.locationCount = inquiry.locationCount
   lead.audienceSynced = audienceSynced || lead.audienceSynced
+}
+
+/** Admin-entered lead. Same Get Found fields, status `new`, no marketing audience sync. */
+export function createAdminLead(inquiry: GetFoundInquiry): MarketingLead {
+  return leadFromInquiry(inquiry, false)
+}
+
+export function applyLeadStatus(lead: MarketingLead, status: LeadStatus) {
+  lead.status = status
+  if (status === "paid") {
+    lead.invoiceStatus = "paid"
+    lead.invoiceError = ""
+  }
+}
+
+/** Clear the agency assignment. Does not delete Paddle rows or invoice ids. */
+export function unassignLead(lead: MarketingLead) {
+  lead.assignedToUserId = ""
+  lead.assignedAt = null
+  if (lead.status === "assigned" || lead.status === "invoiced") {
+    lead.status = "new"
+  }
+}
+
+export function removeLead(leads: MarketingLead[], id: string): MarketingLead | null {
+  const index = leads.findIndex((item) => item.id === id)
+  if (index < 0) return null
+  const [removed] = leads.splice(index, 1)
+  return removed ?? null
 }
 
 export function paidLeadPlanLabel(plan: PlanId) {

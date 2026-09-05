@@ -1,8 +1,24 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { Plus } from "lucide-react"
+import { useCallback, useState } from "react"
 
+import {
+  AdminLeadFormFields,
+  adminLeadFormFromLead,
+  adminLeadPayload,
+  emptyAdminLeadForm,
+  type AdminLeadFormValue,
+} from "@/components/admin-lead-form"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { LeadStatus, MarketingLead, PlanId } from "@/lib/types"
@@ -23,6 +39,8 @@ type LeadsPayload = {
   agencies: AgencyOption[]
   error?: string
 }
+
+type Toast = { id: number; kind: "ok" | "err"; text: string }
 
 const STATUS_LABEL: Record<LeadStatus, string> = {
   new: "New",
@@ -56,17 +74,45 @@ function agencyLabel(agency: AgencyOption) {
   return `${shop} · ${agency.planLabel} · ${agency.email}`
 }
 
-export function AdminLeads() {
-  const [payload, setPayload] = useState<LeadsPayload | null>(null)
-  const [loading, setLoading] = useState(true)
+export function AdminLeads({ initial }: { initial: LeadsPayload }) {
+  const [payload, setPayload] = useState<LeadsPayload>(initial)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [cost, setCost] = useState("50")
+  const [cost, setCost] = useState(initial ? String(initial.costPerLeadUsd) : "50")
   const [savingCost, setSavingCost] = useState(false)
   const [selected, setSelected] = useState<MarketingLead | null>(null)
   const [assignTo, setAssignTo] = useState("")
   const [assigning, setAssigning] = useState(false)
-  const [actionError, setActionError] = useState<string | null>(null)
-  const [actionOk, setActionOk] = useState<string | null>(null)
+  const [unassigning, setUnassigning] = useState(false)
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const [formOpen, setFormOpen] = useState<"add" | "edit" | null>(null)
+  const [form, setForm] = useState<AdminLeadFormValue>(emptyAdminLeadForm)
+  const [formPending, setFormPending] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<MarketingLead | null>(null)
+  const [deletePending, setDeletePending] = useState(false)
+
+  const showToast = useCallback((kind: Toast["kind"], text: string) => {
+    const id = Date.now() + Math.floor(Math.random() * 1000)
+    setToasts((current) => [...current, { id, kind, text }])
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id))
+    }, 4500)
+  }, [])
+
+  function upsertLead(lead: MarketingLead) {
+    setSelected((current) => (current?.id === lead.id ? lead : current))
+    setPayload((current) =>
+      current
+        ? {
+            ...current,
+            leads: current.leads.some((item) => item.id === lead.id)
+              ? current.leads.map((item) => (item.id === lead.id ? lead : item))
+              : [lead, ...current.leads],
+          }
+        : current
+    )
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -84,15 +130,23 @@ export function AdminLeads() {
     }
   }, [])
 
-  useEffect(() => {
-    void load()
-  }, [load])
+  function openAdd() {
+    setForm(emptyAdminLeadForm())
+    setFormError(null)
+    setFormOpen("add")
+  }
+
+  function openEdit(lead: MarketingLead) {
+    setSelected(lead)
+    setAssignTo(lead.assignedToUserId)
+    setForm(adminLeadFormFromLead(lead))
+    setFormError(null)
+    setFormOpen("edit")
+  }
 
   async function saveCost(event: React.FormEvent) {
     event.preventDefault()
     setSavingCost(true)
-    setActionError(null)
-    setActionOk(null)
     try {
       const response = await fetch("/api/admin/leads", {
         method: "PUT",
@@ -105,19 +159,64 @@ export function AdminLeads() {
       setPayload((current) =>
         current ? { ...current, costPerLeadUsd: data.costPerLeadUsd ?? current.costPerLeadUsd } : current
       )
-      setActionOk(`Cost per lead is $${Number(data.costPerLeadUsd ?? cost).toFixed(2)}.`)
+      showToast("ok", `Cost per lead is $${Number(data.costPerLeadUsd ?? cost).toFixed(2)}.`)
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Could not save cost per lead.")
+      showToast("err", err instanceof Error ? err.message : "Could not save cost per lead.")
     } finally {
       setSavingCost(false)
+    }
+  }
+
+  async function saveForm(event: React.FormEvent) {
+    event.preventDefault()
+    setFormPending(true)
+    setFormError(null)
+    try {
+      if (formOpen === "add") {
+        const response = await fetch("/api/admin/leads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(adminLeadPayload(form, false)),
+        })
+        const data = (await response.json()) as { error?: string; lead?: MarketingLead }
+        if (!response.ok) throw new Error(data.error || "Could not add this lead.")
+        if (data.lead) {
+          upsertLead(data.lead)
+          setSelected(data.lead)
+          setAssignTo(data.lead.assignedToUserId)
+        }
+        setFormOpen(null)
+        showToast("ok", "Lead added.")
+        return
+      }
+
+      if (formOpen === "edit" && selected) {
+        const response = await fetch(`/api/admin/leads/${selected.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(adminLeadPayload(form, true)),
+        })
+        const data = (await response.json()) as { error?: string; lead?: MarketingLead }
+        if (!response.ok) throw new Error(data.error || "Could not save this lead.")
+        if (data.lead) {
+          upsertLead(data.lead)
+          setAssignTo(data.lead.assignedToUserId)
+        }
+        setFormOpen(null)
+        showToast("ok", "Lead updated.")
+      }
+    } catch (err) {
+      const text = err instanceof Error ? err.message : "Could not save this lead."
+      setFormError(text)
+      showToast("err", text)
+    } finally {
+      setFormPending(false)
     }
   }
 
   async function assignLead() {
     if (!selected) return
     setAssigning(true)
-    setActionError(null)
-    setActionOk(null)
     try {
       const response = await fetch(`/api/admin/leads/${selected.id}`, {
         method: "PATCH",
@@ -130,28 +229,62 @@ export function AdminLeads() {
         invoice?: { ok: boolean; dryRun?: boolean; error?: string }
       }
       if (!response.ok) throw new Error(data.error || "Could not assign this lead.")
-      if (data.lead) {
-        setSelected(data.lead)
-        setPayload((current) =>
-          current
-            ? {
-                ...current,
-                leads: current.leads.map((item) => (item.id === data.lead!.id ? data.lead! : item)),
-              }
-            : current
-        )
-      }
+      if (data.lead) upsertLead(data.lead)
       if (data.invoice && !data.invoice.ok) {
-        setActionError(data.invoice.error || "Assignment saved. Paddle invoice failed.")
+        showToast("err", data.invoice.error || "Assignment saved. Paddle invoice failed.")
       } else if (data.invoice?.dryRun) {
-        setActionOk("Assigned. Invoice recorded as a dry-run (no live charge).")
+        showToast("ok", "Assigned. Invoice recorded as a dry-run (no live charge).")
       } else {
-        setActionOk("Assigned and invoiced.")
+        showToast("ok", selected.assignedToUserId ? "Reassigned and invoiced." : "Assigned and invoiced.")
       }
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Could not assign this lead.")
+      showToast("err", err instanceof Error ? err.message : "Could not assign this lead.")
     } finally {
       setAssigning(false)
+    }
+  }
+
+  async function unassignSelected() {
+    if (!selected) return
+    setUnassigning(true)
+    try {
+      const response = await fetch(`/api/admin/leads/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unassign: true }),
+      })
+      const data = (await response.json()) as { error?: string; lead?: MarketingLead }
+      if (!response.ok) throw new Error(data.error || "Could not unassign this lead.")
+      if (data.lead) {
+        upsertLead(data.lead)
+        setAssignTo("")
+      }
+      showToast("ok", "Lead unassigned.")
+    } catch (err) {
+      showToast("err", err instanceof Error ? err.message : "Could not unassign this lead.")
+    } finally {
+      setUnassigning(false)
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return
+    setDeletePending(true)
+    try {
+      const response = await fetch(`/api/admin/leads/${deleting.id}`, { method: "DELETE" })
+      const data = (await response.json()) as { error?: string }
+      if (!response.ok) throw new Error(data.error || "Could not delete this lead.")
+      const deletedId = deleting.id
+      setPayload((current) =>
+        current ? { ...current, leads: current.leads.filter((item) => item.id !== deletedId) } : current
+      )
+      if (selected?.id === deletedId) setSelected(null)
+      setDeleting(null)
+      showToast("ok", "Lead deleted.")
+    } catch (err) {
+      showToast("err", err instanceof Error ? err.message : "Could not delete this lead.")
+    } finally {
+      setDeletePending(false)
     }
   }
 
@@ -160,6 +293,8 @@ export function AdminLeads() {
   const assignee = selected
     ? agencies.find((item) => item.id === selected.assignedToUserId)
     : undefined
+  const alreadyAssigned = Boolean(selected?.assignedToUserId)
+  const reassigning = alreadyAssigned && assignTo && assignTo !== selected?.assignedToUserId
 
   return (
     <div className="space-y-6">
@@ -196,12 +331,15 @@ export function AdminLeads() {
         </div>
       </form>
 
-      {actionError ? (
-        <p className="text-sm text-destructive" role="alert">
-          {actionError}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {loading ? "Loading…" : `${leads.length} lead${leads.length === 1 ? "" : "s"}`}
         </p>
-      ) : null}
-      {actionOk ? <p className="text-sm text-emerald-800">{actionOk}</p> : null}
+        <Button type="button" onClick={openAdd}>
+          <Plus />
+          Add lead
+        </Button>
+      </div>
 
       {loading ? (
         <div className="rounded-2xl border px-4 py-10 text-sm text-muted-foreground">Loading leads…</div>
@@ -214,57 +352,102 @@ export function AdminLeads() {
         </div>
       ) : leads.length === 0 ? (
         <div className="rounded-2xl border px-4 py-10 text-sm text-muted-foreground">
-          No Get Found leads yet. Submissions from /get-found show up here.
+          <p>No leads yet. Submissions from /get-found show up here, or add one manually.</p>
+          <Button className="mt-3" type="button" onClick={openAdd}>
+            <Plus />
+            Add lead
+          </Button>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="bg-muted/70 text-xs text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-medium">Business</th>
-                <th className="px-3 py-2 font-medium">Contact</th>
-                <th className="px-3 py-2 font-medium">Location</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leads.map((lead) => (
-                <tr
-                  key={lead.id}
-                  className="cursor-pointer border-t hover:bg-muted/40"
+        <>
+          <ul className="space-y-3 sm:hidden">
+            {leads.map((lead) => (
+              <li key={lead.id} className="rounded-2xl border bg-card p-4">
+                <button
+                  type="button"
+                  className="w-full text-left"
                   onClick={() => {
                     setSelected(lead)
                     setAssignTo(lead.assignedToUserId)
-                    setActionError(null)
-                    setActionOk(null)
                   }}
                 >
-                  <td className="px-3 py-3">
-                    <p className="font-medium">{lead.businessName || "Untitled"}</p>
-                    <p className="text-[11px] text-muted-foreground">{lead.primaryCategory || "No category"}</p>
-                  </td>
-                  <td className="px-3 py-3">
-                    <p>{lead.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{lead.email}</p>
-                  </td>
-                  <td className="px-3 py-3">
-                    {lead.city}, {lead.state}
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px]">
-                      {STATUS_LABEL[lead.status]}
-                    </span>
-                    {lead.invoiceStatus === "failed" ? (
-                      <p className="mt-1 text-[11px] text-destructive">Invoice failed</p>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-3 text-xs text-muted-foreground">{formatWhen(lead.createdAt)}</td>
+                  <p className="font-medium">{lead.businessName || "Untitled"}</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {lead.name} · {lead.email}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {lead.city}, {lead.state} · {STATUS_LABEL[lead.status]} · {formatWhen(lead.createdAt)}
+                  </p>
+                </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" size="xs" variant="outline" onClick={() => openEdit(lead)}>
+                    Edit
+                  </Button>
+                  <Button type="button" size="xs" variant="destructive" onClick={() => setDeleting(lead)}>
+                    Delete
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto rounded-2xl border sm:block">
+            <table className="w-full min-w-[800px] text-left text-sm">
+              <thead className="bg-muted/70 text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Business</th>
+                  <th className="px-3 py-2 font-medium">Contact</th>
+                  <th className="px-3 py-2 font-medium">Location</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium">Created</th>
+                  <th className="px-3 py-2 font-medium">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {leads.map((lead) => (
+                  <tr
+                    key={lead.id}
+                    className="cursor-pointer border-t hover:bg-muted/40"
+                    onClick={() => {
+                      setSelected(lead)
+                      setAssignTo(lead.assignedToUserId)
+                    }}
+                  >
+                    <td className="px-3 py-3">
+                      <p className="font-medium">{lead.businessName || "Untitled"}</p>
+                      <p className="text-[11px] text-muted-foreground">{lead.primaryCategory || "No category"}</p>
+                    </td>
+                    <td className="px-3 py-3">
+                      <p>{lead.name}</p>
+                      <p className="text-[11px] text-muted-foreground">{lead.email}</p>
+                    </td>
+                    <td className="px-3 py-3">
+                      {lead.city}, {lead.state}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px]">
+                        {STATUS_LABEL[lead.status]}
+                      </span>
+                      {lead.invoiceStatus === "failed" ? (
+                        <p className="mt-1 text-[11px] text-destructive">Invoice failed</p>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-3 text-xs text-muted-foreground">{formatWhen(lead.createdAt)}</td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
+                        <Button type="button" size="xs" variant="outline" onClick={() => openEdit(lead)}>
+                          Edit
+                        </Button>
+                        <Button type="button" size="xs" variant="destructive" onClick={() => setDeleting(lead)}>
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {selected ? (
@@ -279,9 +462,17 @@ export function AdminLeads() {
                 {STATUS_LABEL[selected.status]} · {invoiceLabel(selected)} · {formatWhen(selected.createdAt)}
               </p>
             </div>
-            <Button type="button" variant="outline" onClick={() => setSelected(null)}>
-              Close
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={() => openEdit(selected)}>
+                Edit
+              </Button>
+              <Button type="button" variant="destructive" onClick={() => setDeleting(selected)}>
+                Delete
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setSelected(null)}>
+                Close
+              </Button>
+            </div>
           </div>
 
           <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
@@ -344,10 +535,28 @@ export function AdminLeads() {
                   ))}
                 </select>
                 <Button type="button" disabled={assigning || !assignTo} onClick={() => void assignLead()}>
-                  {assigning ? "Assigning…" : "Assign & invoice"}
+                  {assigning
+                    ? reassigning
+                      ? "Reassigning…"
+                      : "Assigning…"
+                    : reassigning
+                      ? "Reassign & invoice"
+                      : "Assign & invoice"}
                 </Button>
               </div>
+              {alreadyAssigned ? (
+                <Button
+                  className="mt-3"
+                  type="button"
+                  variant="outline"
+                  disabled={unassigning}
+                  onClick={() => void unassignSelected()}
+                >
+                  {unassigning ? "Unassigning…" : "Unassign"}
+                </Button>
+              ) : null}
               <p className="mt-2 text-xs text-muted-foreground">
+                Saving field edits does not invoice. Assign or Reassign creates the Paddle invoice.
                 Starter / Entry accounts cannot receive paid leads. A failed invoice still keeps the
                 assignment.
               </p>
@@ -355,6 +564,79 @@ export function AdminLeads() {
           ) : null}
         </div>
       ) : null}
+
+      <Dialog open={formOpen !== null} onOpenChange={(open) => !open && setFormOpen(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <form onSubmit={saveForm}>
+            <DialogHeader>
+              <DialogTitle>{formOpen === "edit" ? "Edit lead" : "Add lead"}</DialogTitle>
+              <DialogDescription>
+                {formOpen === "edit"
+                  ? "Update contact and listing fields. Changing the business name does not invoice. Use Assign or Reassign for billing."
+                  : "Create a Get Found lead. Status starts as new. No marketing consent or Resend audience sync."}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4">
+              <AdminLeadFormFields
+                value={form}
+                onChange={setForm}
+                disabled={formPending}
+                showStatus={formOpen === "edit"}
+              />
+            </div>
+            {formError ? (
+              <p className="mt-3 text-sm text-destructive" role="alert">
+                {formError}
+              </p>
+            ) : null}
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={() => setFormOpen(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={formPending}>
+                {formPending ? "Saving…" : formOpen === "edit" ? "Save lead" : "Add lead"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && !deletePending && setDeleting(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete this lead?</DialogTitle>
+            <DialogDescription>
+              {deleting
+                ? `Remove ${deleting.businessName || deleting.name || "this lead"} (${deleting.email}). The agency account and Paddle invoices stay.`
+                : "This cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={deletePending} onClick={() => setDeleting(null)}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" disabled={deletePending} onClick={() => void confirmDelete()}>
+              {deletePending ? "Deleting…" : "Delete lead"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="pointer-events-none fixed right-4 bottom-4 z-50 flex w-[min(20rem,calc(100%-2rem))] flex-col gap-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            role="status"
+            className={
+              toast.kind === "ok"
+                ? "pointer-events-auto rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 shadow-lg"
+                : "pointer-events-auto rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive shadow-lg"
+            }
+          >
+            {toast.text}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

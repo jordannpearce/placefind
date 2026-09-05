@@ -738,6 +738,10 @@ async function saveToPostgres(db: Database) {
       "costPerLeadUsd",
       String(parseCostPerLeadUsd(db.settings.costPerLeadUsd)),
     ])
+    await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
+      "marketingLeads",
+      JSON.stringify(db.leads.slice(0, 500)),
+    ])
     for (const lead of db.leads.slice(0, 500)) {
       await client.query(
         `INSERT INTO leads (
