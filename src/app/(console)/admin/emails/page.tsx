@@ -47,7 +47,7 @@ export default async function AdminEmailsPage() {
             status: user.status,
             marketingOptIn: user.marketingOptIn,
             company: user.company,
-            agencyName: agencies[user.agencyId] || user.company,
+            agencyName: (user.agencyId && agencies[user.agencyId]) || "Independent",
           }))}
         />
       </div>

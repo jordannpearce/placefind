@@ -355,7 +355,7 @@ export function AdminUsers({
               list="agency-names"
               value={form.agencyName}
               onChange={(event) => setForm((current) => ({ ...current, agencyName: event.target.value }))}
-              placeholder="Taylor Agency"
+              placeholder="Agency name"
             />
             <datalist id="agency-names">
               {agencies.map((agency) => (

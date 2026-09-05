@@ -87,7 +87,7 @@ export function serializeAdminUsers(db: Database) {
     return {
       ...rest,
       hasDfsPassword: Boolean(dfsPassword),
-      agencyName: agencies[user.agencyId] || user.company || "Independent",
+      agencyName: (user.agencyId && agencies[user.agencyId]) || "Independent",
       campaignCount: db.workspaces[user.id]?.campaigns.length ?? 0,
     }
   })

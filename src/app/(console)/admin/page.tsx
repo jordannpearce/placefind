@@ -15,7 +15,7 @@ export default async function AdminPage() {
   const agenciesById = Object.fromEntries(db.agencies.map((agency) => [agency.id, agency.name]))
   const users = db.users.map((user) => ({
     ...publicUser(user),
-    agencyName: agenciesById[user.agencyId] || user.company || "Independent",
+    agencyName: (user.agencyId && agenciesById[user.agencyId]) || "Independent",
     campaignCount: db.workspaces[user.id]?.campaigns.length ?? 0,
   }))
   const agencies = db.agencies.map((agency) => ({
