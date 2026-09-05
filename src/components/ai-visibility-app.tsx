@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { AiVisibilityBuy } from "@/components/ai-visibility-buy"
+import {
+  BrandProfileFields,
+  emptyBrandProfileDraft,
+  type BrandProfileDraft,
+} from "@/components/brand-profile-fields"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -32,6 +37,10 @@ export function AiVisibilityApp() {
   const [pending, setPending] = useState("")
   const [error, setError] = useState("")
   const [selectedScanId, setSelectedScanId] = useState("")
+  const [editing, setEditing] = useState(false)
+  const [brandDraft, setBrandDraft] = useState<BrandProfileDraft>(emptyBrandProfileDraft)
+  const [brandError, setBrandError] = useState("")
+  const [brandMessage, setBrandMessage] = useState("")
 
   const load = useCallback(async () => {
     const response = await fetch("/api/ai")
@@ -52,15 +61,27 @@ export function AiVisibilityApp() {
 
   useEffect(() => {
     if (!brand) return
-    setDrafts((current) => {
-      const next = Array.from({ length: AI_PROMPTS_PER_BRAND }, (_, index) => current[index] || "")
-      brand.prompts.forEach((prompt, index) => {
-        if (index < AI_PROMPTS_PER_BRAND) next[index] = prompt.text
-      })
-      return next
+    setDrafts(Array.from({ length: AI_PROMPTS_PER_BRAND }, (_, index) => brand.prompts[index]?.text || ""))
+    setPromptId((current) => {
+      if (current && brand.prompts.some((prompt) => prompt.id === current)) return current
+      return brand.prompts[0]?.id || ""
     })
-    setPromptId((current) => current || brand.prompts[0]?.id || "")
-  }, [brand?.id, brand?.prompts])
+  }, [brand])
+
+  useEffect(() => {
+    if (!brand) return
+    setBrandDraft(draftFromBrand(brand))
+    setEditing(false)
+    setBrandError("")
+    setBrandMessage("")
+  }, [brand?.id])
+
+  function selectBrand(id: string) {
+    setBrandId(id)
+    requestAnimationFrame(() => {
+      document.getElementById("brand-profile")?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }
 
   const selectedPrompt = prompts.find((item) => item.id === promptId) ?? prompts[0] ?? null
   const history = useMemo(
@@ -116,6 +137,38 @@ export function AiVisibilityApp() {
     }
   }
 
+  async function saveBrand() {
+    if (!brand) return
+    setPending("brand")
+    setBrandError("")
+    setBrandMessage("")
+    try {
+      if (brandDraft.name.trim().length < 2) {
+        throw new Error("Enter the company name.")
+      }
+      if (brandDraft.city.trim().length < 2) {
+        throw new Error("Enter the city.")
+      }
+      if (!brandDraft.state.trim()) {
+        throw new Error("Choose a state.")
+      }
+      const response = await fetch("/api/ai/brands", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: brand.id, ...brandDraft }),
+      })
+      const next = (await response.json()) as { error?: string }
+      if (!response.ok) throw new Error(next.error || "Could not save the brand.")
+      setEditing(false)
+      setBrandMessage("Brand profile saved. City and state refreshed the local Maps location.")
+      await load()
+    } catch (err) {
+      setBrandError(err instanceof Error ? err.message : "Could not save the brand.")
+    } finally {
+      setPending("")
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8">
       <div>
@@ -143,7 +196,7 @@ export function AiVisibilityApp() {
             <button
               key={item.id}
               type="button"
-              onClick={() => setBrandId(item.id)}
+              onClick={() => selectBrand(item.id)}
               className={cn(
                 "rounded-2xl border p-4 text-left",
                 item.id === brand?.id ? "border-foreground bg-card" : "bg-background"
@@ -170,6 +223,11 @@ export function AiVisibilityApp() {
               <p className="text-[11px] text-muted-foreground">
                 prompts saved · {AI_SCANS_PER_PROMPT} scans each
               </p>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                {item.id === brand?.id
+                  ? "Showing profile and saved prompts below"
+                  : "Open profile and saved prompts"}
+              </p>
             </button>
           ))}
         </section>
@@ -179,22 +237,122 @@ export function AiVisibilityApp() {
         </p>
       )}
 
-      {brand && brand.status === "active" ? (
-        <section className="space-y-4 rounded-2xl border bg-card p-5">
-          <div>
-            <h2 className="font-heading text-2xl">Prompts</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Type each question a customer would ask. Save it, then scan. Results are local to{" "}
-              {[brand.city, brand.state].filter(Boolean).join(", ") || "the brand city"} using the
-              Maps location. {brand.name} is scored against the company name
-              {brand.street || brand.address ? `, street` : ""}
-              {brand.phone ? `, phone` : ""}
-              {brand.website || brand.domain ? `, and website` : ""}
-              {brand.competitors.length
-                ? ` — plus ${brand.competitors.map((item) => item.name).join(", ")}`
-                : ""}
-              .
-            </p>
+      {brand ? (
+        <section id="brand-profile" className="space-y-4 rounded-2xl border bg-card p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+                Brand profile
+              </p>
+              <h2 className="font-heading text-2xl">{brand.name}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Review the saved settings, then check the {AI_PROMPTS_PER_BRAND} prompt slots for
+                this brand. Each saved prompt has {AI_SCANS_PER_PROMPT} scans.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {editing ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={pending === "brand"}
+                    onClick={() => {
+                      setBrandDraft(draftFromBrand(brand))
+                      setEditing(false)
+                      setBrandError("")
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="button" disabled={pending === "brand"} onClick={() => void saveBrand()}>
+                    {pending === "brand" ? "Saving…" : "Save brand"}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setBrandDraft(draftFromBrand(brand))
+                    setBrandError("")
+                    setBrandMessage("")
+                    setEditing(true)
+                  }}
+                >
+                  Edit brand settings
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {editing ? (
+            <div className="space-y-3">
+              <BrandProfileFields
+                idPrefix="ai-brand-edit"
+                values={brandDraft}
+                onChange={setBrandDraft}
+                disabled={pending === "brand"}
+              />
+              <p className="text-xs text-muted-foreground">
+                City and state are required. Saving refreshes the local Maps location used for
+                scans.
+              </p>
+            </div>
+          ) : (
+            <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <ProfileFact label="Company name" value={brand.name} />
+              <ProfileFact label="Website" value={brand.website || brand.domain || "—"} />
+              <ProfileFact label="Street" value={brand.street || "—"} />
+              <ProfileFact
+                label="City, state, ZIP"
+                value={[brand.city, brand.state, brand.zip].filter(Boolean).join(", ") || "—"}
+              />
+              <ProfileFact label="Phone" value={brand.phone || "—"} />
+              <ProfileFact
+                label="Maps location"
+                value={
+                  brand.location
+                    ? locationLabel(brand.location, brand)
+                    : [brand.city, brand.state].filter(Boolean).join(", ") || "Not set yet"
+                }
+              />
+              <ProfileFact
+                label="Competitors"
+                value={
+                  brand.competitors.length
+                    ? brand.competitors.map((item) => item.name).join(", ")
+                    : "None added"
+                }
+                wide
+              />
+            </dl>
+          )}
+          {brandError ? <p className="text-sm text-destructive">{brandError}</p> : null}
+          {brandMessage ? <p className="text-sm text-emerald-800">{brandMessage}</p> : null}
+
+          <div className="space-y-3 border-t pt-4">
+            <div>
+              <h3 className="font-heading text-xl">Saved prompts</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Type each question a customer would ask. Save it, then scan. Results are local to{" "}
+                {[brand.city, brand.state].filter(Boolean).join(", ") || "the brand city"} using the
+                Maps location. {brand.name} is scored against the company name
+                {brand.street || brand.address ? `, street` : ""}
+                {brand.phone ? `, phone` : ""}
+                {brand.website || brand.domain ? `, and website` : ""}
+                {brand.competitors.length
+                  ? ` — plus ${brand.competitors.map((item) => item.name).join(", ")}`
+                  : ""}
+                .
+              </p>
+            </div>
+            {prompts.length === 0 ? (
+              <p className="rounded-2xl border border-dashed px-4 py-6 text-sm text-muted-foreground">
+                No prompts saved yet. Use the {AI_PROMPTS_PER_BRAND} slots below to add questions
+                for this brand.
+              </p>
+            ) : null}
           </div>
           <div className="grid gap-3">
             {Array.from({ length: AI_PROMPTS_PER_BRAND }, (_, index) => {
@@ -212,7 +370,7 @@ export function AiVisibilityApp() {
                     <Label htmlFor={`ai-prompt-${index}`}>Prompt {index + 1}</Label>
                     {saved ? (
                       <p className="text-[11px] text-muted-foreground">
-                        {saved.scansUsed}/{saved.scansIncluded} scans used
+                        Saved · {saved.scansRemaining} of {saved.scansIncluded} scans remaining
                       </p>
                     ) : (
                       <p className="text-[11px] text-muted-foreground">Not saved yet</p>
@@ -241,7 +399,7 @@ export function AiVisibilityApp() {
                     >
                       {pending === `save-${index}` ? "Saving…" : saved ? "Update prompt" : "Save prompt"}
                     </Button>
-                    {saved ? (
+                    {saved && brand.status === "active" ? (
                       <Button
                         type="button"
                         size="sm"
@@ -502,6 +660,36 @@ export function AiVisibilityApp() {
             : undefined
         }
       />
+    </div>
+  )
+}
+
+function draftFromBrand(brand: BrandRow): BrandProfileDraft {
+  return {
+    name: brand.name,
+    street: brand.street,
+    city: brand.city,
+    state: brand.state,
+    zip: brand.zip,
+    phone: brand.phone,
+    website: brand.website,
+    competitors: brand.competitors.map((item) => item.name).join(", "),
+  }
+}
+
+function ProfileFact({
+  label,
+  value,
+  wide,
+}: {
+  label: string
+  value: string
+  wide?: boolean
+}) {
+  return (
+    <div className={wide ? "sm:col-span-2" : undefined}>
+      <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{label}</dt>
+      <dd className="mt-0.5">{value}</dd>
     </div>
   )
 }

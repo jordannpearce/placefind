@@ -7,6 +7,7 @@ import {
   missingBrandLocation,
   parseBrandForm,
   removeComplimentaryBrand,
+  updateAssignedBrandProfile,
   userHasMatchingBrand,
 } from "@/lib/ai-visibility"
 import { withResolvedBrandLocation } from "@/lib/maps-location-server"
@@ -130,4 +131,63 @@ export async function DELETE(request: Request) {
   }
   const db = await readDb()
   return NextResponse.json({ ok: true, brands: listAssignedBrands(db.users, db.agencies) })
+}
+
+export async function PATCH(request: Request) {
+  const admin = await requireAdmin()
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+  let body: Parameters<typeof parseBrandForm>[0] & { userId?: string; brandId?: string; id?: string }
+  try {
+    body = (await request.json()) as typeof body
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+  }
+
+  const userId = body.userId?.trim() || ""
+  const brandId = (body.brandId || body.id || "").trim()
+  if (!userId || !brandId) {
+    return NextResponse.json({ error: "Choose a brand to update." }, { status: 400 })
+  }
+
+  const parsed = parseBrandForm(body)
+  if (parsed.name.trim().length < 2) {
+    return NextResponse.json({ error: "Enter the company name." }, { status: 400 })
+  }
+  const locationError = missingBrandLocation(parsed)
+  if (locationError) {
+    return NextResponse.json({ error: locationError }, { status: 400 })
+  }
+  const located = await withResolvedBrandLocation(parsed, await resolveRequestAuth())
+
+  try {
+    const result = await updateDb((next) => {
+      const user = next.users.find((row) => row.id === userId)
+      if (!user) {
+        const error = new Error("Account not found.") as Error & { status?: number }
+        error.status = 404
+        throw error
+      }
+      const updated = updateAssignedBrandProfile(user, brandId, located)
+      if (!updated) {
+        const error = new Error("Brand not found on that account.") as Error & { status?: number }
+        error.status = 404
+        throw error
+      }
+      return {
+        brand: {
+          ...updated,
+          ownerUserId: user.id,
+        },
+        brands: listAssignedBrands(next.users, next.agencies),
+      }
+    })
+    return NextResponse.json({ ok: true, ...result })
+  } catch (error) {
+    const status = typeof (error as { status?: number }).status === "number" ? (error as { status: number }).status : 500
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Could not update the brand." },
+      { status }
+    )
+  }
 }

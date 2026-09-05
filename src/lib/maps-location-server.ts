@@ -1,6 +1,6 @@
 import { parseBrandForm, scanLocationForBrand } from "./ai-visibility"
 import { dataForSeoErrorMessage, type DataForSeoAuth } from "./dataforseo"
-import { canonicalAiLocation } from "./maps-location"
+import { canonicalAiLocation, usableBrandCoords } from "./maps-location"
 import { toStateAbbr, toStateName } from "./storage"
 import type { AiBrand } from "./types"
 
@@ -133,11 +133,12 @@ export async function resolveBrandScanLocation(
   auth?: DataForSeoAuth | null
 ): Promise<{ location: string; lat: number | null; lng: number | null }> {
   const fallback = scanLocationForBrand(brand)
-  if (brand.lat != null && brand.lng != null && fallback) {
-    return { location: fallback, lat: brand.lat, lng: brand.lng }
+  const stored = usableBrandCoords(brand.lat, brand.lng)
+  if (stored.lat != null && stored.lng != null && fallback) {
+    return { location: fallback, lat: stored.lat, lng: stored.lng }
   }
   if (!brand.city.trim() || !brand.state.trim()) {
-    return { location: fallback, lat: brand.lat, lng: brand.lng }
+    return { location: fallback, lat: stored.lat, lng: stored.lng }
   }
   const geo = await resolveCityStateLocation({
     city: brand.city,

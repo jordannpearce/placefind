@@ -1,12 +1,15 @@
 import assert from "node:assert/strict"
 
 import {
+  applyBrandProfileUpdate,
   consumePromptScan,
   missingBrandLocation,
   normalizeAiBrand,
   parseBrandForm,
+  promptSlotsForBrand,
   refundPromptScan,
   scanLocationForBrand,
+  updateAssignedBrandProfile,
   upsertBrandPrompt,
 } from "../src/lib/ai-visibility.ts"
 import { canonicalAiLocation, composeBrandAddress, parseLegacyAddress } from "../src/lib/maps-location.ts"
@@ -130,5 +133,62 @@ for (let i = 1; i < 10; i += 1) {
 }
 const overflow = upsertBrandPrompt(brand, "An eleventh prompt should not save on this brand")
 assert.equal(overflow.ok, false)
+
+const emptySlots = promptSlotsForBrand({ prompts: [] })
+assert.equal(emptySlots.empty, true)
+assert.equal(emptySlots.emptyMessage, "No prompts saved yet")
+assert.equal(emptySlots.slots.length, 10)
+assert.equal(emptySlots.slots.every((slot) => !slot.saved), true)
+
+const review = promptSlotsForBrand(brand)
+assert.equal(review.empty, false)
+assert.equal(review.savedCount, 10)
+assert.equal(review.slots[0]?.saved, true)
+assert.equal(review.slots[0]?.scansRemaining, 0)
+
+const relocated = parseBrandForm({
+  name: "Acme Plumbing West",
+  street: "200 West 6th St",
+  city: "Dallas",
+  state: "TX",
+  zip: "75201",
+  phone: "(214) 555-0100",
+  website: "https://acmewest.example",
+  competitors: "Dallas Drain",
+})
+const updated = applyBrandProfileUpdate(brand, {
+  ...relocated,
+  lat: 32.78,
+  lng: -96.8,
+  location: "Dallas,Texas,United States",
+})
+assert(updated)
+assert.equal(updated.id, brand.id)
+assert.equal(updated.subscriptionId, "complimentary")
+assert.equal(updated.prompts.length, 10)
+assert.equal(updated.name, "Acme Plumbing West")
+assert.equal(updated.city, "Dallas")
+assert.equal(updated.street, "200 West 6th St")
+assert.equal(updated.location, "Dallas,Texas,United States")
+assert.equal(updated.lat, 32.78)
+assert.equal(updated.lng, -96.8)
+assert.equal(updated.status, "active")
+
+const owner = {
+  id: "user_owner",
+  aiBrands: [brand],
+} as unknown as import("../src/lib/types.ts").User
+const stolen = updateAssignedBrandProfile(owner, "ai_brand_someone_else", relocated)
+assert.equal(stolen, null)
+const owned = updateAssignedBrandProfile(owner, brand.id, {
+  ...relocated,
+  lat: 32.78,
+  lng: -96.8,
+  location: "Dallas,Texas,United States",
+})
+assert(owned)
+assert.equal(owned.subscriptionId, "complimentary")
+assert.equal(owner.aiBrands[0]?.city, "Dallas")
+assert.equal(owner.aiBrands[0]?.prompts.length, 10)
 
 console.log("ai brand signals ok")

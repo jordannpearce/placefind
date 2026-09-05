@@ -275,6 +275,92 @@ export function brandQuotaView(brand: AiBrand) {
   }
 }
 
+export function competitorsInputValue(competitors: AiCompetitor[]) {
+  return competitors.map((item) => item.name).join(", ")
+}
+
+export function promptSlotsForBrand(brand: Pick<AiBrand, "prompts">) {
+  const saved = (brand.prompts ?? []).map(promptScanView)
+  return {
+    empty: saved.length === 0,
+    emptyMessage: saved.length === 0 ? "No prompts saved yet" : "",
+    savedCount: saved.length,
+    included: AI_PROMPTS_PER_BRAND,
+    slots: Array.from({ length: AI_PROMPTS_PER_BRAND }, (_, index) => {
+      const prompt = saved[index]
+      if (!prompt) {
+        return {
+          index,
+          saved: false,
+          id: "",
+          text: "",
+          scansUsed: 0,
+          scansRemaining: AI_SCANS_PER_PROMPT,
+          scansIncluded: AI_SCANS_PER_PROMPT,
+        }
+      }
+      return {
+        index,
+        saved: true,
+        id: prompt.id,
+        text: prompt.text,
+        scansUsed: prompt.scansUsed,
+        scansRemaining: prompt.scansRemaining,
+        scansIncluded: prompt.scansIncluded,
+      }
+    }),
+  }
+}
+
+export type BrandProfileUpdate = ReturnType<typeof parseBrandForm> & {
+  lat?: number | null
+  lng?: number | null
+  location?: string
+}
+
+/** Update NAP and Maps location on a brand the caller already owns. Never changes billing or prompts. */
+export function applyBrandProfileUpdate(existing: AiBrand, located: BrandProfileUpdate): AiBrand | null {
+  const name = located.name.trim()
+  if (name.length < 2) return null
+  return normalizeAiBrand({
+    ...existing,
+    name,
+    street: located.street,
+    city: located.city,
+    state: located.state,
+    zip: located.zip,
+    address: located.address,
+    phone: located.phone,
+    website: located.website,
+    competitors: located.competitors,
+    lat: located.lat ?? null,
+    lng: located.lng ?? null,
+    location: located.location || "",
+    id: existing.id,
+    subscriptionId: existing.subscriptionId,
+    status: existing.status,
+    prompts: existing.prompts,
+    promptsUsed: existing.promptsUsed,
+    promptPeriodStart: existing.promptPeriodStart,
+    createdAt: existing.createdAt,
+  })
+}
+
+export function updateAssignedBrandProfile(
+  user: User,
+  brandId: string,
+  located: BrandProfileUpdate
+): AiBrand | null {
+  if (!Array.isArray(user.aiBrands)) user.aiBrands = []
+  const id = brandId.trim()
+  const index = user.aiBrands.findIndex((brand) => brand.id === id)
+  if (index < 0) return null
+  const updated = applyBrandProfileUpdate(user.aiBrands[index], located)
+  if (!updated) return null
+  user.aiBrands[index] = updated
+  return updated
+}
+
 export function grantComplimentaryBrand(user: User, input: AiBrandInput) {
   const created = normalizeAiBrand({
     ...input,

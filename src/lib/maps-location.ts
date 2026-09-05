@@ -29,6 +29,14 @@ function finiteCoord(value: unknown) {
   return Number.isFinite(n) ? n : null
 }
 
+export function usableBrandCoords(lat: unknown, lng: unknown) {
+  const nextLat = finiteCoord(lat)
+  const nextLng = finiteCoord(lng)
+  if (nextLat == null || nextLng == null) return { lat: null, lng: null }
+  if (Math.abs(nextLat) < 1e-9 && Math.abs(nextLng) < 1e-9) return { lat: null, lng: null }
+  return { lat: nextLat, lng: nextLng }
+}
+
 export function canonicalAiLocation(city: string, state: string) {
   const cityName = city.trim()
   const stateName = toStateName(state)
@@ -121,8 +129,7 @@ export function normalizeBrandLocation(raw: Partial<BrandLocation> & BrandAddres
     state,
     zip,
     address,
-    lat: finiteCoord(raw.lat),
-    lng: finiteCoord(raw.lng),
+    ...usableBrandCoords(raw.lat, raw.lng),
     location,
   }
 }

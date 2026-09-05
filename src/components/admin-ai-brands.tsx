@@ -2,6 +2,11 @@
 
 import { useMemo, useState } from "react"
 
+import {
+  BrandProfileFields,
+  emptyBrandProfileDraft,
+  type BrandProfileDraft,
+} from "@/components/brand-profile-fields"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -62,8 +67,13 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
   const [form, setForm] = useState(emptyForm)
   const [pending, setPending] = useState(false)
   const [removing, setRemoving] = useState("")
+  const [savingEdit, setSavingEdit] = useState(false)
   const [error, setError] = useState("")
   const [message, setMessage] = useState("")
+  const [editingKey, setEditingKey] = useState("")
+  const [editDraft, setEditDraft] = useState<BrandProfileDraft>(emptyBrandProfileDraft)
+  const [editError, setEditError] = useState("")
+  const [editMessage, setEditMessage] = useState("")
 
   const users = useMemo(
     () => payload.users.slice().sort((a, b) => (a.company || a.name).localeCompare(b.company || b.name)),
@@ -73,6 +83,7 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
     () => payload.agencies.slice().sort((a, b) => a.name.localeCompare(b.name)),
     [payload.agencies]
   )
+  const editingBrand = payload.brands.find((brand) => `${brand.ownerUserId}:${brand.id}` === editingKey) ?? null
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -109,6 +120,70 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
       setError(err instanceof Error ? err.message : "Could not assign the brand.")
     } finally {
       setPending(false)
+    }
+  }
+
+  function startEdit(brand: AssignedBrand) {
+    setEditingKey(`${brand.ownerUserId}:${brand.id}`)
+    setEditDraft({
+      name: brand.name,
+      street: brand.street,
+      city: brand.city,
+      state: brand.state,
+      zip: brand.zip,
+      phone: brand.phone,
+      website: brand.website,
+      competitors: brand.competitors.map((item) => item.name).join(", "),
+    })
+    setEditError("")
+    setEditMessage("")
+    setError("")
+  }
+
+  async function saveEdit(brand: AssignedBrand) {
+    setSavingEdit(true)
+    setEditError("")
+    setEditMessage("")
+    try {
+      if (editDraft.name.trim().length < 2) {
+        throw new Error("Enter the company name.")
+      }
+      if (editDraft.city.trim().length < 2) {
+        throw new Error("Enter the city.")
+      }
+      if (!editDraft.state.trim()) {
+        throw new Error("Choose a state.")
+      }
+      const response = await fetch("/api/admin/ai-brands", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: brand.ownerUserId,
+          brandId: brand.id,
+          ...editDraft,
+        }),
+      })
+      const next = (await response.json()) as Payload & { error?: string }
+      if (!response.ok) throw new Error(next.error || "Could not update the brand.")
+      setPayload((current) => ({ ...current, brands: next.brands }))
+      const updated = next.brands.find((item) => item.id === brand.id && item.ownerUserId === brand.ownerUserId)
+      if (updated) {
+        setEditDraft({
+          name: updated.name,
+          street: updated.street,
+          city: updated.city,
+          state: updated.state,
+          zip: updated.zip,
+          phone: updated.phone,
+          website: updated.website,
+          competitors: updated.competitors.map((item) => item.name).join(", "),
+        })
+      }
+      setEditMessage("Brand profile saved. City and state refreshed the local Maps location.")
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Could not update the brand.")
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -287,58 +362,113 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
       {payload.brands.length === 0 ? (
         <p className="text-sm text-muted-foreground">No AI Visibility brands assigned yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="bg-muted/70 text-xs text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-medium">Brand</th>
-                <th className="px-3 py-2 font-medium">Assigned to</th>
-                <th className="px-3 py-2 font-medium">Agency</th>
-                <th className="px-3 py-2 font-medium">Prompts</th>
-                <th className="px-3 py-2 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payload.brands.map((brand) => (
-                <tr key={`${brand.ownerUserId}-${brand.id}`} className="border-t">
-                  <td className="px-3 py-3">
-                    <p className="font-medium">{brand.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {[brand.website || brand.domain, brand.phone, [brand.city, brand.state].filter(Boolean).join(", ")]
-                        .filter(Boolean)
-                        .join(" · ") || "No site"}
-                    </p>
-                  </td>
-                  <td className="px-3 py-3">
-                    <p>{brand.ownerCompany || brand.ownerName}</p>
-                    <p className="text-[11px] text-muted-foreground">{brand.ownerEmail}</p>
-                  </td>
-                  <td className="px-3 py-3 text-xs text-muted-foreground">{brand.agencyName}</td>
-                  <td className="px-3 py-3 text-xs">
-                    {brand.quota.remaining}/{brand.quota.included}
-                    {brand.complimentary ? (
-                      <p className="text-[11px] text-muted-foreground">Complimentary</p>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-3">
-                    {brand.complimentary ? (
-                      <Button
-                        type="button"
-                        size="xs"
-                        variant="outline"
-                        disabled={removing === `${brand.ownerUserId}:${brand.id}`}
-                        onClick={() => void removeBrand(brand)}
-                      >
-                        Remove
-                      </Button>
-                    ) : (
-                      <span className="text-[11px] text-muted-foreground">Paid</span>
-                    )}
-                  </td>
+        <div className="space-y-4">
+          <div className="overflow-x-auto rounded-2xl border">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="bg-muted/70 text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Brand</th>
+                  <th className="px-3 py-2 font-medium">Assigned to</th>
+                  <th className="px-3 py-2 font-medium">Agency</th>
+                  <th className="px-3 py-2 font-medium">Prompts</th>
+                  <th className="px-3 py-2 font-medium">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {payload.brands.map((brand) => {
+                  const key = `${brand.ownerUserId}:${brand.id}`
+                  return (
+                    <tr key={`${brand.ownerUserId}-${brand.id}`} className="border-t">
+                      <td className="px-3 py-3">
+                        <p className="font-medium">{brand.name}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {[
+                            brand.website || brand.domain,
+                            brand.phone,
+                            [brand.city, brand.state].filter(Boolean).join(", "),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "No site"}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3">
+                        <p>{brand.ownerCompany || brand.ownerName}</p>
+                        <p className="text-[11px] text-muted-foreground">{brand.ownerEmail}</p>
+                      </td>
+                      <td className="px-3 py-3 text-xs text-muted-foreground">{brand.agencyName}</td>
+                      <td className="px-3 py-3 text-xs">
+                        {brand.quota.remaining}/{brand.quota.included}
+                        {brand.complimentary ? (
+                          <p className="text-[11px] text-muted-foreground">Complimentary</p>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant={editingKey === key ? "default" : "outline"}
+                            onClick={() => startEdit(brand)}
+                          >
+                            {editingKey === key ? "Editing" : "Edit"}
+                          </Button>
+                          {brand.complimentary ? (
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="outline"
+                              disabled={removing === key}
+                              onClick={() => void removeBrand(brand)}
+                            >
+                              Remove
+                            </Button>
+                          ) : (
+                            <span className="self-center text-[11px] text-muted-foreground">Paid</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {editingBrand ? (
+            <div className="space-y-3 rounded-2xl border bg-background p-4">
+              <div>
+                <h3 className="font-heading text-xl">Edit brand profile</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Update {editingBrand.name} on {editingBrand.ownerCompany || editingBrand.ownerName}.
+                  City and state refresh the local Maps location.
+                </p>
+              </div>
+              <BrandProfileFields
+                idPrefix="admin-brand-edit"
+                values={editDraft}
+                onChange={setEditDraft}
+                disabled={savingEdit}
+              />
+              {editError ? <p className="text-sm text-destructive">{editError}</p> : null}
+              {editMessage ? <p className="text-sm text-emerald-800">{editMessage}</p> : null}
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" disabled={savingEdit} onClick={() => void saveEdit(editingBrand)}>
+                  {savingEdit ? "Saving…" : "Save brand"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={savingEdit}
+                  onClick={() => {
+                    setEditingKey("")
+                    setEditError("")
+                    setEditMessage("")
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </section>

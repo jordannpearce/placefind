@@ -6,6 +6,7 @@ import {
   listAssignedBrands,
   parseBrandForm,
   removeComplimentaryBrand,
+  updateAssignedBrandProfile,
   userHasMatchingBrand,
 } from "../src/lib/ai-visibility.ts"
 import type { User } from "../src/lib/types.ts"
@@ -105,6 +106,30 @@ const listed = listAssignedBrands([owner, agencyUser], agencies)
 assert.equal(listed.length, 1)
 assert.equal(listed[0]?.ownerEmail, "owner@example.com")
 assert.equal(listed[0]?.complimentary, true)
+
+const paid = grantComplimentaryBrand(agencyUser, parsed)
+assert(paid)
+paid.subscriptionId = "sub_paid_keep"
+const edited = updateAssignedBrandProfile(agencyUser, paid.id, {
+  ...parseBrandForm({
+    name: "Oak Street Dental North",
+    street: "88 Congress Ave",
+    city: "Houston",
+    state: "TX",
+    zip: "77002",
+    phone: "7135550100",
+    website: "https://oakstreet.example",
+    competitors: "Smile Co",
+  }),
+  lat: 29.76,
+  lng: -95.37,
+  location: "Houston,Texas,United States",
+})
+assert(edited)
+assert.equal(edited.subscriptionId, "sub_paid_keep", "admin edit must not change billing")
+assert.equal(edited.city, "Houston")
+assert.equal(edited.location, "Houston,Texas,United States")
+assert.equal(updateAssignedBrandProfile(agencyUser, "missing", parsed), null)
 
 assert(removeComplimentaryBrand(owner, created.id))
 assert.equal(owner.aiBrands.length, 0)
