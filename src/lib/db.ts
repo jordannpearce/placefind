@@ -199,10 +199,14 @@ export function findOrCreateAgency(db: Database, name: string): Agency {
 }
 
 export { purgeUserAccount, type PurgeUserResult } from "./purge-user"
+export {
+  deleteAgencyGroup,
+  deleteLeftoverDemoAgencyGroups,
+  type DeleteAgencyGroupResult,
+} from "./agency-group"
 
 function seedDb(db: Database): Database {
   const now = new Date().toISOString()
-  const gridpin = findOrCreateAgency(db, "GridPins")
   const admin: User = {
     id: "user_tm_admin",
     name: "TM",
@@ -214,7 +218,7 @@ function seedDb(db: Database): Database {
     extraCampaigns: 0,
     marketingOptIn: false,
     company: "GridPins",
-    agencyId: gridpin.id,
+    agencyId: "",
     paddleCustomerId: "",
     createdAt: now,
     lastLoginAt: null,
@@ -240,10 +244,8 @@ function ensureAdmin(db: Database) {
     if (!verifyPassword(ADMIN_PASSWORD, existing.passwordHash)) {
       existing.passwordHash = hashPassword(ADMIN_PASSWORD)
     }
-    if (!existing.agencyId) existing.agencyId = findOrCreateAgency(db, existing.company || "GridPins").id
     return
   }
-  const agency = findOrCreateAgency(db, "GridPins")
   db.users.push({
     id: "user_tm_admin",
     name: "TM",
@@ -255,7 +257,7 @@ function ensureAdmin(db: Database) {
     extraCampaigns: 0,
     marketingOptIn: false,
     company: "GridPins",
-    agencyId: agency.id,
+    agencyId: "",
     paddleCustomerId: "",
     createdAt: new Date().toISOString(),
     lastLoginAt: null,
@@ -308,9 +310,8 @@ function hydrate(raw: Partial<Database>): Database {
         updatedAt: row.updatedAt || row.createdAt || new Date().toISOString(),
       })),
   }
-  for (const user of db.users) {
-    if (!user.agencyId) user.agencyId = findOrCreateAgency(db, user.company || user.name).id
-  }
+  // Leave users with an empty agencyId unassigned. Auto-creating a group from
+  // company/name was recreating leftover demo labels such as GridPins.
   for (const customer of db.customers) {
     if (!customer.email) continue
     const user = db.users.find((item) => item.email === customer.email)

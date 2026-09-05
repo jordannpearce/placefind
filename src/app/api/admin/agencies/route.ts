@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { createManagedUser, sendManagedUserWelcome, serializeAdminUsers } from "@/lib/admin-managed-user"
 import { requireAdmin } from "@/lib/auth-guard"
-import { findOrCreateAgency, readDb, updateDb } from "@/lib/db"
+import { deleteAgencyGroup, findOrCreateAgency, readDb, updateDb } from "@/lib/db"
 import {
   computeTrialEndsAt,
   isTrialUnit,
@@ -131,8 +131,28 @@ export async function POST(request: Request) {
 export async function DELETE(request: NextRequest) {
   const admin = await requireAdmin()
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  const agencyId = request.nextUrl.searchParams.get("agencyId")?.trim() || ""
   const userId = request.nextUrl.searchParams.get("userId")?.trim() || ""
-  if (!userId) return NextResponse.json({ error: "userId is required" }, { status: 400 })
+
+  if (agencyId) {
+    const result = await updateDb((db) => deleteAgencyGroup(db, agencyId, admin.user.id))
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })
+    const impersonated = await getImpersonatedUserId()
+    if (impersonated && result.purgedUsers.some((item) => item.userId === impersonated)) {
+      await clearImpersonation()
+    }
+    const db = await readDb()
+    return NextResponse.json({
+      ok: true,
+      agencyId: result.agencyId,
+      name: result.name,
+      unassignedUserIds: result.unassignedUserIds,
+      purgedUsers: result.purgedUsers,
+      ...agencyPayload(db),
+    })
+  }
+
+  if (!userId) return NextResponse.json({ error: "agencyId or userId is required" }, { status: 400 })
 
   const result = await updateDb((db) => {
     const target = db.users.find((item) => item.id === userId)

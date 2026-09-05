@@ -197,6 +197,49 @@ export function AdminAgencies({
     }
   }
 
+  async function deleteGroup(agency: Group) {
+    if (
+      !window.confirm(
+        `Delete the agency group “${agency.name}”? Accounts in that group are unassigned. A leftover GridPin or Taylor Agency owner account is removed; other users stay.`
+      )
+    ) {
+      return
+    }
+    setBusyId(`group:${agency.id}`)
+    setError(null)
+    try {
+      const response = await fetch(`/api/admin/agencies?agencyId=${encodeURIComponent(agency.id)}`, {
+        method: "DELETE",
+      })
+      const data = (await response.json()) as {
+        error?: string
+        agencies?: Group[]
+        accounts?: AdminUserRow[]
+        purgedUsers?: { userId: string; email: string }[]
+      }
+      if (!response.ok) throw new Error(data.error || "Could not delete agency group")
+      if (data.agencies) setGroups(data.agencies)
+      else setGroups((current) => current.filter((item) => item.id !== agency.id))
+      if (data.accounts) {
+        setRows(data.accounts)
+      } else if (data.purgedUsers?.length) {
+        const purged = new Set(data.purgedUsers.map((item) => item.userId))
+        setRows((current) => current.filter((row) => !purged.has(row.id)))
+      }
+      const purgedNote = data.purgedUsers?.length
+        ? ` Removed ${data.purgedUsers.map((item) => item.email).join(", ")}.`
+        : ""
+      showToast("ok", `Group “${agency.name}” deleted.${purgedNote}`)
+      router.refresh()
+    } catch (err) {
+      const text = err instanceof Error ? err.message : "Could not delete agency group"
+      setError(text)
+      showToast("err", text)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function deleteAgency(user: AdminUserRow) {
     if (user.id === currentUserId) {
       showToast("err", "You cannot delete your own account.")
@@ -368,18 +411,32 @@ export function AdminAgencies({
         <div className="rounded-2xl border bg-card p-5">
           <h3 className="font-heading text-lg">Agency groups</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Name labels used to group accounts. Deleting an agency account removes that owner only,
-            not everyone who shares the group.
+            Name labels used to group accounts. Delete a group to unassign its members. A leftover
+            GridPin or Taylor Agency owner account is removed; everyone else stays.
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {groups.map((agency) => (
-              <div key={agency.id} className="rounded-xl border px-3 py-2">
-                <p className="font-medium">{agency.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {agency.userCount} account{agency.userCount === 1 ? "" : "s"}
-                </p>
-              </div>
-            ))}
+            {groups.map((agency) => {
+              const busy = busyId === `group:${agency.id}`
+              return (
+                <div key={agency.id} className="flex items-start justify-between gap-2 rounded-xl border px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="font-medium">{agency.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {agency.userCount} account{agency.userCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="destructive"
+                    disabled={busy}
+                    onClick={() => deleteGroup(agency)}
+                  >
+                    {busy ? "Working…" : "Delete"}
+                  </Button>
+                </div>
+              )
+            })}
           </div>
         </div>
       ) : null}
