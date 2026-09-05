@@ -2,6 +2,9 @@ import type { PlanId } from "./types"
 
 export const EXTRA_SLOT_PRICE = 5
 export const MAX_EXTRA_CAMPAIGNS = 5
+export const STARTER_INCLUDED_SCANS = 5
+export const EXTRA_SCAN_PRICE = 5
+export const MAX_EXTRA_SCAN_CREDITS = 9999
 
 export const PLANS: Record<
   PlanId,
@@ -22,7 +25,7 @@ export const PLANS: Record<
     id: "starter",
     name: "Starter",
     price: 20,
-    blurb: "One brand, one location. A single campaign to prove Maps rankings on a grid.",
+    blurb: "One brand, one location. Five live Maps scans each month — no API key to enter.",
     campaigns: 1,
     maxCampaigns: 1,
     extraSlotPrice: 0,
@@ -31,10 +34,11 @@ export const PLANS: Record<
     features: [
       "1 campaign — one brand and one location",
       "Hard limit: you cannot add a second campaign",
+      "5 live Maps scans each month",
+      "Extra scans $5 each when you need more",
       "3 keywords on that campaign",
       "Grids up to 7×7",
-      "Daily or weekly schedules",
-      "Your own DataForSEO key",
+      "Live Maps included — no API key to enter",
     ],
   },
   agency: {
@@ -108,6 +112,12 @@ export function monthlyTotal(plan: PlanId, extras = 0): number {
 
 export function canAddCampaign(plan: PlanId, extras: number, currentCount: number): boolean {
   return currentCount < campaignLimit(plan, extras)
+}
+
+export function clampExtraScanCredits(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value)
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, Math.min(MAX_EXTRA_SCAN_CREDITS, Math.round(n)))
 }
 
 export function campaignLimitMessage(plan: PlanId, extras = 0): string {

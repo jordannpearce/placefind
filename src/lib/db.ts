@@ -5,7 +5,8 @@ import { Pool, type QueryResultRow } from "pg"
 import { DEFAULT_COST_PER_LEAD_USD, normalizeLead, parseCostPerLeadUsd, parseStoredLeads } from "./leads"
 import { hashPassword, verifyPassword } from "./password"
 import { parseTrialEndsAt } from "./paddle-access"
-import { clampExtraCampaigns, isPlanId } from "./plans"
+import { clampExtraCampaigns, clampExtraScanCredits, isPlanId } from "./plans"
+import { defaultScanQuotaFields } from "./scan-quota"
 import { purgeUserAccount } from "./purge-user"
 import { normalizeWorkspaceScans } from "./scan-results"
 import { defaultCampaigns } from "./storage"
@@ -87,6 +88,8 @@ function emptyDb(): Database {
       resendFrom: DEFAULT_RESEND_FROM,
       resendAudienceId: "",
       costPerLeadUsd: DEFAULT_COST_PER_LEAD_USD,
+      extraScanProductId: "",
+      extraScanPriceId: "",
     },
     leads: [],
     customers: [],
@@ -105,6 +108,10 @@ function normalizeUser(raw: Partial<User> & { email: string }): User {
     status: raw.status === "pending" || raw.status === "suspended" ? raw.status : "active",
     plan,
     extraCampaigns: clampExtraCampaigns(plan, raw.extraCampaigns),
+    extraScanCredits: clampExtraScanCredits(raw.extraScanCredits),
+    scansUsed: Math.max(0, Math.round(Number(raw.scansUsed) || 0)),
+    scanPeriodStart: typeof raw.scanPeriodStart === "string" ? raw.scanPeriodStart : null,
+    scanSessionUntil: typeof raw.scanSessionUntil === "string" ? raw.scanSessionUntil : null,
     marketingOptIn: Boolean(raw.marketingOptIn),
     company: raw.company || "",
     agencyId: raw.agencyId || "",
@@ -193,6 +200,7 @@ function seedDb(db: Database): Database {
     status: "active",
     plan: "enterprise",
     extraCampaigns: 0,
+    ...defaultScanQuotaFields(),
     marketingOptIn: false,
     company: "GridPins",
     agencyId: "",
@@ -232,6 +240,7 @@ function ensureAdmin(db: Database) {
     status: "active",
     plan: "enterprise",
     extraCampaigns: 0,
+    ...defaultScanQuotaFields(),
     marketingOptIn: false,
     company: "GridPins",
     agencyId: "",
@@ -275,6 +284,8 @@ function hydrate(raw: Partial<Database>): Database {
       resendFrom: defaultResendFrom(raw.settings?.resendFrom),
       resendAudienceId: raw.settings?.resendAudienceId ?? "",
       costPerLeadUsd: parseCostPerLeadUsd(raw.settings?.costPerLeadUsd),
+      extraScanProductId: raw.settings?.extraScanProductId?.trim() || "",
+      extraScanPriceId: raw.settings?.extraScanPriceId?.trim() || "",
     },
     leads: (raw.leads ?? []).map((lead) => normalizeLead(lead)).filter((lead): lead is MarketingLead => Boolean(lead)),
     customers: (raw.customers ?? [])
@@ -425,6 +436,10 @@ async function ensureSchema() {
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS extra_campaigns INTEGER NOT NULL DEFAULT 0`)
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS paddle_customer_id TEXT NOT NULL DEFAULT ''`)
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ`)
+      await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS extra_scan_credits INTEGER NOT NULL DEFAULT 0`)
+      await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS scans_used INTEGER NOT NULL DEFAULT 0`)
+      await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS scan_period_start TEXT`)
+      await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS scan_session_until TIMESTAMPTZ`)
     })()
   }
   await schemaReady
@@ -442,6 +457,10 @@ async function loadFromPostgres(): Promise<Database> {
       status: User["status"]
       plan: User["plan"]
       extra_campaigns: number
+      extra_scan_credits: number
+      scans_used: number
+      scan_period_start: string | null
+      scan_session_until: Date | null
       marketing_opt_in: boolean
       company: string
       agency_id: string
@@ -531,6 +550,10 @@ async function loadFromPostgres(): Promise<Database> {
         status: row.status,
         plan: row.plan,
         extraCampaigns: row.extra_campaigns,
+        extraScanCredits: row.extra_scan_credits,
+        scansUsed: row.scans_used,
+        scanPeriodStart: row.scan_period_start,
+        scanSessionUntil: row.scan_session_until ? row.scan_session_until.toISOString() : null,
         marketingOptIn: row.marketing_opt_in,
         company: row.company,
         agencyId: row.agency_id,
@@ -583,6 +606,8 @@ async function loadFromPostgres(): Promise<Database> {
       resendFrom: defaultResendFrom(settingsMap.resendFrom),
       resendAudienceId: settingsMap.resendAudienceId || "",
       costPerLeadUsd: parseCostPerLeadUsd(settingsMap.costPerLeadUsd),
+      extraScanProductId: settingsMap.extraScanProductId || "",
+      extraScanPriceId: settingsMap.extraScanPriceId || "",
     },
     leads:
       leadRows.rows.length > 0
@@ -664,9 +689,10 @@ async function saveToPostgres(db: Database) {
     for (const user of db.users) {
       await client.query(
         `INSERT INTO users (
-          id, name, email, password_hash, role, status, plan, extra_campaigns, marketing_opt_in, company, agency_id,
+          id, name, email, password_hash, role, status, plan, extra_campaigns, extra_scan_credits, scans_used,
+          scan_period_start, scan_session_until, marketing_opt_in, company, agency_id,
           paddle_customer_id, created_at, last_login_at, dfs_login, dfs_password, trial_ends_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
         [
           user.id,
           user.name,
@@ -676,6 +702,10 @@ async function saveToPostgres(db: Database) {
           user.status,
           user.plan,
           user.extraCampaigns,
+          user.extraScanCredits,
+          user.scansUsed,
+          user.scanPeriodStart,
+          user.scanSessionUntil,
           user.marketingOptIn,
           user.company,
           user.agencyId,
@@ -752,6 +782,14 @@ async function saveToPostgres(db: Database) {
     await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
       "costPerLeadUsd",
       String(parseCostPerLeadUsd(db.settings.costPerLeadUsd)),
+    ])
+    await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
+      "extraScanProductId",
+      db.settings.extraScanProductId || "",
+    ])
+    await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
+      "extraScanPriceId",
+      db.settings.extraScanPriceId || "",
     ])
     await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
       "marketingLeads",

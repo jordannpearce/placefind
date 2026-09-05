@@ -1,9 +1,15 @@
-import { dataForSeoErrorMessage, listingsFromTask, mapsLiveTask, matchTarget } from "../src/lib/dataforseo"
-import { buildGrid, formatCoordinate, spacingFromRadius } from "../src/lib/grid"
-import { mockScanPoint } from "../src/lib/mock-scan"
-import { listingMatchesTarget, pinMark } from "../src/lib/rank"
-import { latestKeywordResults, mergeWorkspaceScans, normalizeWorkspaceScans } from "../src/lib/scan-results"
-import type { Listing } from "../src/lib/types"
+import {
+  dataForSeoErrorMessage,
+  isEmptySearchResults,
+  listingsFromTask,
+  mapsLiveTask,
+  matchTarget,
+} from "../src/lib/dataforseo.ts"
+import { buildGrid, formatCoordinate, spacingFromRadius } from "../src/lib/grid.ts"
+import { mockScanPoint } from "../src/lib/mock-scan.ts"
+import { listingMatchesTarget, pinMark } from "../src/lib/rank.ts"
+import { latestKeywordResults, mergeWorkspaceScans, normalizeWorkspaceScans } from "../src/lib/scan-results.ts"
+import type { Listing } from "../src/lib/types.ts"
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message)
@@ -157,6 +163,30 @@ assert(
   dataForSeoErrorMessage({}, 502) === "DataForSEO returned HTTP 502",
   "HTTP failures without a JSON body still surface"
 )
+assert(
+  isEmptySearchResults({
+    status_code: 20000,
+    status_message: "Ok.",
+    tasks: [{ status_code: 40102, status_message: "No Search Results." }],
+  }),
+  "40102 is an empty Maps pack, not a failed request"
+)
+assert(
+  dataForSeoErrorMessage({
+    status_code: 20000,
+    tasks: [{ status_code: 40102, status_message: "No Search Results." }],
+  }) === null,
+  "empty SERP must not surface as a scan error"
+)
+const emptyPin = matchTarget({
+  id: "r0c0",
+  lat: 30.26,
+  lng: -97.74,
+  locationCoordinate: "30.26,-97.74,15z",
+  listings: [],
+  targetBusiness: "Houndstooth Coffee",
+})
+assert(emptyPin.found === false && emptyPin.rank == null && emptyPin.error == null, "empty pack is not found")
 
 const grid = buildGrid(30.2672, -97.7431, 5, spacingFromRadius(1.4, 5))
 assert(grid.length === 25, "5×5 lattice is 25 cells around the listing")

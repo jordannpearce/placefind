@@ -6,6 +6,7 @@ import { activationEmail, appUrl } from "@/lib/email-templates"
 import { previewUrl, sendAuthMail } from "@/lib/mail"
 import { hashPassword } from "@/lib/password"
 import { provisionUserFromPaddle } from "@/lib/paddle-fulfillment"
+import { defaultScanQuotaFields } from "@/lib/scan-quota"
 
 export async function POST(request: Request) {
   let body: { name?: string; email?: string; password?: string; company?: string; marketingOptIn?: boolean }
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
       status: "pending" as const,
       plan: "starter" as const,
       extraCampaigns: 0,
+      ...defaultScanQuotaFields(),
       marketingOptIn: Boolean(body.marketingOptIn),
       company: body.company?.trim() || agency.name,
       agencyId: agency.id,

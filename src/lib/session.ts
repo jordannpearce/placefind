@@ -1,5 +1,6 @@
 import { cookies } from "next/headers"
 
+import { scanQuotaSnapshot, usesHostedMaps } from "./scan-quota"
 import { IMPERSONATE_COOKIE, SESSION_COOKIE, signSession, verifySessionToken } from "./session-token"
 import type { User } from "./types"
 
@@ -47,6 +48,13 @@ export async function clearImpersonation() {
 }
 
 export function publicUser(user: User) {
-  const { passwordHash: _hash, dfsPassword, ...rest } = user
-  return { ...rest, hasDfsPassword: Boolean(dfsPassword) }
+  const { passwordHash: _hash, dfsPassword, dfsLogin, ...rest } = user
+  const hosted = usesHostedMaps(user)
+  return {
+    ...rest,
+    dfsLogin: hosted ? "" : dfsLogin,
+    hasDfsPassword: hosted ? false : Boolean(dfsPassword),
+    usesHostedMaps: hosted,
+    scanQuota: scanQuotaSnapshot(user),
+  }
 }
