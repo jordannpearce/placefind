@@ -35,8 +35,10 @@ export default function TermsPage() {
         </P>
         <P>
           Plan limits apply: Starter is one brand and one location (one campaign). Pro includes
-          five campaigns and may add extra slots up to ten. Advanced includes fifty campaigns. We may
-          refuse or throttle scans that abuse the service or your API provider.
+          five campaigns and may add extra slots up to ten. Advanced includes fifty campaigns. The
+          optional AI Visibility add-on is billed separately at the listed monthly price per brand
+          and includes a fixed number of prompt scans. We may refuse or throttle scans that abuse
+          the service or your API provider.
         </P>
       </section>
       <section className="space-y-3">
@@ -60,8 +62,10 @@ export default function TermsPage() {
           Subscription payments are processed by Paddle, our payment processor. Changing plan or
           Pro extra-campaign slots may generate a billing notice. Live Maps tasks are billed by
           the Maps API provider you connect, to the credentials you enter. Those API charges are
-          not included in the GridPins subscription and are not refundable by us. See the Refund
-          Policy for how third-party API usage is treated.
+          not included in the GridPins subscription and are not refundable by us. AI Visibility
+          add-on fees are billed per brand, per month, through Paddle. Prompt scans use a hosted
+          AI monitoring API that we configure; unused prompts do not roll over unless we say so in
+          the product. See the Refund Policy for how third-party API usage is treated.
         </P>
       </section>
       <section className="space-y-3">

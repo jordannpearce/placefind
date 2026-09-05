@@ -28,6 +28,8 @@ function user(partial: Partial<User> & Pick<User, "id" | "email">): User {
     dfsLogin: "",
     dfsPassword: "",
     trialEndsAt: "2026-10-01T00:00:00.000Z",
+    aiBrands: [],
+    aiScans: [],
     ...partial,
   }
 }

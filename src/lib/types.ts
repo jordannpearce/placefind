@@ -197,6 +197,72 @@ export type Agency = {
   createdAt: string
 }
 
+export type AiCompetitor = {
+  name: string
+  domain: string
+}
+
+export type AiBrandStatus = "active" | "canceled" | "past_due" | "paused"
+
+export type AiBrand = {
+  id: string
+  name: string
+  domain: string
+  competitors: AiCompetitor[]
+  subscriptionId: string
+  status: AiBrandStatus
+  promptsUsed: number
+  promptPeriodStart: string | null
+  createdAt: string
+}
+
+export type AiEngineId = "chatgpt" | "perplexity" | "gemini" | "copilot" | "aimode" | "grok"
+
+export type AiSource = {
+  position: number
+  url: string
+  label: string
+  description: string
+  citesBrand: boolean
+}
+
+export type AiCompetitorHit = {
+  name: string
+  domain: string
+  mentioned: boolean
+  cited: boolean
+}
+
+export type AiModelResult = {
+  engine: AiEngineId
+  label: string
+  mentioned: boolean
+  cited: boolean
+  mentionRank: number | null
+  excerpt: string
+  sources: AiSource[]
+  competitors: AiCompetitorHit[]
+  error: string | null
+}
+
+export type AiScanRun = {
+  id: string
+  brandId: string
+  brandName: string
+  prompt: string
+  country: string
+  createdAt: string
+  mode: ScanMode
+  models: AiModelResult[]
+}
+
+export type AiPromptQuota = {
+  included: number
+  used: number
+  remaining: number
+  periodStart: string | null
+}
+
 export type AppSettings = {
   resendApiKey: string
   resendFrom: string
@@ -205,6 +271,9 @@ export type AppSettings = {
   costPerLeadUsd: number
   extraScanProductId: string
   extraScanPriceId: string
+  cloroApiKey: string
+  aiVisibilityProductId: string
+  aiVisibilityPriceId: string
 }
 
 export type LeadStatus = "new" | "assigned" | "invoiced" | "paid"
@@ -247,12 +316,15 @@ export type PaddleCustomer = {
   updatedAt: string
 }
 
+export type PaddleSubscriptionKind = "plan" | "ai_visibility"
+
 export type PaddleSubscription = {
   subscriptionId: string
   customerId: string
   status: string
   priceId: string
   productId: string
+  kind?: PaddleSubscriptionKind
   scheduledChangeAction: string | null
   scheduledChangeAt: string | null
   createdAt: string
@@ -283,6 +355,8 @@ export type User = {
   dfsPassword: string
   /** App-side access window set by an admin. Null means no complimentary access. */
   trialEndsAt: string | null
+  aiBrands: AiBrand[]
+  aiScans: AiScanRun[]
 }
 
 export type SessionPayload = {

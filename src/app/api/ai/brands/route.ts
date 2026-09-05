@@ -1,0 +1,57 @@
+import { NextResponse } from "next/server"
+
+import {
+  brandQuotaView,
+  canManageAiComplimentary,
+  complimentaryAiBrand,
+  normalizeAiBrand,
+  parseCompetitorsInput,
+} from "@/lib/ai-visibility"
+import { requireUser } from "@/lib/auth-guard"
+import { billingRequiredResponse } from "@/lib/billing-gate"
+import { readDb, updateDb } from "@/lib/db"
+import { userHasSoftwareAccess } from "@/lib/paddle-access"
+
+export async function POST(request: Request) {
+  const auth = await requireUser()
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!canManageAiComplimentary(auth.user)) {
+    return NextResponse.json(
+      { error: "Add a brand from Account or AI Visibility checkout — $199 per month per brand." },
+      { status: 403 }
+    )
+  }
+
+  const db = await readDb()
+  if (!userHasSoftwareAccess(auth.user, db)) {
+    return billingRequiredResponse(auth.user, db)
+  }
+
+  let body: { name?: string; domain?: string; competitors?: unknown; sample?: boolean }
+  try {
+    body = (await request.json()) as typeof body
+  } catch {
+    body = {}
+  }
+
+  const user = await updateDb((next) => {
+    const current = next.users.find((row) => row.id === auth.user.id)
+    if (!current) return null
+    const created = body.sample
+      ? complimentaryAiBrand()
+      : normalizeAiBrand({
+          name: body.name,
+          domain: body.domain,
+          competitors: parseCompetitorsInput(body.competitors),
+          subscriptionId: "complimentary",
+          status: "active",
+        })
+    if (!created) return current
+    created.id = `ai_brand_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+    current.aiBrands.push(created)
+    return current
+  })
+
+  if (!user) return NextResponse.json({ error: "Account not found." }, { status: 404 })
+  return NextResponse.json({ ok: true, brands: user.aiBrands.map(brandQuotaView) })
+}

@@ -20,8 +20,8 @@ export default function ContactPage() {
         </p>
         <h1 className="font-heading mt-3 text-4xl tracking-tight md:text-5xl">Talk to GridPins</h1>
         <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground">
-          Questions about a campaign, a Maps listing, or whether a grid is the right brief — send
-          them here. Every message goes to{" "}
+          Questions about a campaign, a Maps listing, AI Visibility prompts, or whether a grid is
+          the right brief — send them here. Every message goes to{" "}
           <a className="text-primary hover:underline" href={`mailto:${SUPPORT_INBOX}`}>
             {SUPPORT_INBOX}
           </a>
@@ -47,6 +47,11 @@ export default function ContactPage() {
             <p className="mt-4 text-sm">
               <Link href="/get-found" className="text-primary hover:underline">
                 Looking for help ranking a Google Business Profile?
+              </Link>
+            </p>
+            <p className="mt-2 text-sm">
+              <Link href="/ai-visibility" className="text-primary hover:underline">
+                Questions about the $199 AI Visibility add-on?
               </Link>
             </p>
           </div>

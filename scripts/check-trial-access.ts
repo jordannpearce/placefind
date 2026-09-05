@@ -35,6 +35,8 @@ function user(partial: Partial<User>): User {
     dfsLogin: "",
     dfsPassword: "",
     trialEndsAt: null,
+    aiBrands: [],
+    aiScans: [],
     ...partial,
   }
 }

@@ -5,6 +5,7 @@ import { Pool, type QueryResultRow } from "pg"
 import { DEFAULT_COST_PER_LEAD_USD, normalizeLead, parseCostPerLeadUsd, parseStoredLeads } from "./leads"
 import { hashPassword, verifyPassword } from "./password"
 import { parseTrialEndsAt } from "./paddle-access"
+import { defaultAiVisibilityFields, normalizeAiBrands, normalizeAiScans } from "./ai-visibility"
 import { clampExtraCampaigns, clampExtraScanCredits, isPlanId } from "./plans"
 import { defaultScanQuotaFields } from "./scan-quota"
 import { purgeUserAccount } from "./purge-user"
@@ -90,6 +91,9 @@ function emptyDb(): Database {
       costPerLeadUsd: DEFAULT_COST_PER_LEAD_USD,
       extraScanProductId: "",
       extraScanPriceId: "",
+      cloroApiKey: "",
+      aiVisibilityProductId: "",
+      aiVisibilityPriceId: "",
     },
     leads: [],
     customers: [],
@@ -97,7 +101,13 @@ function emptyDb(): Database {
   }
 }
 
-function normalizeUser(raw: Partial<User> & { email: string }): User {
+function normalizeUser(
+  raw: Partial<Omit<User, "aiBrands" | "aiScans">> & {
+    email: string
+    aiBrands?: unknown
+    aiScans?: unknown
+  }
+): User {
   const plan: PlanId = isPlanId(raw.plan) ? raw.plan : "starter"
   return {
     id: raw.id || `user_${Date.now()}`,
@@ -121,6 +131,8 @@ function normalizeUser(raw: Partial<User> & { email: string }): User {
     dfsLogin: raw.dfsLogin || "",
     dfsPassword: raw.dfsPassword || "",
     trialEndsAt: parseTrialEndsAt(raw.trialEndsAt),
+    aiBrands: normalizeAiBrands(raw.aiBrands),
+    aiScans: normalizeAiScans(raw.aiScans),
   }
 }
 
@@ -210,6 +222,7 @@ function seedDb(db: Database): Database {
     dfsLogin: "",
     dfsPassword: "",
     trialEndsAt: null,
+    ...defaultAiVisibilityFields(),
   }
   db.users = [admin]
   db.workspaces[admin.id] = {
@@ -250,6 +263,7 @@ function ensureAdmin(db: Database) {
     dfsLogin: "",
     dfsPassword: "",
     trialEndsAt: null,
+    ...defaultAiVisibilityFields(),
   })
   if (!db.workspaces["user_tm_admin"]) {
     db.workspaces["user_tm_admin"] = {
@@ -286,6 +300,9 @@ function hydrate(raw: Partial<Database>): Database {
       costPerLeadUsd: parseCostPerLeadUsd(raw.settings?.costPerLeadUsd),
       extraScanProductId: raw.settings?.extraScanProductId?.trim() || "",
       extraScanPriceId: raw.settings?.extraScanPriceId?.trim() || "",
+      cloroApiKey: raw.settings?.cloroApiKey?.trim() || "",
+      aiVisibilityProductId: raw.settings?.aiVisibilityProductId?.trim() || "",
+      aiVisibilityPriceId: raw.settings?.aiVisibilityPriceId?.trim() || "",
     },
     leads: (raw.leads ?? []).map((lead) => normalizeLead(lead)).filter((lead): lead is MarketingLead => Boolean(lead)),
     customers: (raw.customers ?? [])
@@ -304,6 +321,7 @@ function hydrate(raw: Partial<Database>): Database {
         status: row.status,
         priceId: row.priceId || "",
         productId: row.productId || "",
+        kind: row.kind === "ai_visibility" ? "ai_visibility" : "plan",
         scheduledChangeAction: row.scheduledChangeAction ?? null,
         scheduledChangeAt: row.scheduledChangeAt ?? null,
         createdAt: row.createdAt || new Date().toISOString(),
@@ -440,6 +458,9 @@ async function ensureSchema() {
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS scans_used INTEGER NOT NULL DEFAULT 0`)
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS scan_period_start TEXT`)
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS scan_session_until TIMESTAMPTZ`)
+      await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_brands JSONB NOT NULL DEFAULT '[]'::jsonb`)
+      await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_scans JSONB NOT NULL DEFAULT '[]'::jsonb`)
+      await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'plan'`)
     })()
   }
   await schemaReady
@@ -470,6 +491,8 @@ async function loadFromPostgres(): Promise<Database> {
       dfs_login: string
       dfs_password: string
       trial_ends_at: Date | null
+      ai_brands: unknown
+      ai_scans: unknown
     }>("SELECT * FROM users"),
     query<AuthToken & { user_id: string; token_hash: string; expires_at: Date }>("SELECT * FROM tokens"),
     query<{
@@ -503,6 +526,7 @@ async function loadFromPostgres(): Promise<Database> {
       status: string
       price_id: string
       product_id: string
+      kind: string | null
       scheduled_change_action: string | null
       scheduled_change_at: Date | null
       created_at: Date
@@ -563,6 +587,8 @@ async function loadFromPostgres(): Promise<Database> {
         dfsLogin: row.dfs_login,
         dfsPassword: row.dfs_password,
         trialEndsAt: row.trial_ends_at ? row.trial_ends_at.toISOString() : null,
+        aiBrands: row.ai_brands,
+        aiScans: row.ai_scans,
       })
     ),
     tokens: tokens.rows.map((row) => ({
@@ -608,6 +634,9 @@ async function loadFromPostgres(): Promise<Database> {
       costPerLeadUsd: parseCostPerLeadUsd(settingsMap.costPerLeadUsd),
       extraScanProductId: settingsMap.extraScanProductId || "",
       extraScanPriceId: settingsMap.extraScanPriceId || "",
+      cloroApiKey: settingsMap.cloroApiKey || "",
+      aiVisibilityProductId: settingsMap.aiVisibilityProductId || "",
+      aiVisibilityPriceId: settingsMap.aiVisibilityPriceId || "",
     },
     leads:
       leadRows.rows.length > 0
@@ -656,6 +685,7 @@ async function loadFromPostgres(): Promise<Database> {
       status: row.status,
       priceId: row.price_id,
       productId: row.product_id,
+      kind: row.kind === "ai_visibility" ? "ai_visibility" : "plan",
       scheduledChangeAction: row.scheduled_change_action,
       scheduledChangeAt: row.scheduled_change_at ? row.scheduled_change_at.toISOString() : null,
       createdAt: row.created_at.toISOString(),
@@ -691,8 +721,9 @@ async function saveToPostgres(db: Database) {
         `INSERT INTO users (
           id, name, email, password_hash, role, status, plan, extra_campaigns, extra_scan_credits, scans_used,
           scan_period_start, scan_session_until, marketing_opt_in, company, agency_id,
-          paddle_customer_id, created_at, last_login_at, dfs_login, dfs_password, trial_ends_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+          paddle_customer_id, created_at, last_login_at, dfs_login, dfs_password, trial_ends_at,
+          ai_brands, ai_scans
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23::jsonb)`,
         [
           user.id,
           user.name,
@@ -715,6 +746,8 @@ async function saveToPostgres(db: Database) {
           user.dfsLogin,
           user.dfsPassword,
           user.trialEndsAt,
+          JSON.stringify(user.aiBrands ?? []),
+          JSON.stringify(user.aiScans ?? []),
         ]
       )
     }
@@ -727,15 +760,16 @@ async function saveToPostgres(db: Database) {
     for (const subscription of db.subscriptions) {
       await client.query(
         `INSERT INTO subscriptions (
-          subscription_id, customer_id, status, price_id, product_id,
+          subscription_id, customer_id, status, price_id, product_id, kind,
           scheduled_change_action, scheduled_change_at, created_at, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
         [
           subscription.subscriptionId,
           subscription.customerId,
           subscription.status,
           subscription.priceId,
           subscription.productId,
+          subscription.kind === "ai_visibility" ? "ai_visibility" : "plan",
           subscription.scheduledChangeAction,
           subscription.scheduledChangeAt,
           subscription.createdAt,
@@ -790,6 +824,18 @@ async function saveToPostgres(db: Database) {
     await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
       "extraScanPriceId",
       db.settings.extraScanPriceId || "",
+    ])
+    await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
+      "cloroApiKey",
+      db.settings.cloroApiKey || "",
+    ])
+    await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
+      "aiVisibilityProductId",
+      db.settings.aiVisibilityProductId || "",
+    ])
+    await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
+      "aiVisibilityPriceId",
+      db.settings.aiVisibilityPriceId || "",
     ])
     await client.query("INSERT INTO app_settings (key, value) VALUES ($1, $2)", [
       "marketingLeads",

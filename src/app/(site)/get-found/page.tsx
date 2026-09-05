@@ -69,6 +69,35 @@ export default function GetFoundPage() {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-16">
+        <h2 className="font-heading text-3xl tracking-tight">What we actually look at</h2>
+        <div className="mt-8 grid gap-6 md:grid-cols-2">
+          {[
+            {
+              title: "The profile before the grid",
+              body: "Primary name, categories, service area, and photos decide whether Maps treats you as relevant. A grid on a broken profile just paints a honest weak halo.",
+            },
+            {
+              title: "Proximity, then spend",
+              body: "Once the listing is clean, a lattice shows which neighborhoods already convert. That is when ads and posts have somewhere to land.",
+            },
+            {
+              title: "Keywords that split the map",
+              body: "Brand queries and category queries rarely share a pack. We ask for the terms customers actually type, not the slogan on the window.",
+            },
+            {
+              title: "AI shortlists, if you want them",
+              body: "Some owners also need to know whether ChatGPT or Perplexity names them. That is the optional $199/brand AI Visibility add-on — ten prompts a month, not a replacement for Maps.",
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-2xl border bg-card p-5">
+              <h3 className="font-heading text-2xl">{item.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 pb-16">
         <h2 className="font-heading text-3xl tracking-tight">Already tracking ranks?</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
           Open a workspace and run a grid on the listing. Or write us if you want a person to look

@@ -45,6 +45,20 @@ const SECTIONS = [
       "Do not scan a 13×13 on every typo. Each pin is a live Maps task. Use a smaller grid to learn a location, then densify when you are deciding whether to spend on a neighborhood.",
     ],
   },
+  {
+    title: "Why ranking still matters when reviews look fine",
+    body: [
+      "A 4.8 rating does not put you in the pack two miles south. Prominence helps. Proximity still draws the edge of the halo. Tracking ranks is how you learn whether a review campaign widened coverage or only padded the average on streets you already owned.",
+      "The same is true after a category change. The listing can look healthier in the dashboard and lose “emergency” or “near me” pins overnight. The grid is the only honest before-and-after.",
+    ],
+  },
+  {
+    title: "How a grid relates to AI answers",
+    body: [
+      "People now ask ChatGPT or Perplexity for a shortlist, then open Maps. The lattice still decides the sidewalk. The optional AI Visibility add-on ($199 per brand per month) tells you whether those models name you and which pages they cite. It does not replace a grid. It is a second surface.",
+      "Ten prompt scans a month is a fixed query set — branded, category, and “near me” — not a place to test every slogan. Keep the lattice for streets. Keep prompts for language.",
+    ],
+  },
 ]
 
 export default function WhyGridsPage() {
@@ -125,9 +139,14 @@ export default function WhyGridsPage() {
             rankings on Pro or Advanced are for learning the workflow — they are not a live
             market report.
           </p>
-          <Link href="/signup" className={buttonVariants({ size: "lg", className: "mt-8" })}>
-            Create a workspace
-          </Link>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="/signup" className={buttonVariants({ size: "lg" })}>
+              Create a workspace
+            </Link>
+            <Link href="/ai-visibility" className={buttonVariants({ variant: "outline", size: "lg" })}>
+              AI Visibility add-on
+            </Link>
+          </div>
         </div>
       </section>
     </div>

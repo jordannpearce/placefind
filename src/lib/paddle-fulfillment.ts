@@ -17,12 +17,17 @@ import {
   subscriptionGrantsAccess,
   subscriptionRevokesAccess,
 } from "./paddle-access"
+import {
+  aiVisibilityCatalogFromSettings,
+  isAiVisibilityPurchase,
+} from "./ai-visibility-catalog"
 import { extraScanCatalogFromSettings, isExtraScanPurchase } from "./extra-scan-catalog"
+import { normalizeAiBrand, parseCompetitorsInput, periodStartIso } from "./ai-visibility"
 import { resolvePlanFromCatalog } from "./paddle-catalog"
 import { clampExtraCampaigns } from "./plans"
 import { grantExtraScanCredits } from "./scan-quota"
 import { markLeadPaid } from "./leads"
-import type { PaddleCustomer, PaddleSubscription, PlanId, User } from "./types"
+import type { AiBrandStatus, PaddleCustomer, PaddleSubscription, PlanId, User } from "./types"
 
 function nowIso() {
   return new Date().toISOString()
@@ -66,6 +71,7 @@ function upsertSubscription(db: Database, next: Omit<PaddleSubscription, "create
     existing.status = next.status
     if (next.priceId) existing.priceId = next.priceId
     if (next.productId) existing.productId = next.productId
+    if (next.kind) existing.kind = next.kind
     existing.scheduledChangeAction = next.scheduledChangeAction
     existing.scheduledChangeAt = next.scheduledChangeAt
     existing.updatedAt = stamp
@@ -77,6 +83,7 @@ function upsertSubscription(db: Database, next: Omit<PaddleSubscription, "create
     status: next.status,
     priceId: next.priceId,
     productId: next.productId,
+    kind: next.kind === "ai_visibility" ? "ai_visibility" : "plan",
     scheduledChangeAction: next.scheduledChangeAction,
     scheduledChangeAt: next.scheduledChangeAt,
     createdAt: next.createdAt ? asIso(next.createdAt) : stamp,
@@ -103,6 +110,49 @@ export function linkUserToPaddleCustomer(db: Database, customerId: string, email
     return byEmail
   }
   return null
+}
+
+function brandStatusFromSubscription(status: string): AiBrandStatus {
+  const normalized = status.trim().toLowerCase()
+  if (normalized === "active") return "active"
+  if (normalized === "paused") return "paused"
+  if (normalized === "past_due") return "past_due"
+  return "canceled"
+}
+
+function upsertAiBrandFromSubscription(
+  user: User,
+  input: {
+    subscriptionId: string
+    status: string
+    brandName?: string
+    brandDomain?: string
+    competitors?: unknown
+  }
+) {
+  const existing = user.aiBrands.find((brand) => brand.subscriptionId === input.subscriptionId)
+  const status = brandStatusFromSubscription(input.status)
+  if (existing) {
+    existing.status = status
+    if (input.brandName?.trim()) existing.name = input.brandName.trim().slice(0, 80)
+    if (input.brandDomain?.trim()) existing.domain = input.brandDomain.trim().slice(0, 200)
+    const competitors = parseCompetitorsInput(input.competitors)
+    if (competitors.length) existing.competitors = competitors
+    return existing
+  }
+  const created = normalizeAiBrand({
+    id: `ai_brand_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    name: input.brandName?.trim() || "Brand",
+    domain: input.brandDomain || "",
+    competitors: parseCompetitorsInput(input.competitors),
+    subscriptionId: input.subscriptionId,
+    status,
+    promptsUsed: 0,
+    promptPeriodStart: periodStartIso(),
+    createdAt: nowIso(),
+  })
+  if (created) user.aiBrands.push(created)
+  return created
 }
 
 function applyPlanToUser(user: User, plan: PlanId) {
@@ -204,6 +254,17 @@ export async function handleSubscriptionEvent(
   event: SubscriptionCreatedEvent | SubscriptionUpdatedEvent | SubscriptionCanceledEvent
 ) {
   const catalog = itemsFromSubscription(event)
+  const aiCatalog = aiVisibilityCatalogFromSettings(db.settings)
+  const custom = customDataRecord(event.data.customData) ?? customDataRecord(catalog.customData)
+  const isAi = isAiVisibilityPurchase({
+    kind: custom?.kind,
+    priceId: catalog.priceId,
+    productId: catalog.productId,
+    priceName: catalog.priceName,
+    productName: catalog.productName,
+    aiVisibilityPriceId: aiCatalog.priceId,
+    aiVisibilityProductId: aiCatalog.productId,
+  })
   upsertCustomer(db, event.data.customerId, "")
   const subscription = upsertSubscription(db, {
     subscriptionId: event.data.id,
@@ -211,12 +272,28 @@ export async function handleSubscriptionEvent(
     status: event.data.status,
     priceId: catalog.priceId,
     productId: catalog.productId,
+    kind: isAi ? "ai_visibility" : "plan",
     scheduledChangeAction: event.data.scheduledChange?.action ?? null,
     scheduledChangeAt: event.data.scheduledChange?.effectiveAt ?? null,
     createdAt: event.data.createdAt,
   })
+  const userId = typeof custom?.userId === "string" ? custom.userId : ""
+  const user =
+    (userId ? db.users.find((row) => row.id === userId) : null) ||
+    linkUserToPaddleCustomer(db, event.data.customerId, "")
+  if (isAi) {
+    if (user) {
+      upsertAiBrandFromSubscription(user, {
+        subscriptionId: event.data.id,
+        status: event.data.status,
+        brandName: typeof custom?.brandName === "string" ? custom.brandName : "",
+        brandDomain: typeof custom?.brandDomain === "string" ? custom.brandDomain : "",
+        competitors: custom?.competitors,
+      })
+    }
+    return
+  }
   const plan = await resolvePlan(catalog)
-  const user = linkUserToPaddleCustomer(db, event.data.customerId, "")
   if (user) {
     if (plan && subscriptionGrantsAccess(subscription)) applyPlanToUser(user, plan)
     else applySubscriptionToUser(db, user)
@@ -266,8 +343,46 @@ export async function handleTransactionCompleted(db: Database, event: Transactio
     return
   }
 
+  const aiCatalog = aiVisibilityCatalogFromSettings(db.settings)
   const priceId = item?.price?.id || ""
   const productId = item?.price?.productId || ""
+  const isAi = isAiVisibilityPurchase({
+    kind: custom?.kind,
+    priceId,
+    productId,
+    priceName: item?.price?.name,
+    aiVisibilityPriceId: aiCatalog.priceId,
+    aiVisibilityProductId: aiCatalog.productId,
+  })
+  if (isAi) {
+    const userId = typeof custom?.userId === "string" ? custom.userId : ""
+    const user =
+      (userId ? db.users.find((row) => row.id === userId) : null) ||
+      (customerId ? linkUserToPaddleCustomer(db, customerId, "") : null)
+    const subscriptionId = event.data.subscriptionId || ""
+    if (subscriptionId && customerId) {
+      upsertSubscription(db, {
+        subscriptionId,
+        customerId,
+        status: "active",
+        priceId,
+        productId,
+        kind: "ai_visibility",
+        scheduledChangeAction: null,
+        scheduledChangeAt: null,
+      })
+    }
+    if (user && subscriptionId) {
+      upsertAiBrandFromSubscription(user, {
+        subscriptionId,
+        status: "active",
+        brandName: typeof custom?.brandName === "string" ? custom.brandName : "",
+        brandDomain: typeof custom?.brandDomain === "string" ? custom.brandDomain : "",
+        competitors: custom?.competitors,
+      })
+    }
+    return
+  }
   const plan = await resolvePlan({
     priceId,
     productId,
@@ -285,6 +400,7 @@ export async function handleTransactionCompleted(db: Database, event: Transactio
         status: "active",
         priceId,
         productId,
+        kind: "plan",
         scheduledChangeAction: null,
         scheduledChangeAt: null,
       })

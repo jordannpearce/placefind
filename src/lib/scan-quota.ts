@@ -1,3 +1,4 @@
+import { defaultAiVisibilityFields } from "./ai-visibility"
 import {
   clampExtraScanCredits,
   STARTER_INCLUDED_SCANS,
@@ -125,5 +126,6 @@ export function scanQuotaForRole(role: UserRole, plan: PlanId, extras = 0): Scan
     dfsLogin: "",
     dfsPassword: "",
     trialEndsAt: null,
+    ...defaultAiVisibilityFields(),
   })
 }

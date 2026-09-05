@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ExtraScanBuy } from "@/components/extra-scan-buy"
+import { AiVisibilityBuy } from "@/components/ai-visibility-buy"
 import {
   campaignLimit,
   EXTRA_SLOT_PRICE,
@@ -162,6 +163,8 @@ export function AccountForm({ user }: { user: PublicUser }) {
           </p>
         )}
       </section>
+
+      <AiVisibilityBuy />
 
       {user.usesHostedMaps ? (
         <ExtraScanBuy quota={user.scanQuota} />

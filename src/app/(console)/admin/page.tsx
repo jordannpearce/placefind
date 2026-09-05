@@ -1,11 +1,14 @@
 import Link from "next/link"
 
 import { AdminAgencies } from "@/components/admin-agencies"
+import { AdminCloro } from "@/components/admin-cloro"
 import { AdminUsers } from "@/components/admin-users"
 import { buttonVariants } from "@/components/ui/button"
 import { isAgencyAccount } from "@/lib/agency-account"
 import { requireAdmin } from "@/lib/auth-guard"
+import { resolveCloroApiKey } from "@/lib/cloro"
 import { readDb } from "@/lib/db"
+import { maskSecret } from "@/lib/mail"
 import { publicUser } from "@/lib/session"
 
 export default async function AdminPage() {
@@ -22,6 +25,7 @@ export default async function AdminPage() {
     ...agency,
     userCount: db.users.filter((user) => user.agencyId === agency.id).length,
   }))
+  const cloroKey = await resolveCloroApiKey(db.settings.cloroApiKey)
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -41,6 +45,17 @@ export default async function AdminPage() {
             Emails & Resend
           </Link>
         </div>
+      </div>
+      <div className="mt-8">
+        <AdminCloro
+          initial={{
+            hasCloroKey: Boolean(cloroKey),
+            cloroKeyLast4: maskSecret(cloroKey),
+            cloroSource: db.settings.cloroApiKey.trim() ? "admin" : cloroKey ? "env" : "none",
+            aiVisibilityPriceId: db.settings.aiVisibilityPriceId,
+            aiVisibilityProductId: db.settings.aiVisibilityProductId,
+          }}
+        />
       </div>
       <div className="mt-8">
         <AdminAgencies

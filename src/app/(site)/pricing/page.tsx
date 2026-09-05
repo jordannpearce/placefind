@@ -67,7 +67,9 @@ export default async function PricingPage({
       <p className="mt-3 max-w-2xl text-muted-foreground">
         Three plans. Same grid tracker. Starter is one brand, one location, and five Maps
         scans each month. Extra scans are $5. Pro is five campaigns with optional extra slots.
-        Advanced is fifty campaigns for shops that run many listings.
+        Advanced is fifty campaigns for shops that run many listings. On every plan you can add
+        AI Visibility for $199 per month per brand — 10 prompt scans across ChatGPT, Perplexity,
+        Gemini, Copilot, and Google AI Mode.
         The total you see is what Paddle returns for your country — we do not recalculate it.
         Payments are processed by Paddle. Refunds follow the{" "}
         <Link href="/refunds" className="text-primary hover:underline">
@@ -106,6 +108,21 @@ export default async function PricingPage({
           />
         </div>
       )}
+      <section className="mt-16 rounded-2xl border bg-card p-6">
+        <h2 className="font-heading text-3xl tracking-tight">AI Visibility add-on</h2>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Maps tells you which streets still put the listing in the local pack. AI models decide
+          the shortlist before someone opens Maps. Add AI Visibility on any plan for $199 per
+          month per brand. Each brand includes 10 prompt scans per month. One prompt is one scan
+          across the models. Add it after you subscribe — from Account or the AI Visibility page
+          in the workspace.
+        </p>
+        <p className="mt-4 text-sm">
+          <Link href="/ai-visibility" className="text-primary hover:underline">
+            How prompt scans and citations work
+          </Link>
+        </p>
+      </section>
     </div>
   )
 }

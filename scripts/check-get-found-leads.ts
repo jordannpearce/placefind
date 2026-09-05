@@ -131,6 +131,8 @@ function user(partial: Partial<User> & Pick<User, "id" | "email" | "plan">): Use
     dfsLogin: "",
     dfsPassword: "",
     trialEndsAt: null,
+    aiBrands: [],
+    aiScans: [],
     ...partial,
   }
 }

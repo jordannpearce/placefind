@@ -16,6 +16,9 @@ export async function SiteHeader() {
           <Link href="/why-grids" className="hidden rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground md:inline">
             Why grids
           </Link>
+          <Link href="/ai-visibility" className="hidden rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground lg:inline">
+            AI Visibility
+          </Link>
           <Link href="/get-found" className="rounded-lg px-3 py-1.5 text-muted-foreground hover:text-foreground">
             Get found
           </Link>
@@ -56,6 +59,9 @@ export function SiteFooter() {
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           <Link href="/why-grids" className="hover:text-foreground">
             Why grids
+          </Link>
+          <Link href="/ai-visibility" className="hover:text-foreground">
+            AI Visibility
           </Link>
           <Link href="/get-found" className="hover:text-foreground">
             Get found

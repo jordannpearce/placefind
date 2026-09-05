@@ -9,6 +9,7 @@ import {
 import { previewUrl, sendAuthMail } from "@/lib/mail"
 import { hashPassword, randomToken } from "@/lib/password"
 import { provisionUserFromPaddle } from "@/lib/paddle-fulfillment"
+import { defaultAiVisibilityFields } from "@/lib/ai-visibility"
 import { clampExtraCampaigns, isPlanId, PLANS } from "@/lib/plans"
 import { defaultScanQuotaFields, scanQuotaSnapshot, setExtraScanCredits, usesHostedMaps } from "@/lib/scan-quota"
 import type { PlanId, User, UserRole, UserStatus } from "@/lib/types"
@@ -67,6 +68,7 @@ export function createManagedUser(db: Database, input: CreateManagedUserInput): 
     dfsLogin: "",
     dfsPassword: "",
     trialEndsAt: input.trialEndsAt ?? null,
+    ...defaultAiVisibilityFields(),
   }
   created.extraCampaigns = clampExtraCampaigns(created.plan, input.extraCampaigns)
   if (input.extraScanCredits !== undefined) setExtraScanCredits(created, input.extraScanCredits)

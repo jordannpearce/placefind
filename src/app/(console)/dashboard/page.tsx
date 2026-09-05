@@ -42,9 +42,14 @@ export default async function DashboardPage() {
               : ""}
           </p>
         </div>
-        <Link href="/track" className={buttonVariants({ size: "lg" })}>
-          Open tracker
-        </Link>
+        <div className="flex flex-wrap gap-3">
+          <Link href="/track" className={buttonVariants({ size: "lg" })}>
+            Open tracker
+          </Link>
+          <Link href="/ai" className={buttonVariants({ variant: "outline", size: "lg" })}>
+            AI Visibility
+          </Link>
+        </div>
       </div>
 
       {due.length > 0 ? (
@@ -102,6 +107,18 @@ export default async function DashboardPage() {
           ))}
         </div>
       )}
+
+      <section className="mt-12 rounded-2xl border bg-card p-5">
+        <h2 className="font-heading text-2xl">AI Visibility</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Optional on every plan: $199 per month per brand, 10 prompt scans against ChatGPT,
+          Perplexity, Gemini, Copilot, and Google AI Mode. Check whether the brand is named and
+          which pages are cited.
+        </p>
+        <Link href="/ai" className={buttonVariants({ size: "sm", className: "mt-4" })}>
+          Open AI Visibility
+        </Link>
+      </section>
     </div>
   )
 }

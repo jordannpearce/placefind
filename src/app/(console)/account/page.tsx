@@ -30,8 +30,8 @@ export default async function AccountPage({
       <h1 className="font-heading text-4xl tracking-tight">Account</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         {usesHostedMaps(auth.user)
-          ? "Profile, plan, and email preferences. Starter includes 5 Maps scans each month. Extra scans are $5 on this page. Changing plan sends a billing email."
-          : "Profile, plan, extra campaign slots, Maps API keys, and email preferences. Changing plan or extras sends a billing email. Paid access is provisioned from Paddle webhooks."}
+          ? "Profile, plan, and email preferences. Starter includes 5 Maps scans each month. Extra scans are $5 on this page. AI Visibility is $199/month per brand. Changing plan sends a billing email."
+          : "Profile, plan, extra campaign slots, Maps API keys, AI Visibility brands, and email preferences. Changing plan or extras sends a billing email. Paid access is provisioned from Paddle webhooks."}
       </p>
       {locked || !current ? (
         <div className="mt-6">

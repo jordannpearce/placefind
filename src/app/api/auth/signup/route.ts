@@ -6,6 +6,7 @@ import { activationEmail, appUrl } from "@/lib/email-templates"
 import { previewUrl, sendAuthMail } from "@/lib/mail"
 import { hashPassword } from "@/lib/password"
 import { provisionUserFromPaddle } from "@/lib/paddle-fulfillment"
+import { defaultAiVisibilityFields } from "@/lib/ai-visibility"
 import { defaultScanQuotaFields } from "@/lib/scan-quota"
 
 export async function POST(request: Request) {
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
       dfsLogin: "",
       dfsPassword: "",
       trialEndsAt: null,
+      ...defaultAiVisibilityFields(),
     }
     db.users.push(created)
     db.workspaces[created.id] = emptyWorkspace()

@@ -27,6 +27,8 @@ function user(partial: Partial<User> & Pick<User, "id" | "email">): User {
     dfsLogin: "old-dfs",
     dfsPassword: "old-secret",
     trialEndsAt: null,
+    aiBrands: [],
+    aiScans: [],
     ...partial,
   }
 }

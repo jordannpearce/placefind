@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 const PRODUCT_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/track", label: "Tracker" },
+  { href: "/ai", label: "AI Visibility" },
   { href: "/account", label: "Account" },
 ]
 

@@ -23,6 +23,7 @@ function sub(partial: Partial<PaddleSubscription>): PaddleSubscription {
     status: "active",
     priceId: "pri_1",
     productId: "pro_1",
+    kind: "plan",
     scheduledChangeAction: null,
     scheduledChangeAt: null,
     createdAt: now,
@@ -54,6 +55,8 @@ function user(partial: Partial<User>): User {
     dfsLogin: "",
     dfsPassword: "",
     trialEndsAt: null,
+    aiBrands: [],
+    aiScans: [],
     ...partial,
   }
 }

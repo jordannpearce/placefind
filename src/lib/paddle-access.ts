@@ -76,11 +76,12 @@ export function subscriptionRevokesAccess(
 }
 
 export function pickAccessSubscription(subscriptions: PaddleSubscription[]): PaddleSubscription | null {
-  const granting = subscriptions.filter(subscriptionGrantsAccess)
+  const planSubs = subscriptions.filter((row) => row.kind !== "ai_visibility")
+  const granting = planSubs.filter(subscriptionGrantsAccess)
   if (granting.length > 0) {
     return granting.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
   }
-  const latest = [...subscriptions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const latest = [...planSubs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   return latest[0] ?? null
 }
 
@@ -154,6 +155,7 @@ const ALLOWED_UNPAID_PREFIXES = [
   "/email-policy",
   "/refunds",
   "/why-grids",
+  "/ai-visibility",
   "/login",
   "/signup",
   "/verify",

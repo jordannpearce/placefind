@@ -5,6 +5,9 @@ export const MAX_EXTRA_CAMPAIGNS = 5
 export const STARTER_INCLUDED_SCANS = 5
 export const EXTRA_SCAN_PRICE = 5
 export const MAX_EXTRA_SCAN_CREDITS = 9999
+export const AI_VISIBILITY_PRICE = 199
+export const AI_PROMPTS_PER_BRAND = 10
+export const MAX_AI_SCANS = 40
 
 export const PLANS: Record<
   PlanId,
@@ -39,6 +42,7 @@ export const PLANS: Record<
       "3 keywords on that campaign",
       "Grids up to 7×7",
       "Maps scans included",
+      `Optional AI Visibility $${AI_VISIBILITY_PRICE}/mo per brand · ${AI_PROMPTS_PER_BRAND} prompts`,
     ],
   },
   agency: {
@@ -58,6 +62,7 @@ export const PLANS: Record<
       "Grids up to 13×13",
       "Keyword comparison dashboards",
       "Billing emails when you change plan or extras",
+      `Optional AI Visibility $${AI_VISIBILITY_PRICE}/mo per brand · ${AI_PROMPTS_PER_BRAND} prompts`,
     ],
   },
   enterprise: {
@@ -77,6 +82,7 @@ export const PLANS: Record<
       "Marketing and info email sends",
       "Invoice-ready billing emails",
       "Priority onboarding",
+      `Optional AI Visibility $${AI_VISIBILITY_PRICE}/mo per brand · ${AI_PROMPTS_PER_BRAND} prompts`,
     ],
   },
 }
