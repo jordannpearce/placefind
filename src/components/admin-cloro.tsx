@@ -57,8 +57,9 @@ export function AdminCloro({ initial }: { initial: CloroSettings }) {
       <h2 className="font-heading text-2xl">Cloro · AI Visibility</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Paste the cloro.dev API key here. Workspace users never see it. Each paid brand gets 10
-        prompt scans per month across ChatGPT, Perplexity, Gemini, Copilot, Google AI Mode, and Grok.
-        Without a key, the add-on still shows sample answers so you can demo the layout.
+        typed prompts and 4 scans on each, across ChatGPT, Perplexity, Gemini, Copilot, Google AI
+        Mode, and Grok. Without a key, the add-on still shows sample answers so you can demo the
+        layout.
       </p>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="space-y-1.5">

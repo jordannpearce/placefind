@@ -7,7 +7,8 @@ export const EXTRA_SCAN_PRICE = 5
 export const MAX_EXTRA_SCAN_CREDITS = 9999
 export const AI_VISIBILITY_PRICE = 199
 export const AI_PROMPTS_PER_BRAND = 10
-export const MAX_AI_SCANS = 40
+export const AI_SCANS_PER_PROMPT = 4
+export const MAX_AI_SCANS = 400
 
 export const PLANS: Record<
   PlanId,

@@ -23,8 +23,9 @@ export default function AiVisibilityMarketingPage() {
         <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground">
           Maps still decides the sidewalk. ChatGPT, Perplexity, Gemini, Copilot, and Google AI Mode
           decide the shortlist before someone opens Maps. The AI Visibility add-on is ${AI_VISIBILITY_PRICE}{" "}
-          per month per brand on Starter, Pro, or Advanced. You get {AI_PROMPTS_PER_BRAND} prompt
-          scans each month. One prompt is one scan across those models.
+          per month per brand on Starter, Pro, or Advanced. You type {AI_PROMPTS_PER_BRAND} prompts
+          and can scan each one four times. History stays so you can compare whether the brand still
+          shows.
         </p>
         <div className="mt-7 flex flex-wrap gap-3">
           <Link href="/signup" className={buttonVariants({ size: "lg" })}>
@@ -73,8 +74,8 @@ export default function AiVisibilityMarketingPage() {
               body: "The grid is proximity: pins, ATR, local-pack share. The add-on is language: mentioned, cited, competitors. Agencies brief both in the same monthly recap.",
             },
             {
-              title: "Ten prompts is a set, not a toy",
-              body: `${AI_PROMPTS_PER_BRAND} scans per brand per month is enough for a fixed query set — branded, category, and “near me” — run more than once. Do not burn a scan on every typo.`,
+              title: "Ten prompts, four scans each",
+              body: `Type ${AI_PROMPTS_PER_BRAND} individual prompts — branded, category, and “near me.” Each prompt can be scanned four times. Compare those runs instead of rewriting the question every time.`,
             },
             {
               title: "Keys stay in Admin",
@@ -95,9 +96,9 @@ export default function AiVisibilityMarketingPage() {
           <ol className="mt-6 space-y-4">
             {[
               "Subscribe to AI Visibility for one brand — $199/month, on any GridPins plan. Add the company name, address, phone, and website.",
-              "Write the prompt a real customer would type, and list competitors you want watched.",
-              "GridPins sends that prompt to the AI models and reads the answer plus cited sources.",
-              "You see whether the brand was found, which facts appeared, citations, and who else was named. That uses one of this month’s 10 scans.",
+              "Type up to 10 individual prompts a customer would ask, and list competitors you want watched.",
+              "Scan a saved prompt. Each prompt can run 4 times. GridPins reads the answers plus cited sources.",
+              "Compare the history: whether the brand was found, which facts appeared, citations, and who else was named.",
             ].map((step, index) => (
               <li key={step} className="rounded-2xl border bg-background p-4">
                 <p className="text-xs font-medium text-muted-foreground">Step {index + 1}</p>

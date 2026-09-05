@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { AI_PROMPTS_PER_BRAND, AI_VISIBILITY_PRICE } from "@/lib/plans"
+import { AI_PROMPTS_PER_BRAND, AI_SCANS_PER_PROMPT, AI_VISIBILITY_PRICE } from "@/lib/plans"
 
 export type AiBrandFormValues = {
   name: string
@@ -70,8 +70,23 @@ export function AiVisibilityBuy({
     }
   }, [])
 
+  function fieldValue(id: string, fallback: string) {
+    if (typeof document === "undefined") return fallback
+    const el = document.getElementById(id)
+    if (el && "value" in el && typeof (el as HTMLInputElement).value === "string") {
+      return (el as HTMLInputElement).value
+    }
+    return fallback
+  }
+
   function formValues(): AiBrandFormValues {
-    return { name, address, phone, website, competitors }
+    return {
+      name: fieldValue("ai-company-name", name),
+      address: fieldValue("ai-address", address),
+      phone: fieldValue("ai-phone", phone),
+      website: fieldValue("ai-website", website),
+      competitors: fieldValue("ai-competitors", competitors),
+    }
   }
 
   function resetForm() {
@@ -87,10 +102,10 @@ export function AiVisibilityBuy({
     setError("")
     setMessage("")
     try {
-      if (name.trim().length < 2) {
+      const values = formValues()
+      if (values.name.trim().length < 2) {
         throw new Error("Enter the company name.")
       }
-      const values = formValues()
       if (onComplimentary) {
         await onComplimentary(values)
         setMessage("Brand added. Prompt scans will look for this company name, address, phone, and website.")
@@ -133,9 +148,10 @@ export function AiVisibilityBuy({
     <section className="space-y-3 rounded-2xl border bg-card p-5">
       <h2 className="font-heading text-2xl">Add a brand · ${AI_VISIBILITY_PRICE}/month</h2>
       <p className="text-sm text-muted-foreground">
-        Available on every plan. Each brand includes {AI_PROMPTS_PER_BRAND} prompt scans per month
-        across the AI models. One prompt is one scan. Each scan checks whether the answer includes
-        this company name, address, phone number, and website.
+        Available on every plan. Each brand includes {AI_PROMPTS_PER_BRAND} prompts you type
+        yourself. Each prompt can be scanned {AI_SCANS_PER_PROMPT} times, and those runs stay in
+        history so you can compare visibility. Each scan checks whether the answer includes this
+        company name, address, phone number, and website.
       </p>
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-1.5">

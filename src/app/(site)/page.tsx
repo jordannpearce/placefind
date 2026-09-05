@@ -210,8 +210,8 @@ export default function HomePage() {
               and reports whether the brand is named, who else is named, and which pages are cited.
             </p>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Each brand includes {AI_PROMPTS_PER_BRAND} prompt scans per month. One prompt is one
-              scan across the AI models. Add it on Starter, Pro, or Advanced.
+              Each brand includes {AI_PROMPTS_PER_BRAND} prompts you type, and four scans on each
+              so you can compare history. Add it on Starter, Pro, or Advanced.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link href="/ai-visibility" className={buttonVariants({ size: "lg" })}>

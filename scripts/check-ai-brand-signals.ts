@@ -1,6 +1,13 @@
 import assert from "node:assert/strict"
 
-import { normalizeAiBrand, parseBrandForm } from "../src/lib/ai-visibility.ts"
+import {
+  consumePromptScan,
+  normalizeAiBrand,
+  parseBrandForm,
+  refundPromptScan,
+  upsertBrandPrompt,
+} from "../src/lib/ai-visibility.ts"
+import { AI_SCANS_PER_PROMPT } from "../src/lib/plans.ts"
 import { analyzeAnswer, mockCloroScan, signalLabels } from "../src/lib/cloro.ts"
 
 const brand = normalizeAiBrand({
@@ -52,5 +59,26 @@ assert.equal(missing.competitors[0]?.mentioned, true)
 const mocks = mockCloroScan({ brand, engines: ["chatgpt"] })
 assert.equal(mocks[0]?.mentioned, true)
 assert.equal(mocks[0]?.signals.name, true)
+
+assert(brand)
+const first = upsertBrandPrompt(brand, "Who is the best plumber downtown and how do I call them?")
+assert.equal(first.ok, true)
+if (first.ok) {
+  assert.equal(brand.prompts.length, 1)
+  for (let i = 0; i < AI_SCANS_PER_PROMPT; i += 1) {
+    const used = consumePromptScan(brand, first.prompt.id)
+    assert.equal(used.ok, true, `scan ${i + 1} should be allowed`)
+  }
+  const blocked = consumePromptScan(brand, first.prompt.id)
+  assert.equal(blocked.ok, false)
+  refundPromptScan(brand, first.prompt.id)
+  assert.equal(consumePromptScan(brand, first.prompt.id).ok, true)
+}
+for (let i = 1; i < 10; i += 1) {
+  const extra = upsertBrandPrompt(brand, `Prompt number ${i + 1} about local service`)
+  assert.equal(extra.ok, true)
+}
+const overflow = upsertBrandPrompt(brand, "An eleventh prompt should not save on this brand")
+assert.equal(overflow.ok, false)
 
 console.log("ai brand signals ok")

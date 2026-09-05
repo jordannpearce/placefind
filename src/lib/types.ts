@@ -204,6 +204,14 @@ export type AiCompetitor = {
 
 export type AiBrandStatus = "active" | "canceled" | "past_due" | "paused"
 
+export type AiSavedPrompt = {
+  id: string
+  text: string
+  scansUsed: number
+  createdAt: string
+  updatedAt: string
+}
+
 export type AiBrand = {
   id: string
   name: string
@@ -214,6 +222,7 @@ export type AiBrand = {
   competitors: AiCompetitor[]
   subscriptionId: string
   status: AiBrandStatus
+  prompts: AiSavedPrompt[]
   promptsUsed: number
   promptPeriodStart: string | null
   createdAt: string
@@ -260,6 +269,7 @@ export type AiScanRun = {
   id: string
   brandId: string
   brandName: string
+  promptId: string
   prompt: string
   country: string
   createdAt: string
@@ -271,6 +281,7 @@ export type AiPromptQuota = {
   included: number
   used: number
   remaining: number
+  scansPerPrompt: number
   periodStart: string | null
 }
 

@@ -91,7 +91,7 @@ async function createCatalog() {
   const price = await paddle.prices.create({
     productId: product.id,
     name: "AI Visibility — one brand",
-    description: "10 AI prompt scans per month for one brand",
+    description: "10 typed AI prompts, 4 scans each, for one brand",
     type: "standard",
     billingCycle: { interval: "month", frequency: 1 },
     unitPrice: { amount: String(AI_VISIBILITY_PRICE * 100), currencyCode: "USD" },

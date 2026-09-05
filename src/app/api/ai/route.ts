@@ -6,7 +6,7 @@ import { billingRequiredResponse } from "@/lib/billing-gate"
 import { resolveCloroApiKey } from "@/lib/cloro"
 import { readDb } from "@/lib/db"
 import { userHasSoftwareAccess } from "@/lib/paddle-access"
-import { AI_PROMPTS_PER_BRAND, AI_VISIBILITY_PRICE } from "@/lib/plans"
+import { AI_PROMPTS_PER_BRAND, AI_SCANS_PER_PROMPT, AI_VISIBILITY_PRICE } from "@/lib/plans"
 
 export async function GET() {
   const auth = await requireUser()
@@ -25,6 +25,7 @@ export async function GET() {
     canAddComplimentary: canManageAiComplimentary(user),
     liveConfigured: Boolean(apiKey),
     promptsPerBrand: AI_PROMPTS_PER_BRAND,
+    scansPerPrompt: AI_SCANS_PER_PROMPT,
     monthlyPrice: AI_VISIBILITY_PRICE,
   })
 }

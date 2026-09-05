@@ -111,9 +111,9 @@ export default async function DashboardPage() {
       <section className="mt-12 rounded-2xl border bg-card p-5">
         <h2 className="font-heading text-2xl">AI Visibility</h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Optional on every plan: $199 per month per brand, 10 prompt scans against ChatGPT,
-          Perplexity, Gemini, Copilot, and Google AI Mode. Check whether the brand is named and
-          which pages are cited.
+          Optional on every plan: $199 per month per brand. Type 10 prompts and scan each one 4
+          times against ChatGPT, Perplexity, Gemini, Copilot, and Google AI Mode. History stays so
+          you can compare whether the brand is still named.
         </p>
         <Link href="/ai" className={buttonVariants({ size: "sm", className: "mt-4" })}>
           Open AI Visibility

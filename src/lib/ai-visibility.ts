@@ -1,9 +1,10 @@
-import { AI_PROMPTS_PER_BRAND, MAX_AI_SCANS } from "./plans"
+import { AI_PROMPTS_PER_BRAND, AI_SCANS_PER_PROMPT, MAX_AI_SCANS } from "./plans"
 import type {
   AiBrand,
   AiBrandStatus,
   AiCompetitor,
   AiPromptQuota,
+  AiSavedPrompt,
   AiScanRun,
   User,
 } from "./types"
@@ -54,6 +55,7 @@ export type AiBrandInput = {
   website?: string
   domain?: string
   competitors?: unknown
+  prompts?: unknown
   subscriptionId?: string
   status?: AiBrandStatus
   id?: string
@@ -81,12 +83,35 @@ export function normalizeAiBrand(raw: Partial<AiBrand> | AiBrandInput | null | u
     website,
     domain: normalizeDomain(website || raw.domain),
     competitors,
+    prompts: normalizeAiPrompts("prompts" in raw ? raw.prompts : []),
     subscriptionId: trimText(raw.subscriptionId, 80),
     status,
     promptsUsed: Math.max(0, Math.round(Number(raw.promptsUsed) || 0)),
     promptPeriodStart: typeof raw.promptPeriodStart === "string" ? raw.promptPeriodStart : null,
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
   }
+}
+
+export function normalizeAiPrompt(raw: Partial<AiSavedPrompt> | null | undefined): AiSavedPrompt | null {
+  if (!raw || typeof raw !== "object") return null
+  const text = typeof raw.text === "string" ? raw.text.trim().slice(0, 2000) : ""
+  if (text.length < 8) return null
+  const now = new Date().toISOString()
+  return {
+    id: trimText(raw.id, 80) || `ai_prompt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    text,
+    scansUsed: Math.max(0, Math.round(Number(raw.scansUsed) || 0)),
+    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now,
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : now,
+  }
+}
+
+export function normalizeAiPrompts(raw: unknown): AiSavedPrompt[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => normalizeAiPrompt(item as Partial<AiSavedPrompt>))
+    .filter((item): item is AiSavedPrompt => Boolean(item))
+    .slice(0, AI_PROMPTS_PER_BRAND)
 }
 
 export function normalizeAiBrands(raw: unknown): AiBrand[] {
@@ -104,6 +129,7 @@ export function normalizeAiScans(raw: unknown): AiScanRun[] {
       const scan = item as AiScanRun
       return {
         ...scan,
+        promptId: typeof scan.promptId === "string" ? scan.promptId : "",
         models: (scan.models || []).map((model) => ({
           ...model,
           signals: model.signals ?? { name: false, address: false, phone: false, website: false },
@@ -125,27 +151,75 @@ export function resetAiBrandPeriod(brand: AiBrand, now = new Date()) {
   return brand
 }
 
-export function aiPromptQuota(brand: AiBrand, now = new Date()): AiPromptQuota {
-  resetAiBrandPeriod(brand, now)
-  const remaining = Math.max(0, AI_PROMPTS_PER_BRAND - brand.promptsUsed)
+export function aiPromptQuota(brand: AiBrand): AiPromptQuota {
+  const used = (brand.prompts ?? []).length
   return {
     included: AI_PROMPTS_PER_BRAND,
-    used: brand.promptsUsed,
-    remaining,
+    used,
+    remaining: Math.max(0, AI_PROMPTS_PER_BRAND - used),
+    scansPerPrompt: AI_SCANS_PER_PROMPT,
     periodStart: brand.promptPeriodStart,
   }
 }
 
-export function consumeAiPrompt(brand: AiBrand, now = new Date()): { ok: true } | { ok: false; error: string } {
-  const quota = aiPromptQuota(brand, now)
-  if (quota.remaining <= 0) {
+export function upsertBrandPrompt(
+  brand: AiBrand,
+  text: string,
+  promptId?: string
+): { ok: true; prompt: AiSavedPrompt } | { ok: false; error: string } {
+  if (!Array.isArray(brand.prompts)) brand.prompts = []
+  const trimmed = text.trim()
+  if (trimmed.length < 8) return { ok: false, error: "Enter a prompt of at least 8 characters." }
+  if (trimmed.length > 2000) return { ok: false, error: "Keep the prompt under 2,000 characters." }
+  const now = new Date().toISOString()
+  if (promptId) {
+    const existing = brand.prompts.find((item) => item.id === promptId)
+    if (!existing) return { ok: false, error: "Prompt not found." }
+    existing.text = trimmed
+    existing.updatedAt = now
+    return { ok: true, prompt: existing }
+  }
+  if (brand.prompts.length >= AI_PROMPTS_PER_BRAND) {
+    return { ok: false, error: `This brand already has ${AI_PROMPTS_PER_BRAND} prompts.` }
+  }
+  const created: AiSavedPrompt = {
+    id: `ai_prompt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    text: trimmed,
+    scansUsed: 0,
+    createdAt: now,
+    updatedAt: now,
+  }
+  brand.prompts.push(created)
+  return { ok: true, prompt: created }
+}
+
+export function consumePromptScan(
+  brand: AiBrand,
+  promptId: string
+): { ok: true; prompt: AiSavedPrompt } | { ok: false; error: string } {
+  const prompt = (brand.prompts ?? []).find((item) => item.id === promptId)
+  if (!prompt) return { ok: false, error: "Save this prompt before scanning." }
+  if (prompt.scansUsed >= AI_SCANS_PER_PROMPT) {
     return {
       ok: false,
-      error: `This brand has used its ${AI_PROMPTS_PER_BRAND} AI prompt scans for the month.`,
+      error: `This prompt already has ${AI_SCANS_PER_PROMPT} scans. Compare the saved history.`,
     }
   }
-  brand.promptsUsed += 1
-  return { ok: true }
+  prompt.scansUsed += 1
+  return { ok: true, prompt: { ...prompt } }
+}
+
+export function refundPromptScan(brand: AiBrand, promptId: string) {
+  const prompt = (brand.prompts ?? []).find((item) => item.id === promptId)
+  if (prompt && prompt.scansUsed > 0) prompt.scansUsed -= 1
+}
+
+export function promptScanView(prompt: AiSavedPrompt) {
+  return {
+    ...prompt,
+    scansRemaining: Math.max(0, AI_SCANS_PER_PROMPT - prompt.scansUsed),
+    scansIncluded: AI_SCANS_PER_PROMPT,
+  }
 }
 
 export function activeAiBrands(user: Pick<User, "aiBrands" | "role">) {
@@ -176,6 +250,7 @@ export function brandQuotaView(brand: AiBrand) {
   const quota = aiPromptQuota(brand)
   return {
     ...brand,
+    prompts: (brand.prompts ?? []).map(promptScanView),
     quota,
   }
 }

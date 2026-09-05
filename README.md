@@ -58,7 +58,7 @@ Each pin is one live Maps task. A 7×7 scan is 49 tasks per keyword. Never send 
 
 ### AI Visibility add-on
 
-$199 per month per brand, on every plan. Ten prompt scans per month. Paste the Cloro API key in **Admin** (or `CLORO_API_KEY`). Customers never see the key. Optional Paddle IDs:
+$199 per month per brand, on every plan. Ten prompts you type, four scans each, saved as history. Paste the Cloro API key in **Admin** (or `CLORO_API_KEY`). Customers never see the key. Optional Paddle IDs:
 
 ```bash
 CLORO_API_KEY=
