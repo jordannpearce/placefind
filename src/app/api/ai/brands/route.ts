@@ -3,9 +3,8 @@ import { NextResponse } from "next/server"
 import {
   brandQuotaView,
   canManageAiComplimentary,
-  complimentaryAiBrand,
   normalizeAiBrand,
-  parseCompetitorsInput,
+  parseBrandForm,
 } from "@/lib/ai-visibility"
 import { requireUser } from "@/lib/auth-guard"
 import { billingRequiredResponse } from "@/lib/billing-gate"
@@ -27,25 +26,26 @@ export async function POST(request: Request) {
     return billingRequiredResponse(auth.user, db)
   }
 
-  let body: { name?: string; domain?: string; competitors?: unknown; sample?: boolean }
+  let body: Parameters<typeof parseBrandForm>[0]
   try {
     body = (await request.json()) as typeof body
   } catch {
     body = {}
   }
 
+  const parsed = parseBrandForm(body)
+  if (parsed.name.trim().length < 2) {
+    return NextResponse.json({ error: "Enter the company name." }, { status: 400 })
+  }
+
   const user = await updateDb((next) => {
     const current = next.users.find((row) => row.id === auth.user.id)
     if (!current) return null
-    const created = body.sample
-      ? complimentaryAiBrand()
-      : normalizeAiBrand({
-          name: body.name,
-          domain: body.domain,
-          competitors: parseCompetitorsInput(body.competitors),
-          subscriptionId: "complimentary",
-          status: "active",
-        })
+    const created = normalizeAiBrand({
+      ...parsed,
+      subscriptionId: "complimentary",
+      status: "active",
+    })
     if (!created) return current
     created.id = `ai_brand_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
     current.aiBrands.push(created)

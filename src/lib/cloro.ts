@@ -1,4 +1,4 @@
-import type { AiCompetitor, AiEngineId, AiModelResult, AiSource, ScanMode } from "./types"
+import type { AiBrand, AiCompetitor, AiEngineId, AiMatchSignals, AiModelResult, AiSource, ScanMode } from "./types"
 
 export const AI_ENGINES: Array<{ id: AiEngineId; label: string }> = [
   { id: "chatgpt", label: "ChatGPT" },
@@ -24,6 +24,8 @@ type CloroResult = {
   sources?: CloroSource[]
 }
 
+export type BrandCheck = Pick<AiBrand, "name" | "address" | "phone" | "website" | "domain" | "competitors">
+
 function needle(value: string) {
   return value.trim().toLowerCase()
 }
@@ -38,6 +40,30 @@ function domainInUrl(url: string, domain: string) {
   const d = needle(domain)
   if (!d) return false
   return needle(url).includes(d)
+}
+
+function digitsOnly(value: string) {
+  return value.replace(/\D/g, "")
+}
+
+function phoneMentioned(haystack: string, phone: string) {
+  const want = digitsOnly(phone)
+  if (want.length < 7) return false
+  const hay = digitsOnly(haystack)
+  if (hay.includes(want)) return true
+  const last10 = want.slice(-10)
+  return last10.length >= 10 && hay.includes(last10)
+}
+
+function addressMentioned(haystack: string, address: string) {
+  const raw = needle(address)
+  if (!raw) return false
+  if (haystack.includes(raw)) return true
+  const parts = raw.split(/[,\s]+/).filter((part) => part.length > 1)
+  const number = parts.find((part) => /^\d/.test(part))
+  const street = parts.find((part) => /^[a-z]/.test(part) && !/^(st|ave|rd|dr|blvd|ln|ct|ste|suite|north|south|east|west)$/.test(part))
+  if (number && street) return haystack.includes(number) && haystack.includes(street)
+  return false
 }
 
 function excerptAround(text: string, term: string) {
@@ -61,19 +87,29 @@ function firstMentionIndex(text: string, terms: string[]) {
   return Number.isFinite(best) ? best : -1
 }
 
+function emptySignals(): AiMatchSignals {
+  return { name: false, address: false, phone: false, website: false }
+}
+
 export function analyzeAnswer(input: {
   engine: AiEngineId
   label: string
   text: string
   sources: CloroSource[]
-  brandName: string
-  brandDomain: string
-  competitors: AiCompetitor[]
+  brand: BrandCheck
   error?: string | null
 }): AiModelResult {
   const text = input.text || ""
-  const haystack = `${text} ${input.sources.map((source) => `${source.label || ""} ${source.url || ""}`).join(" ")}`.toLowerCase()
-  const mentioned = includesTerm(haystack, input.brandName) || domainInUrl(haystack, input.brandDomain)
+  const sourceBlob = input.sources.map((source) => `${source.label || ""} ${source.url || ""}`).join(" ")
+  const haystack = `${text} ${sourceBlob}`.toLowerCase()
+  const domain = input.brand.domain || needle(input.brand.website).replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0]
+  const signals: AiMatchSignals = {
+    name: includesTerm(haystack, input.brand.name),
+    address: addressMentioned(haystack, input.brand.address),
+    phone: phoneMentioned(`${text} ${sourceBlob}`, input.brand.phone),
+    website: Boolean(domain) && (domainInUrl(haystack, domain) || includesTerm(haystack, domain)),
+  }
+  const mentioned = signals.name || signals.address || signals.phone || signals.website
   const sources: AiSource[] = input.sources.slice(0, 12).map((source, index) => {
     const url = source.url || ""
     return {
@@ -81,13 +117,16 @@ export function analyzeAnswer(input: {
       url,
       label: source.label || url || `Source ${index + 1}`,
       description: source.description || "",
-      citesBrand: domainInUrl(url, input.brandDomain) || includesTerm(`${source.label || ""} ${url}`, input.brandName),
+      citesBrand:
+        domainInUrl(url, domain) ||
+        includesTerm(`${source.label || ""} ${url}`, input.brand.name) ||
+        addressMentioned(`${source.label || ""} ${url} ${source.description || ""}`.toLowerCase(), input.brand.address),
     }
   })
   const cited = sources.some((source) => source.citesBrand)
   const names = [
-    { name: input.brandName, domain: input.brandDomain, isBrand: true },
-    ...input.competitors.map((competitor) => ({ ...competitor, isBrand: false })),
+    { name: input.brand.name, domain, isBrand: true },
+    ...input.brand.competitors.map((competitor) => ({ ...competitor, isBrand: false })),
   ]
   const ranked = names
     .map((item) => ({
@@ -97,6 +136,12 @@ export function analyzeAnswer(input: {
     .filter((item) => item.index >= 0)
     .sort((a, b) => a.index - b.index)
   const mentionRank = ranked.findIndex((item) => item.isBrand) + 1 || null
+  const excerptTerm =
+    (signals.name && input.brand.name) ||
+    (signals.website && domain) ||
+    (signals.address && input.brand.address) ||
+    (signals.phone && input.brand.phone) ||
+    input.brand.name
 
   return {
     engine: input.engine,
@@ -104,9 +149,10 @@ export function analyzeAnswer(input: {
     mentioned,
     cited,
     mentionRank: mentioned ? mentionRank || 1 : null,
-    excerpt: mentioned ? excerptAround(text, input.brandName) : text.slice(0, 220).trim(),
+    signals,
+    excerpt: mentioned ? excerptAround(text, excerptTerm) : text.slice(0, 220).trim(),
     sources,
-    competitors: input.competitors.map((competitor) => ({
+    competitors: input.brand.competitors.map((competitor) => ({
       name: competitor.name,
       domain: competitor.domain,
       mentioned:
@@ -120,34 +166,38 @@ export function analyzeAnswer(input: {
   }
 }
 
-function mockAnswer(engine: AiEngineId, brandName: string, competitors: AiCompetitor[]) {
-  const rival = competitors[0]?.name || "a nearby competitor"
+function mockAnswer(engine: AiEngineId, brand: BrandCheck) {
+  const rival = brand.competitors[0]?.name || "a nearby competitor"
+  const where = brand.address ? ` at ${brand.address}` : ""
+  const phone = brand.phone ? ` Call ${brand.phone}.` : ""
+  const site = brand.website || brand.domain
+  const siteLine = site ? ` Their site is ${site}.` : ""
   const templates: Record<AiEngineId, string> = {
-    chatgpt: `For espresso downtown, locals often start with ${brandName}. ${rival} is a common backup when the line is long. Official hours and the menu live on the brand site.`,
-    perplexity: `Recent guides name ${brandName} among the stronger specialty shops in the area. Reviewers also mention ${rival}. Sources include local roundups and the shop homepage.`,
-    gemini: `If you want a specialty pour-over, ${brandName} is frequently recommended. ${rival} shows up for patio seating. Confirm current hours before you go.`,
-    copilot: `People looking for coffee near the capitol often hear ${brandName} first. ${rival} appears in the same shortlists. Maps listings and the shop sites are the usual citations.`,
-    aimode: `${brandName} is a typical answer for “best coffee nearby,” with ${rival} listed just behind. Local pack pages and review sites are cited.`,
-    grok: `Short version: ${brandName} still gets the nod on specialty drinks. ${rival} wins some late-night mentions. Treat this as a vibe check, not a ranking from one street.`,
+    chatgpt: `A common recommendation is ${brand.name}${where}.${phone}${siteLine} ${rival} is a frequent alternative.`,
+    perplexity: `Guides often name ${brand.name}${where}.${siteLine} Reviewers also mention ${rival}.${phone}`,
+    gemini: `If you want that business, ${brand.name} is frequently recommended${where}.${phone}${siteLine} ${rival} shows up in the same lists.`,
+    copilot: `People asking locally often hear ${brand.name} first${where}.${siteLine} ${rival} appears in the same shortlists.${phone}`,
+    aimode: `${brand.name} is a typical answer${where}, with ${rival} listed just behind.${siteLine}${phone}`,
+    grok: `Short version: ${brand.name} still gets named${where}.${phone}${siteLine} ${rival} wins some leftover mentions.`,
   }
   return templates[engine]
 }
 
-function mockSources(brandName: string, brandDomain: string, competitors: AiCompetitor[]): CloroSource[] {
-  const domain = brandDomain || `${brandName.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`
-  const rival = competitors[0]
+function mockSources(brand: BrandCheck): CloroSource[] {
+  const domain = brand.domain || needle(brand.name).replace(/[^a-z0-9]+/g, "") + ".com"
+  const rival = brand.competitors[0]
   return [
     {
       position: 1,
-      url: `https://${domain.replace(/^https?:\/\//, "")}`,
-      label: `${brandName} — official site`,
-      description: "Hours, locations, and menu.",
+      url: brand.website?.startsWith("http") ? brand.website : `https://${domain}`,
+      label: `${brand.name} — official site`,
+      description: [brand.address, brand.phone].filter(Boolean).join(" · ") || "Official listing.",
     },
     {
       position: 2,
-      url: "https://austin.example/best-coffee",
-      label: "Best coffee in downtown Austin",
-      description: `A local roundup that names ${brandName}.`,
+      url: "https://example.com/local-directory",
+      label: `Local directory listing for ${brand.name}`,
+      description: brand.address || `A roundup that names ${brand.name}.`,
     },
     rival
       ? {
@@ -160,29 +210,21 @@ function mockSources(brandName: string, brandDomain: string, competitors: AiComp
           position: 3,
           url: "https://maps.example/listings",
           label: "Local listings",
-          description: "Directory of nearby coffee shops.",
+          description: "Directory of nearby businesses.",
         },
   ]
 }
 
-export function mockCloroScan(input: {
-  brandName: string
-  brandDomain: string
-  competitors: AiCompetitor[]
-  engines?: AiEngineId[]
-}): AiModelResult[] {
+export function mockCloroScan(input: { brand: BrandCheck; engines?: AiEngineId[] }): AiModelResult[] {
   const engines = input.engines?.length ? input.engines : AI_ENGINES.map((item) => item.id)
   return engines.map((engine) => {
     const meta = AI_ENGINES.find((item) => item.id === engine) ?? { id: engine, label: engine }
-    const text = mockAnswer(engine, input.brandName, input.competitors)
     return analyzeAnswer({
       engine,
       label: meta.label,
-      text,
-      sources: mockSources(input.brandName, input.brandDomain, input.competitors),
-      brandName: input.brandName,
-      brandDomain: input.brandDomain,
-      competitors: input.competitors,
+      text: mockAnswer(engine, input.brand),
+      sources: mockSources(input.brand),
+      brand: input.brand,
     })
   })
 }
@@ -225,9 +267,7 @@ export async function runCloroPrompt(input: {
   apiKey: string
   prompt: string
   country: string
-  brandName: string
-  brandDomain: string
-  competitors: AiCompetitor[]
+  brand: BrandCheck
   engines?: AiEngineId[]
 }): Promise<{ mode: ScanMode; models: AiModelResult[] }> {
   const engines = input.engines?.length ? input.engines : AI_ENGINES.map((item) => item.id)
@@ -235,12 +275,7 @@ export async function runCloroPrompt(input: {
   if (!key) {
     return {
       mode: "mock",
-      models: mockCloroScan({
-        brandName: input.brandName,
-        brandDomain: input.brandDomain,
-        competitors: input.competitors,
-        engines,
-      }),
+      models: mockCloroScan({ brand: input.brand, engines }),
     }
   }
 
@@ -258,9 +293,7 @@ export async function runCloroPrompt(input: {
         label: meta.label,
         text: result.markdown || result.text || "",
         sources: result.sources || [],
-        brandName: input.brandName,
-        brandDomain: input.brandDomain,
-        competitors: input.competitors,
+        brand: input.brand,
       })
     })
   )
@@ -274,12 +307,22 @@ export async function runCloroPrompt(input: {
       label: meta.label,
       text: "",
       sources: [],
-      brandName: input.brandName,
-      brandDomain: input.brandDomain,
-      competitors: input.competitors,
+      brand: input.brand,
       error: item.reason instanceof Error ? item.reason.message : "This model could not be scanned.",
     })
   })
 
   return { mode: "live", models }
+}
+
+export function signalLabels(signals: AiMatchSignals | undefined) {
+  if (!signals) return []
+  return (
+    [
+      signals.name ? "Company name" : null,
+      signals.address ? "Address" : null,
+      signals.phone ? "Phone" : null,
+      signals.website ? "Website" : null,
+    ] as Array<string | null>
+  ).filter((item): item is string => Boolean(item))
 }

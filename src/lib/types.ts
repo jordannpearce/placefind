@@ -207,6 +207,9 @@ export type AiBrandStatus = "active" | "canceled" | "past_due" | "paused"
 export type AiBrand = {
   id: string
   name: string
+  address: string
+  phone: string
+  website: string
   domain: string
   competitors: AiCompetitor[]
   subscriptionId: string
@@ -214,6 +217,13 @@ export type AiBrand = {
   promptsUsed: number
   promptPeriodStart: string | null
   createdAt: string
+}
+
+export type AiMatchSignals = {
+  name: boolean
+  address: boolean
+  phone: boolean
+  website: boolean
 }
 
 export type AiEngineId = "chatgpt" | "perplexity" | "gemini" | "copilot" | "aimode" | "grok"
@@ -239,6 +249,7 @@ export type AiModelResult = {
   mentioned: boolean
   cited: boolean
   mentionRank: number | null
+  signals: AiMatchSignals
   excerpt: string
   sources: AiSource[]
   competitors: AiCompetitorHit[]

@@ -66,7 +66,7 @@ PADDLE_AI_VISIBILITY_PRICE_ID=
 PADDLE_AI_VISIBILITY_PRODUCT_ID=
 ```
 
-If those Paddle IDs are empty, GridPins can create the $199/month product. Without a Cloro key, the workspace still shows sample model answers.
+If those Paddle IDs are empty, GridPins can create the $199/month product. Without a Cloro key, the workspace still shows sample model answers. Adding a brand asks for company name, address, phone, and website — each prompt scan checks whether those facts appear in the answers.
 
 ## Product
 

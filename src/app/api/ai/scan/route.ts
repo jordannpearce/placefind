@@ -77,9 +77,7 @@ export async function POST(request: Request) {
       apiKey,
       prompt,
       country,
-      brandName: reserved.name,
-      brandDomain: reserved.domain,
-      competitors: reserved.competitors,
+      brand: reserved,
       engines: engines.length ? engines : ENGINES,
     })
     const run: AiScanRun = {

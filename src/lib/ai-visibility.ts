@@ -9,12 +9,20 @@ import type {
 } from "./types"
 
 const STATUSES: AiBrandStatus[] = ["active", "canceled", "past_due", "paused"]
+const SAMPLE_BRAND_ID = "ai_brand_admin_sample"
 
 function trimText(value: unknown, max = 120) {
   return typeof value === "string" ? value.trim().slice(0, max) : ""
 }
 
-function normalizeDomain(value: unknown) {
+export function normalizeWebsite(value: unknown) {
+  const raw = trimText(value, 200)
+  if (!raw) return ""
+  if (/^https?:\/\//i.test(raw)) return raw
+  return raw
+}
+
+export function normalizeDomain(value: unknown) {
   const raw = trimText(value, 200).toLowerCase()
   if (!raw) return ""
   return raw.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] || ""
@@ -39,18 +47,39 @@ export function defaultAiVisibilityFields() {
   }
 }
 
-export function normalizeAiBrand(raw: Partial<AiBrand> | null | undefined): AiBrand | null {
+export type AiBrandInput = {
+  name?: string
+  address?: string
+  phone?: string
+  website?: string
+  domain?: string
+  competitors?: unknown
+  subscriptionId?: string
+  status?: AiBrandStatus
+  id?: string
+  promptsUsed?: number
+  promptPeriodStart?: string | null
+  createdAt?: string
+}
+
+export function normalizeAiBrand(raw: Partial<AiBrand> | AiBrandInput | null | undefined): AiBrand | null {
   if (!raw || typeof raw !== "object") return null
+  const id = trimText(raw.id, 80)
+  if (id === SAMPLE_BRAND_ID) return null
   const name = trimText(raw.name, 80)
   if (!name) return null
   const status = STATUSES.includes(raw.status as AiBrandStatus) ? (raw.status as AiBrandStatus) : "active"
   const competitors = Array.isArray(raw.competitors)
     ? raw.competitors.map(normalizeCompetitor).filter((item): item is AiCompetitor => Boolean(item)).slice(0, 8)
     : []
+  const website = normalizeWebsite("website" in raw ? raw.website : "")
   return {
-    id: trimText(raw.id, 80) || `ai_brand_${Date.now()}`,
+    id: id || `ai_brand_${Date.now()}`,
     name,
-    domain: normalizeDomain(raw.domain),
+    address: trimText("address" in raw ? raw.address : "", 200),
+    phone: trimText("phone" in raw ? raw.phone : "", 40),
+    website,
+    domain: normalizeDomain(website || raw.domain),
     competitors,
     subscriptionId: trimText(raw.subscriptionId, 80),
     status,
@@ -69,7 +98,17 @@ export function normalizeAiScans(raw: unknown): AiScanRun[] {
   if (!Array.isArray(raw)) return []
   return raw
     .filter((item) => item && typeof item === "object" && typeof (item as AiScanRun).id === "string")
-    .slice(0, MAX_AI_SCANS) as AiScanRun[]
+    .slice(0, MAX_AI_SCANS)
+    .map((item) => {
+      const scan = item as AiScanRun
+      return {
+        ...scan,
+        models: (scan.models || []).map((model) => ({
+          ...model,
+          signals: model.signals ?? { name: false, address: false, phone: false, website: false },
+        })),
+      }
+    })
 }
 
 export function periodStartIso(now = new Date()) {
@@ -116,32 +155,6 @@ export function canManageAiComplimentary(user: Pick<User, "role">) {
   return user.role === "admin"
 }
 
-export function complimentaryAiBrand(now = new Date()): AiBrand {
-  return {
-    id: "ai_brand_admin_sample",
-    name: "Houndstooth Coffee",
-    domain: "houndstoothcoffee.com",
-    competitors: [
-      { name: "Jo's Coffee", domain: "joscoffee.com" },
-      { name: "Starbucks", domain: "starbucks.com" },
-    ],
-    subscriptionId: "complimentary",
-    status: "active",
-    promptsUsed: 0,
-    promptPeriodStart: periodStartIso(now),
-    createdAt: now.toISOString(),
-  }
-}
-
-export function ensureAdminSampleBrand(user: User) {
-  if (user.role !== "admin") return user
-  if (user.aiBrands.some((brand) => brand.id === "ai_brand_admin_sample" || brand.status === "active")) {
-    return user
-  }
-  user.aiBrands = [complimentaryAiBrand(), ...user.aiBrands]
-  return user
-}
-
 export function storeAiScan(user: User, run: AiScanRun) {
   user.aiScans = [run, ...user.aiScans].slice(0, MAX_AI_SCANS)
 }
@@ -163,5 +176,24 @@ export function brandQuotaView(brand: AiBrand) {
   return {
     ...brand,
     quota,
+  }
+}
+
+export function parseBrandForm(body: {
+  name?: string
+  companyName?: string
+  address?: string
+  phone?: string
+  website?: string
+  brandName?: string
+  brandDomain?: string
+  competitors?: unknown
+}) {
+  return {
+    name: body.companyName || body.name || body.brandName || "",
+    address: body.address || "",
+    phone: body.phone || "",
+    website: body.website || body.brandDomain || "",
+    competitors: parseCompetitorsInput(body.competitors),
   }
 }

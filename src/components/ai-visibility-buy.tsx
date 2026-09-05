@@ -9,14 +9,24 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { AI_PROMPTS_PER_BRAND, AI_VISIBILITY_PRICE } from "@/lib/plans"
 
+export type AiBrandFormValues = {
+  name: string
+  address: string
+  phone: string
+  website: string
+  competitors: string
+}
+
 export function AiVisibilityBuy({
   onComplimentary,
 }: {
-  onComplimentary?: (input: { name: string; domain: string; competitors: string }) => Promise<void>
+  onComplimentary?: (input: AiBrandFormValues) => Promise<void>
 }) {
   const [paddle, setPaddle] = useState<Paddle | null>(null)
-  const [brandName, setBrandName] = useState("")
-  const [brandDomain, setBrandDomain] = useState("")
+  const [name, setName] = useState("")
+  const [address, setAddress] = useState("")
+  const [phone, setPhone] = useState("")
+  const [website, setWebsite] = useState("")
   const [competitors, setCompetitors] = useState("")
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
@@ -60,21 +70,37 @@ export function AiVisibilityBuy({
     }
   }, [])
 
+  function formValues(): AiBrandFormValues {
+    return { name, address, phone, website, competitors }
+  }
+
+  function resetForm() {
+    setName("")
+    setAddress("")
+    setPhone("")
+    setWebsite("")
+    setCompetitors("")
+  }
+
   async function buy() {
     setPending(true)
     setError("")
     setMessage("")
     try {
+      if (name.trim().length < 2) {
+        throw new Error("Enter the company name.")
+      }
+      const values = formValues()
       if (onComplimentary) {
-        await onComplimentary({ name: brandName, domain: brandDomain, competitors })
-        setMessage("Brand added. You can run prompt scans now.")
-        setBrandName("")
+        await onComplimentary(values)
+        setMessage("Brand added. Prompt scans will look for this company name, address, phone, and website.")
+        resetForm()
         return
       }
       const response = await fetch("/api/me/ai-visibility", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brandName, brandDomain, competitors }),
+        body: JSON.stringify(values),
       })
       const data = (await response.json()) as {
         priceId?: string
@@ -108,32 +134,59 @@ export function AiVisibilityBuy({
       <h2 className="font-heading text-2xl">Add a brand · ${AI_VISIBILITY_PRICE}/month</h2>
       <p className="text-sm text-muted-foreground">
         Available on every plan. Each brand includes {AI_PROMPTS_PER_BRAND} prompt scans per month
-        across the AI models. One prompt is one scan.
+        across the AI models. One prompt is one scan. Each scan checks whether the answer includes
+        this company name, address, phone number, and website.
       </p>
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-1.5">
-          <Label>Brand name</Label>
+          <Label htmlFor="ai-company-name">Company name</Label>
           <Input
-            value={brandName}
-            onChange={(event) => setBrandName(event.target.value)}
-            placeholder="Houndstooth Coffee"
+            id="ai-company-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Acme Plumbing"
+            autoComplete="organization"
           />
         </div>
         <div className="space-y-1.5">
-          <Label>Brand domain</Label>
+          <Label htmlFor="ai-website">Website</Label>
           <Input
-            value={brandDomain}
-            onChange={(event) => setBrandDomain(event.target.value)}
-            placeholder="houndstoothcoffee.com"
+            id="ai-website"
+            value={website}
+            onChange={(event) => setWebsite(event.target.value)}
+            placeholder="https://acmeplumbing.com"
+            autoComplete="url"
+          />
+        </div>
+        <div className="space-y-1.5 md:col-span-2">
+          <Label htmlFor="ai-address">Address</Label>
+          <Input
+            id="ai-address"
+            value={address}
+            onChange={(event) => setAddress(event.target.value)}
+            placeholder="1200 Congress Ave, Austin, TX 78701"
+            autoComplete="street-address"
+          />
+        </div>
+        <div className="space-y-1.5 md:col-span-2">
+          <Label htmlFor="ai-phone">Phone number</Label>
+          <Input
+            id="ai-phone"
+            type="tel"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            placeholder="(512) 555-0142"
+            autoComplete="tel"
           />
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label>Competitors to watch</Label>
+        <Label htmlFor="ai-competitors">Competitors to watch</Label>
         <Textarea
+          id="ai-competitors"
           value={competitors}
           onChange={(event) => setCompetitors(event.target.value)}
-          placeholder="Jo's Coffee, Starbucks"
+          placeholder="Rival Plumbing, City Drain Co"
           rows={2}
         />
       </div>

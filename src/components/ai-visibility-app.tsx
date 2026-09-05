@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { AI_ENGINES } from "@/lib/cloro"
+import { AI_ENGINES, signalLabels } from "@/lib/cloro"
 import { AI_PROMPTS_PER_BRAND } from "@/lib/plans"
-import type { AiBrand, AiPromptQuota, AiScanRun } from "@/lib/types"
+import type { AiBrand, AiMatchSignals, AiPromptQuota, AiScanRun } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 type BrandRow = AiBrand & { quota: AiPromptQuota }
@@ -25,7 +25,9 @@ type WorkspacePayload = {
 export function AiVisibilityApp() {
   const [data, setData] = useState<WorkspacePayload | null>(null)
   const [brandId, setBrandId] = useState("")
-  const [prompt, setPrompt] = useState("Best specialty coffee shop downtown Austin")
+  const [prompt, setPrompt] = useState(
+    "Who would you recommend locally, and how do I contact them? Include the business name, address, phone, and website."
+  )
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
   const [selectedScanId, setSelectedScanId] = useState("")
@@ -81,9 +83,10 @@ export function AiVisibilityApp() {
         </p>
         <h1 className="font-heading text-4xl tracking-tight">AI Visibility</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Run a prompt against ChatGPT, Perplexity, Gemini, Copilot, Google AI Mode, and Grok. See
-          whether the brand is named, who else is named, and which pages are cited. Each prompt is
-          one of {AI_PROMPTS_PER_BRAND} scans for that brand this month.
+          Run a prompt against ChatGPT, Perplexity, Gemini, Copilot, Google AI Mode, and Grok. Each
+          scan checks whether the company name, address, phone number, and website appear in the
+          answer or citations — plus who else is named. Each prompt is one of {AI_PROMPTS_PER_BRAND}{" "}
+          scans for that brand this month.
         </p>
         {data ? (
           <p className="mt-2 text-xs text-muted-foreground">
@@ -110,7 +113,9 @@ export function AiVisibilityApp() {
                 <p className="font-medium">{item.name}</p>
                 <Badge variant={item.status === "active" ? "default" : "secondary"}>{item.status}</Badge>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">{item.domain || "No domain"}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{item.website || item.domain || "No website"}</p>
+              {item.address ? <p className="mt-1 text-xs text-muted-foreground">{item.address}</p> : null}
+              {item.phone ? <p className="text-xs text-muted-foreground">{item.phone}</p> : null}
               <p className="mt-3 font-heading text-2xl">
                 {item.quota.remaining}/{item.quota.included}
               </p>
@@ -130,9 +135,13 @@ export function AiVisibilityApp() {
             <h2 className="font-heading text-2xl">Run a prompt scan</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Ask the question a customer would type. We send the same prompt to each model and
-              score mentions plus cited URLs for {brand.name}
+              check whether {brand.name}
+              {brand.address ? `, ${brand.address}` : ""}
+              {brand.phone ? `, ${brand.phone}` : ""}
+              {brand.website || brand.domain ? `, or ${brand.website || brand.domain}` : ""} appear
+              in the answer
               {brand.competitors.length
-                ? ` and ${brand.competitors.map((item) => item.name).join(", ")}`
+                ? ` — and whether ${brand.competitors.map((item) => item.name).join(", ")} show up too`
                 : ""}
               .
             </p>
@@ -186,13 +195,14 @@ export function AiVisibilityApp() {
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
               <Stat
-                label="Mentioned"
+                label="Brand found"
                 value={`${selected.models.filter((model) => model.mentioned).length}/${selected.models.length}`}
               />
               <Stat
                 label="Cited"
                 value={`${selected.models.filter((model) => model.cited).length}/${selected.models.length}`}
               />
+              <Stat label="Facts found" value={factsFoundLabel(selected.models.map((model) => model.signals))} />
               <Stat
                 label="Models"
                 value={String(selected.models.length)}
@@ -205,7 +215,7 @@ export function AiVisibilityApp() {
                     <h3 className="font-heading text-2xl">{model.label}</h3>
                     <div className="flex flex-wrap gap-1.5">
                       <Badge variant={model.mentioned ? "default" : "secondary"}>
-                        {model.mentioned ? "Brand mentioned" : "Not mentioned"}
+                        {model.mentioned ? "Brand found" : "Brand missing"}
                       </Badge>
                       <Badge variant={model.cited ? "default" : "secondary"}>
                         {model.cited ? "Cited" : "No citation"}
@@ -213,6 +223,11 @@ export function AiVisibilityApp() {
                       {model.mentionRank ? (
                         <Badge variant="secondary">Mention rank {model.mentionRank}</Badge>
                       ) : null}
+                      {signalLabels(model.signals).map((label) => (
+                        <Badge key={label} variant="secondary">
+                          {label}
+                        </Badge>
+                      ))}
                     </div>
                   </div>
                   {model.error ? (
@@ -256,11 +271,11 @@ export function AiVisibilityApp() {
       <AiVisibilityBuy
         onComplimentary={
           data?.canAddComplimentary
-            ? async ({ name, domain, competitors }) => {
+            ? async (values) => {
                 const response = await fetch("/api/ai/brands", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ name, domain, competitors }),
+                  body: JSON.stringify(values),
                 })
                 const next = (await response.json()) as { error?: string }
                 if (!response.ok) throw new Error(next.error || "Could not add brand.")
@@ -271,6 +286,12 @@ export function AiVisibilityApp() {
       />
     </div>
   )
+}
+
+function factsFoundLabel(all: Array<AiMatchSignals | undefined>) {
+  const keys: Array<keyof AiMatchSignals> = ["name", "address", "phone", "website"]
+  const found = keys.filter((key) => all.some((signals) => signals?.[key])).length
+  return `${found}/4`
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

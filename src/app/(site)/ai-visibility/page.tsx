@@ -41,7 +41,7 @@ export default function AiVisibilityMarketingPage() {
           {[
             {
               title: "Mentioned or missing",
-              body: "A prompt scan tells you whether the brand appears in the answer. Missing on three models and present on one is a brief, not a vibe.",
+              body: "A prompt scan tells you whether the company name, address, phone, or website appears in the answer. Missing on three models and present on one is a brief, not a vibe.",
             },
             {
               title: "Cited pages",
@@ -94,10 +94,10 @@ export default function AiVisibilityMarketingPage() {
           <h2 className="font-heading text-3xl">How a prompt scan works</h2>
           <ol className="mt-6 space-y-4">
             {[
-              "Subscribe to AI Visibility for one brand — $199/month, on any GridPins plan.",
+              "Subscribe to AI Visibility for one brand — $199/month, on any GridPins plan. Add the company name, address, phone, and website.",
               "Write the prompt a real customer would type, and list competitors you want watched.",
               "GridPins sends that prompt to the AI models and reads the answer plus cited sources.",
-              "You see mention rank, citations, and who else was named. That uses one of this month’s 10 scans.",
+              "You see whether the brand was found, which facts appeared, citations, and who else was named. That uses one of this month’s 10 scans.",
             ].map((step, index) => (
               <li key={step} className="rounded-2xl border bg-background p-4">
                 <p className="text-xs font-medium text-muted-foreground">Step {index + 1}</p>

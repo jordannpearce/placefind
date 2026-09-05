@@ -114,7 +114,8 @@ export default async function PricingPage({
           Maps tells you which streets still put the listing in the local pack. AI models decide
           the shortlist before someone opens Maps. Add AI Visibility on any plan for $199 per
           month per brand. Each brand includes 10 prompt scans per month. One prompt is one scan
-          across the models. Add it after you subscribe — from Account or the AI Visibility page
+          across the models. Scans check the company name, address, phone, and website you save
+          with the brand. Add it after you subscribe — from Account or the AI Visibility page
           in the workspace.
         </p>
         <p className="mt-4 text-sm">

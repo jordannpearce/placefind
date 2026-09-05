@@ -22,7 +22,13 @@ import {
   isAiVisibilityPurchase,
 } from "./ai-visibility-catalog"
 import { extraScanCatalogFromSettings, isExtraScanPurchase } from "./extra-scan-catalog"
-import { normalizeAiBrand, parseCompetitorsInput, periodStartIso } from "./ai-visibility"
+import {
+  normalizeAiBrand,
+  normalizeDomain,
+  normalizeWebsite,
+  parseCompetitorsInput,
+  periodStartIso,
+} from "./ai-visibility"
 import { resolvePlanFromCatalog } from "./paddle-catalog"
 import { clampExtraCampaigns } from "./plans"
 import { grantExtraScanCredits } from "./scan-quota"
@@ -127,15 +133,26 @@ function upsertAiBrandFromSubscription(
     status: string
     brandName?: string
     brandDomain?: string
+    address?: string
+    phone?: string
+    website?: string
     competitors?: unknown
   }
 ) {
   const existing = user.aiBrands.find((brand) => brand.subscriptionId === input.subscriptionId)
   const status = brandStatusFromSubscription(input.status)
+  const website = normalizeWebsite(input.website || input.brandDomain)
   if (existing) {
     existing.status = status
     if (input.brandName?.trim()) existing.name = input.brandName.trim().slice(0, 80)
-    if (input.brandDomain?.trim()) existing.domain = input.brandDomain.trim().slice(0, 200)
+    if (input.address?.trim()) existing.address = input.address.trim().slice(0, 200)
+    if (input.phone?.trim()) existing.phone = input.phone.trim().slice(0, 40)
+    if (website) {
+      existing.website = website
+      existing.domain = normalizeDomain(website)
+    } else if (input.brandDomain?.trim()) {
+      existing.domain = normalizeDomain(input.brandDomain)
+    }
     const competitors = parseCompetitorsInput(input.competitors)
     if (competitors.length) existing.competitors = competitors
     return existing
@@ -143,6 +160,9 @@ function upsertAiBrandFromSubscription(
   const created = normalizeAiBrand({
     id: `ai_brand_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     name: input.brandName?.trim() || "Brand",
+    address: input.address || "",
+    phone: input.phone || "",
+    website,
     domain: input.brandDomain || "",
     competitors: parseCompetitorsInput(input.competitors),
     subscriptionId: input.subscriptionId,
@@ -153,6 +173,11 @@ function upsertAiBrandFromSubscription(
   })
   if (created) user.aiBrands.push(created)
   return created
+}
+
+function customText(custom: Record<string, unknown> | null | undefined, key: string) {
+  const value = custom?.[key]
+  return typeof value === "string" ? value : ""
 }
 
 function applyPlanToUser(user: User, plan: PlanId) {
@@ -286,8 +311,11 @@ export async function handleSubscriptionEvent(
       upsertAiBrandFromSubscription(user, {
         subscriptionId: event.data.id,
         status: event.data.status,
-        brandName: typeof custom?.brandName === "string" ? custom.brandName : "",
-        brandDomain: typeof custom?.brandDomain === "string" ? custom.brandDomain : "",
+        brandName: customText(custom, "brandName"),
+        brandDomain: customText(custom, "brandDomain"),
+        address: customText(custom, "address"),
+        phone: customText(custom, "phone"),
+        website: customText(custom, "website"),
         competitors: custom?.competitors,
       })
     }
@@ -376,8 +404,11 @@ export async function handleTransactionCompleted(db: Database, event: Transactio
       upsertAiBrandFromSubscription(user, {
         subscriptionId,
         status: "active",
-        brandName: typeof custom?.brandName === "string" ? custom.brandName : "",
-        brandDomain: typeof custom?.brandDomain === "string" ? custom.brandDomain : "",
+        brandName: customText(custom, "brandName"),
+        brandDomain: customText(custom, "brandDomain"),
+        address: customText(custom, "address"),
+        phone: customText(custom, "phone"),
+        website: customText(custom, "website"),
         competitors: custom?.competitors,
       })
     }

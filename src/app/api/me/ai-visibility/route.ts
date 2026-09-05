@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-import { parseCompetitorsInput } from "@/lib/ai-visibility"
+import { parseBrandForm } from "@/lib/ai-visibility"
 import { ensureAiVisibilityCatalog } from "@/lib/ai-visibility-catalog"
 import { requireUser } from "@/lib/auth-guard"
 import { billingRequiredResponse } from "@/lib/billing-gate"
@@ -45,16 +45,17 @@ export async function POST(request: Request) {
   const auth = await requireUser()
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  let body: { brandName?: string; brandDomain?: string; competitors?: unknown }
+  let body: Parameters<typeof parseBrandForm>[0]
   try {
     body = (await request.json()) as typeof body
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const brandName = body.brandName?.trim() || ""
+  const parsed = parseBrandForm(body)
+  const brandName = parsed.name.trim()
   if (brandName.length < 2) {
-    return NextResponse.json({ error: "Enter the brand name this add-on will track." }, { status: 400 })
+    return NextResponse.json({ error: "Enter the company name this add-on will track." }, { status: 400 })
   }
 
   const db = await readDb()
@@ -80,10 +81,11 @@ export async function POST(request: Request) {
         kind: "ai_visibility",
         userId: auth.user.id,
         brandName,
-        brandDomain: body.brandDomain?.trim() || "",
-        competitors: parseCompetitorsInput(body.competitors)
-          .map((item) => item.name)
-          .join(", "),
+        brandDomain: parsed.website,
+        address: parsed.address,
+        phone: parsed.phone,
+        website: parsed.website,
+        competitors: parsed.competitors.map((item) => item.name).join(", "),
       },
     })
   } catch (error) {
