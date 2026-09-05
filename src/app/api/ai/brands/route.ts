@@ -6,8 +6,8 @@ import {
   missingBrandLocation,
   normalizeAiBrand,
   parseBrandForm,
-  withResolvedBrandLocation,
 } from "@/lib/ai-visibility"
+import { withResolvedBrandLocation } from "@/lib/maps-location-server"
 import { requireUser } from "@/lib/auth-guard"
 import { billingRequiredResponse } from "@/lib/billing-gate"
 import { resolveRequestAuth } from "@/lib/dataforseo"

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
-import { missingBrandLocation, parseBrandForm, withResolvedBrandLocation } from "@/lib/ai-visibility"
+import { missingBrandLocation, parseBrandForm } from "@/lib/ai-visibility"
+import { withResolvedBrandLocation } from "@/lib/maps-location-server"
 import { ensureAiVisibilityCatalog } from "@/lib/ai-visibility-catalog"
 import { requireUser } from "@/lib/auth-guard"
 import { billingRequiredResponse } from "@/lib/billing-gate"

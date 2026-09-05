@@ -8,8 +8,8 @@ import {
   parseBrandForm,
   removeComplimentaryBrand,
   userHasMatchingBrand,
-  withResolvedBrandLocation,
 } from "@/lib/ai-visibility"
+import { withResolvedBrandLocation } from "@/lib/maps-location-server"
 import { requireAdmin } from "@/lib/auth-guard"
 import { resolveRequestAuth } from "@/lib/dataforseo"
 import { readDb, updateDb } from "@/lib/db"

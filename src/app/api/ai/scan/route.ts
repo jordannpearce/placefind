@@ -4,9 +4,9 @@ import {
   activeAiBrands,
   consumePromptScan,
   refundPromptScan,
-  resolveBrandScanLocation,
   storeAiScan,
 } from "@/lib/ai-visibility"
+import { resolveBrandScanLocation } from "@/lib/maps-location-server"
 import { requireUser } from "@/lib/auth-guard"
 import { billingRequiredResponse } from "@/lib/billing-gate"
 import { resolveCloroApiKey, runCloroPrompt } from "@/lib/cloro"

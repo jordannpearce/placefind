@@ -1,5 +1,4 @@
-import { type DataForSeoAuth } from "./dataforseo"
-import { canonicalAiLocation, normalizeBrandLocation, resolveCityStateLocation } from "./maps-location"
+import { canonicalAiLocation, normalizeBrandLocation } from "./maps-location"
 import { AI_PROMPTS_PER_BRAND, AI_SCANS_PER_PROMPT, MAX_AI_SCANS } from "./plans"
 import type {
   AiBrand,
@@ -417,47 +416,6 @@ export function missingBrandLocation(parsed: Pick<ReturnType<typeof parseBrandFo
   return ""
 }
 
-export async function withResolvedBrandLocation<T extends ReturnType<typeof parseBrandForm>>(
-  parsed: T,
-  auth?: DataForSeoAuth | null
-) {
-  if (!parsed.city.trim() || !parsed.state.trim()) return parsed
-  const geo = await resolveCityStateLocation({
-    city: parsed.city,
-    state: parsed.state,
-    auth,
-  })
-  return {
-    ...parsed,
-    lat: geo.lat,
-    lng: geo.lng,
-    location: geo.location || parsed.location,
-  }
-}
-
 export function scanLocationForBrand(brand: Pick<AiBrand, "city" | "state" | "location">) {
   return brand.location || (brand.city && brand.state ? canonicalAiLocation(brand.city, brand.state) : "")
-}
-
-export async function resolveBrandScanLocation(
-  brand: AiBrand,
-  auth?: DataForSeoAuth | null
-): Promise<{ location: string; lat: number | null; lng: number | null }> {
-  const fallback = scanLocationForBrand(brand)
-  if (brand.lat != null && brand.lng != null && fallback) {
-    return { location: fallback, lat: brand.lat, lng: brand.lng }
-  }
-  if (!brand.city.trim() || !brand.state.trim()) {
-    return { location: fallback, lat: brand.lat, lng: brand.lng }
-  }
-  const geo = await resolveCityStateLocation({
-    city: brand.city,
-    state: brand.state,
-    auth,
-  })
-  return {
-    location: geo.location || fallback,
-    lat: geo.lat ?? brand.lat,
-    lng: geo.lng ?? brand.lng,
-  }
 }
