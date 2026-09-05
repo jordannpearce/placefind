@@ -382,7 +382,7 @@ export function AdminAiBrands({ initial }: { initial: Payload }) {
                 checked={form.target === "user"}
                 onChange={() => setForm((current) => ({ ...current, target: "user" }))}
               />
-              Any user account — Starter, Pro, Advanced, trial, or agency member
+              Account — one user, including Starter
             </label>
             <label className="inline-flex items-center gap-2">
               <input
