@@ -30,7 +30,7 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: "GridPins — Google Maps grid rank tracker",
   description:
-    "SaaS grid rank tracking for Google Maps. Campaigns per location, multiple keywords, and DataForSEO scans from every nearby street.",
+    "SaaS grid rank tracking for Google Maps. Campaigns per location, multiple keywords, and scans from every nearby street.",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

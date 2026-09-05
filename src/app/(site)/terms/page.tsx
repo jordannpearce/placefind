@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "The agreement that covers GridPins workspaces, scans, billing, and acceptable use.",
 }
 
-const UPDATED = "September 2, 2026"
+const UPDATED = "September 5, 2026"
 
 export default function TermsPage() {
   return (
@@ -20,16 +20,16 @@ export default function TermsPage() {
         <H>1. Who we are</H>
         <P>
           GridPins is a software service that helps brands and agencies measure how a Google Maps
-          listing ranks from a lattice of nearby GPS points. We are not Google, and we are not
-          DataForSEO. We provide software. You supply the listings, keywords, and (when you want
-          live ranks) your own Maps API credentials.
+          listing ranks from a lattice of nearby GPS points. We are not Google. We provide
+          software. You supply the listings, keywords, and (when you want live ranks) your own
+          Maps API credentials.
         </P>
       </section>
       <section className="space-y-3">
         <H>2. The service</H>
         <P>
           A workspace lets you create campaigns, confirm a listing, choose a grid size and radius,
-          and run scans. Each pin is one Maps SERP lookup. Without your DataForSEO login, GridPins
+          and run scans. Each pin is one Maps SERP lookup. Without Maps API credentials, GridPins
           may show a sample ranking set so you can learn the product. Sample ranks are not a
           substitute for live market data and must not be sold to clients as live results.
         </P>
@@ -59,8 +59,9 @@ export default function TermsPage() {
           GridPins subscription fees are billed monthly or annually according to the plan you choose.
           Subscription payments are processed by Paddle, our payment processor. Changing plan or
           Pro extra-campaign slots may generate a billing notice. Live Maps tasks are billed by
-          DataForSEO (or another provider you connect) to the credentials you enter. Those API
-          charges are not included in the GridPins subscription and are not refundable by us.
+          the Maps API provider you connect, to the credentials you enter. Those API charges are
+          not included in the GridPins subscription and are not refundable by us. See the Refund
+          Policy for how third-party API usage is treated.
         </P>
       </section>
       <section className="space-y-3">
@@ -80,8 +81,9 @@ export default function TermsPage() {
         <P>
           You may not use GridPins to scrape Google outside the supported API path, attack our
           systems, impersonate others, send unlawful mail, or store content you do not have rights
-          to. You may not resell raw API access through our app. You must comply with Google, Maps,
-          and DataForSEO terms when you run live scans.
+          to. You may not resell raw API access through our app. You must comply with Google and
+          Maps terms, and with the terms of any Maps API provider you connect, when you run live
+          scans.
         </P>
       </section>
       <section className="space-y-3">

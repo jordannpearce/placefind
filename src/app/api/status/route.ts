@@ -22,8 +22,8 @@ export async function GET() {
         ? "Maps scans are ready."
         : "Maps scans are unavailable right now."
       : live
-        ? "DataForSEO credentials found."
-        : "Add your DataForSEO login and password in Settings, or use sample data.",
+        ? "Maps API credentials found."
+        : "Add your Maps API login and password in Settings, or use sample data.",
   })
 }
 
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       ok: false,
       message: hosted
         ? "Maps scans are unavailable right now."
-        : "No DataForSEO credentials. Scans will use sample data.",
+        : "No Maps API credentials. Scans will use sample data.",
     })
   }
 

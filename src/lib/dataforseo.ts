@@ -211,12 +211,12 @@ export function dataForSeoErrorMessage(
   const { code, message } = payloadStatus(payload)
 
   if (code >= 40000) {
-    return message ? `DataForSEO ${code}: ${message}` : `DataForSEO error ${code}`
+    return message ? `Maps API ${code}: ${message}` : `Maps API error ${code}`
   }
   if (httpStatus && httpStatus >= 400) {
     return message
-      ? `DataForSEO HTTP ${httpStatus}: ${message}`
-      : `DataForSEO returned HTTP ${httpStatus}`
+      ? `Maps API HTTP ${httpStatus}: ${message}`
+      : `Maps API returned HTTP ${httpStatus}`
   }
   return null
 }
@@ -229,8 +229,8 @@ async function readDataForSeoJson(response: Response): Promise<DataForSeoRespons
   } catch {
     throw new Error(
       response.ok
-        ? "DataForSEO returned an unreadable response"
-        : `DataForSEO returned HTTP ${response.status}`
+        ? "Maps API returned an unreadable response"
+        : `Maps API returned HTTP ${response.status}`
     )
   }
 }
@@ -244,11 +244,11 @@ export async function verifyDataForSeoAuth(auth: DataForSeoAuth): Promise<{ ok: 
     const payload = await readDataForSeoJson(response)
     const error = dataForSeoErrorMessage(payload, response.status)
     if (error) return { ok: false, message: error }
-    return { ok: true, message: "DataForSEO account connected." }
+    return { ok: true, message: "Maps API account connected." }
   } catch (error) {
     return {
       ok: false,
-      message: error instanceof Error ? error.message : "Could not reach DataForSEO.",
+      message: error instanceof Error ? error.message : "Could not reach the Maps API.",
     }
   }
 }
@@ -273,7 +273,7 @@ export async function fetchMapsPoint(input: {
   const resolved = resolveDataForSeoAuth(input.auth)
 
   if (!resolved) {
-    throw new Error("DataForSEO credentials are not configured")
+    throw new Error("Maps API credentials are not configured")
   }
 
   const auth = Buffer.from(`${resolved.login}:${resolved.password}`).toString("base64")
@@ -314,12 +314,12 @@ export async function fetchMapsPoint(input: {
     throw new Error(dfsError)
   }
   if (!response.ok) {
-    throw new Error(`DataForSEO returned HTTP ${response.status}`)
+    throw new Error(`Maps API returned HTTP ${response.status}`)
   }
 
   const task = payload.tasks?.[0]
   if (!task) {
-    throw new Error("DataForSEO returned no tasks")
+    throw new Error("Maps API returned no tasks")
   }
 
   const listings = listingsFromTask(task)

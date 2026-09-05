@@ -49,10 +49,10 @@ export function SettingsDialog({
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>DataForSEO API keys</DialogTitle>
+          <DialogTitle>Maps API keys</DialogTitle>
           <DialogDescription>
-            Paste the API login and password from app.dataforseo.com. Keys save to your
-            GridPins account and are used for live Maps search and scans — not sample rankings.
+            Paste your Maps API login and password. Keys save to your GridPins account and are
+            used for live Maps search and scans — not sample rankings.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -63,7 +63,7 @@ export function SettingsDialog({
               value={login}
               autoComplete="username"
               onChange={(event) => setLogin(event.target.value)}
-              placeholder="email or login from app.dataforseo.com"
+              placeholder="API login"
             />
           </div>
           <div className="space-y-1.5">

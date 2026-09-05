@@ -31,7 +31,7 @@ export default async function AccountPage({
       <p className="mt-2 text-sm text-muted-foreground">
         {usesHostedMaps(auth.user)
           ? "Profile, plan, and email preferences. Starter includes 5 Maps scans each month. Extra scans are $5 on this page. Changing plan sends a billing email."
-          : "Profile, plan, extra campaign slots, DataForSEO keys, and email preferences. Changing plan or extras sends a billing email. Paid access is provisioned from Paddle webhooks."}
+          : "Profile, plan, extra campaign slots, Maps API keys, and email preferences. Changing plan or extras sends a billing email. Paid access is provisioned from Paddle webhooks."}
       </p>
       {locked || !current ? (
         <div className="mt-6">
