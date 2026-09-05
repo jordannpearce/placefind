@@ -7,14 +7,9 @@ import { PanelRight } from "lucide-react"
 import { ResultsPanel } from "@/components/results-panel"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
-import {
-  HOME_DEMO,
-  homeDemoKeywordResults,
-  homeDemoKeywordStats,
-  homeDemoPoints,
-  homeDemoSpacing,
-} from "@/lib/home-demo"
+import { HOME_DEMO, homeDemoKeywordStats, homeDemoSpacing } from "@/lib/home-demo"
 import { computeStats } from "@/lib/stats"
+import type { GridPoint, KeywordResults } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const RankMap = dynamic(() => import("@/components/rank-map"), {
@@ -26,9 +21,13 @@ const RankMap = dynamic(() => import("@/components/rank-map"), {
   ),
 })
 
-export function HomeTrackerDemo() {
-  const points = useMemo(() => homeDemoPoints(), [])
-  const allResults = useMemo(() => homeDemoKeywordResults(points), [points])
+export function HomeTrackerDemo({
+  points,
+  allResults,
+}: {
+  points: GridPoint[]
+  allResults: KeywordResults
+}) {
   const [activeKeyword, setActiveKeyword] = useState(HOME_DEMO.activeKeyword)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [resultsOpen, setResultsOpen] = useState(false)

@@ -3,6 +3,7 @@ import Link from "next/link"
 
 import { HomeTrackerDemo } from "@/components/home-tracker-demo"
 import { buttonVariants } from "@/components/ui/button"
+import { buildHomeDemoScan } from "@/lib/home-demo-scan"
 import { AI_PROMPTS_PER_BRAND, AI_VISIBILITY_PRICE, PLANS, PLAN_ORDER } from "@/lib/plans"
 
 export const metadata: Metadata = {
@@ -12,9 +13,10 @@ export const metadata: Metadata = {
 }
 
 export default function HomePage() {
+  const demo = buildHomeDemoScan()
   return (
     <div>
-      <HomeTrackerDemo />
+      <HomeTrackerDemo points={demo.points} allResults={demo.results} />
 
       <section className="mx-auto max-w-6xl px-4 py-14 md:py-20">
         <p className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">

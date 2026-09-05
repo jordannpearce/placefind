@@ -1,7 +1,6 @@
 import { buildGrid, spacingFromRadius } from "./grid"
-import { mockScanPoint } from "./mock-scan"
 import { computeStats } from "./stats"
-import type { GridPoint, KeywordResults, KeywordStatRow, PointResult } from "./types"
+import type { GridPoint, KeywordResults, KeywordStatRow } from "./types"
 
 export const HOME_DEMO = {
   keywords: ["coffee", "espresso", "coffee shop"],
@@ -29,32 +28,6 @@ export function homeDemoPoints(): GridPoint[] {
     HOME_DEMO.gridSize,
     homeDemoSpacing()
   )
-}
-
-export function homeDemoResultsForKeyword(keyword: string, points: GridPoint[]): Record<string, PointResult> {
-  const results: Record<string, PointResult> = {}
-  for (const point of points) {
-    results[point.id] = mockScanPoint({
-      pointId: point.id,
-      keyword,
-      targetBusiness: HOME_DEMO.targetBusiness,
-      targetPlaceId: HOME_DEMO.targetPlaceId,
-      targetLat: HOME_DEMO.store.lat,
-      targetLng: HOME_DEMO.store.lng,
-      lat: point.lat,
-      lng: point.lng,
-      zoom: HOME_DEMO.zoom,
-    })
-  }
-  return results
-}
-
-export function homeDemoKeywordResults(points: GridPoint[]): KeywordResults {
-  const next: KeywordResults = {}
-  for (const keyword of HOME_DEMO.keywords) {
-    next[keyword] = homeDemoResultsForKeyword(keyword, points)
-  }
-  return next
 }
 
 export function homeDemoKeywordStats(all: KeywordResults): KeywordStatRow[] {
