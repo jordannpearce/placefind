@@ -664,6 +664,42 @@ describe("runCampaignTraffic", () => {
     assert.ok(latest?.lastTrafficJob?.log?.some((line) => /server restarted/.test(line.message)))
   })
 
+  it("keeps a slow runner timeout as timed out so polling can keep the job visible", async () => {
+    isolateKeys()
+    process.env.SCRAPPEY_API_KEY = "scp_test_runner_key"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-traffic-timeout-")))
+    const created = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue"],
+        placeId: "ChIJ123",
+        listingTitle: "Franklin Barbecue",
+        center: { lat: 30.27, lng: -97.74 },
+      },
+      "user-a",
+    )
+    attachScan(created, true)
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async () => {
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError")
+    }) as typeof fetch
+
+    try {
+      const result = await runCampaignTraffic(created.id, emptyApiKeys(), ["0:0"], "user-a")
+      assert.equal(result.traffic.status, "error")
+      assert.equal(result.traffic.sessionsFailed, 1)
+      assert.equal(result.traffic.lastError, "Traffic runner timed out.")
+      assert.equal(result.traffic.lastError?.includes("reach"), false)
+      assert.ok(result.traffic.log?.some((line) => /Session failed\. Traffic runner timed out/.test(line.message)))
+      assert.equal(result.traffic.log?.some((line) => /Could not reach the traffic runner/.test(line.message)), false)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it("fails one session when the confirmed listing is not in that pin's results, without throwing 500", async () => {
     isolateKeys()
     process.env.SCRAPPEY_API_KEY = "scp_test_runner_key"
