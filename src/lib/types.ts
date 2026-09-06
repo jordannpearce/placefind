@@ -286,9 +286,27 @@ export type Campaign = {
   lastTrafficJob?: TrafficJob | null
 }
 
+export type TrafficJobStatus = "running" | "ok" | "error" | "stopped"
+
+export type TrafficLogLine = {
+  at: string
+  message: string
+  pinId?: string
+}
+
+export type TrafficPinResult = {
+  pinId: string
+  row: number
+  col: number
+  lat: number
+  lng: number
+  status: "pending" | "running" | "ok" | "fail" | "cancelled"
+  finishedAt: string | null
+}
+
 export type TrafficJob = {
   id: string
-  status: "running" | "ok" | "error"
+  status: TrafficJobStatus
   startedAt: string
   finishedAt: string | null
   sessionsRequested: number
@@ -297,6 +315,9 @@ export type TrafficJob = {
   sessionsFailed: number
   requestCount: number
   lastError: string | null
+  pinIds?: string[]
+  log?: TrafficLogLine[]
+  results?: TrafficPinResult[]
 }
 
 export type CampaignInput = {

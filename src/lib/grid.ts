@@ -5,6 +5,10 @@ export const DEFAULT_SPACING_MILES = 1
 export const DEFAULT_ZOOM = 17
 export const ALLOWED_GRID_SIZES = [3, 5, 7] as const
 
+export function gridPinId(point: Pick<GridPoint, "row" | "col">): string {
+  return `${point.row}:${point.col}`
+}
+
 export function normalizeGridSize(raw: unknown): number {
   const size = Number(raw)
   if ((ALLOWED_GRID_SIZES as readonly number[]).includes(size)) return size

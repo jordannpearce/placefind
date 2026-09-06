@@ -4,7 +4,7 @@ import markerIcon from "leaflet/dist/images/marker-icon.png"
 import markerShadow from "leaflet/dist/images/marker-shadow.png"
 import { useEffect, useRef } from "react"
 import "leaflet/dist/leaflet.css"
-import { pinColor, rankLabel } from "../lib/grid.ts"
+import { gridPinId, pinColor, rankLabel } from "../lib/grid.ts"
 import type { GeoPoint, GridPointResult } from "../lib/types.ts"
 
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: string })._getIconUrl
@@ -18,7 +18,10 @@ type Props = {
   center: GeoPoint | null
   points: GridPointResult[]
   selected: GridPointResult | null
+  selectedPinIds?: string[]
+  pinSelectable?: boolean
   onSelect: (point: GridPointResult) => void
+  onTogglePin?: (point: GridPointResult) => void
 }
 
 function escapeHtml(value: string): string {
@@ -54,12 +57,24 @@ function popupHtml(point: GridPointResult): string {
   </div>`
 }
 
-export function GridMap({ center, points, selected, onSelect }: Props) {
+export function GridMap({
+  center,
+  points,
+  selected,
+  selectedPinIds = [],
+  pinSelectable = false,
+  onSelect,
+  onTogglePin,
+}: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const layerRef = useRef<L.LayerGroup | null>(null)
   const onSelectRef = useRef(onSelect)
+  const onTogglePinRef = useRef(onTogglePin)
+  const pinSelectableRef = useRef(pinSelectable)
   onSelectRef.current = onSelect
+  onTogglePinRef.current = onTogglePin
+  pinSelectableRef.current = pinSelectable
 
   useEffect(() => {
     if (!hostRef.current || mapRef.current) return
@@ -94,11 +109,14 @@ export function GridMap({ center, points, selected, onSelect }: Props) {
     const layer = layerRef.current
     if (!map || !layer) return
     layer.clearLayers()
+    const selectedIds = new Set(selectedPinIds)
     const markers = points.map((point) => {
-      const selectedPoint = selected && selected.row === point.row && selected.col === point.col
+      const pinId = gridPinId(point)
+      const trafficSelected = selectedIds.has(pinId)
+      const detailSelected = Boolean(selected && selected.row === point.row && selected.col === point.col)
       const color = pinColor(point)
       const marker = L.marker([point.lat, point.lng], {
-        icon: pinIcon(color, Boolean(selectedPoint)),
+        icon: pinIcon(color, trafficSelected || detailSelected),
         keyboard: true,
         title: `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`,
       })
@@ -106,7 +124,10 @@ export function GridMap({ center, points, selected, onSelect }: Props) {
         direction: "top",
       })
       marker.bindPopup(popupHtml(point), { closeButton: true })
-      marker.on("click", () => onSelectRef.current(point))
+      marker.on("click", () => {
+        onSelectRef.current(point)
+        if (pinSelectableRef.current) onTogglePinRef.current?.(point)
+      })
       layer.addLayer(marker)
       return marker
     })
@@ -128,7 +149,7 @@ export function GridMap({ center, points, selected, onSelect }: Props) {
       map.setView([center.lat, center.lng], 12)
     }
     window.setTimeout(() => map.invalidateSize(), 40)
-  }, [center, points, selected])
+  }, [center, points, selected, selectedPinIds])
 
   return (
     <div

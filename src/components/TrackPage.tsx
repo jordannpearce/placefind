@@ -5,12 +5,14 @@ import {
   deleteCampaign,
   loadCampaignGrid,
   loadCampaigns,
+  loadCampaignTraffic,
   scanCampaign,
   searchBusiness,
   startCampaignTraffic,
+  stopCampaignTraffic,
   updateCampaign,
 } from "../lib/api.ts"
-import { buildPreviewPoints, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
+import { buildPreviewPoints, gridPinId, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
 import { publicSearchMessage } from "../lib/public-copy.ts"
 import { US_STATES } from "../lib/states.ts"
 import {
@@ -19,12 +21,17 @@ import {
   confirmedListingFromSearch,
   listingsFromSearch,
   campaignScanFinished,
+  noPinsSelectedMessage,
   scanBusinessEnabled,
   searchChanged,
   searchQueryFromCampaign,
   startTrafficEnabled,
   startTrafficLabel,
   startTrafficVisible,
+  stopTrafficVisible,
+  trafficLogEmptyCopy,
+  trafficLogLoadingCopy,
+  trafficPinStatusLabel,
 } from "../lib/track.ts"
 import type {
   ApiKeys,
@@ -36,6 +43,9 @@ import type {
   HostedKeyStatus,
   SearchQuery,
   SearchResponse,
+  TrafficJob,
+  TrafficLogLine,
+  TrafficPinResult,
 } from "../lib/types.ts"
 import { GridMap } from "./GridMap.tsx"
 
@@ -75,11 +85,14 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [saving, setSaving] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [startingTraffic, setStartingTraffic] = useState(false)
+  const [stoppingTraffic, setStoppingTraffic] = useState(false)
+  const [trafficPollError, setTrafficPollError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [searchResult, setSearchResult] = useState<SearchResponse | null>(null)
   const [confirmed, setConfirmed] = useState<ConfirmedListing | null>(null)
   const [selectedPoint, setSelectedPoint] = useState<GridPointResult | null>(null)
+  const [selectedPinIds, setSelectedPinIds] = useState<string[]>([])
   const [previewCenter, setPreviewCenter] = useState<GeoPoint | null>(null)
 
   const selected = useMemo(
@@ -119,6 +132,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setGridSize(5)
       setSpacingMiles(1)
       setPreviewCenter(null)
+      setSelectedPinIds([])
       return
     }
     setQuery(searchQueryFromCampaign(campaign))
@@ -142,6 +156,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setCreating(!next)
     applyCampaign(next)
     setSelectedPoint(null)
+    setSelectedPinIds([])
     return payload.campaigns
   }
 
@@ -193,6 +208,46 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     else if (next !== selectedPoint) setSelectedPoint(next)
   }, [points, selectedPoint])
 
+  useEffect(() => {
+    const allowed = new Set(points.map((point) => gridPinId(point)))
+    setSelectedPinIds((current) => {
+      const next = current.filter((id) => allowed.has(id))
+      return next.length === current.length ? current : next
+    })
+  }, [points])
+
+  useEffect(() => {
+    if (!selected?.id || selected.lastTrafficJob?.status !== "running") return
+    let active = true
+    const poll = async () => {
+      try {
+        const payload = await loadCampaignTraffic(selected.id)
+        if (!active) return
+        replaceCampaign(payload.campaign)
+        setTrafficPollError(null)
+        const job = payload.traffic
+        if (job && job.status !== "running") {
+          if (job.status === "stopped") {
+            setNotice("Traffic stopped. Remaining sessions were cancelled.")
+          } else if (job.sessionsAttempted > 0) {
+            setNotice(`Traffic finished. ${job.sessionsOk} of ${job.sessionsAttempted} sessions opened the listing.`)
+          }
+          if (job.lastError && job.sessionsOk === 0 && job.status !== "stopped") setError(job.lastError)
+        }
+      } catch (err) {
+        if (active) setTrafficPollError(err instanceof Error ? err.message : "Could not refresh the traffic log.")
+      }
+    }
+    const timer = window.setInterval(() => {
+      void poll()
+    }, 1500)
+    void poll()
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [selected?.id, selected?.lastTrafficJob?.status])
+
   function replaceCampaign(next: Campaign) {
     setCampaigns((current) => current.map((row) => (row.id === next.id ? next : row)))
     if (selectedId === next.id) {
@@ -210,6 +265,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setSearchResult(null)
       setPreviewCenter(null)
       setSelectedPoint(null)
+      setSelectedPinIds([])
       setNotice(null)
     }
     setQuery(next)
@@ -221,6 +277,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setNotice(null)
     setConfirmed(null)
     setSelectedPoint(null)
+    setSelectedPinIds([])
     try {
       const payload = await searchBusiness(query, keys, Boolean(hosted?.included && !seller))
       setSearchResult(payload)
@@ -344,6 +401,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setError(null)
     setNotice(null)
     setSelectedPoint(null)
+    setSelectedPinIds([])
     try {
       const hideKeys = Boolean(hosted?.included && !seller)
       let campaign = selected
@@ -388,6 +446,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     applyCampaign(null)
     setSearchResult(null)
     setSelectedPoint(null)
+    setSelectedPinIds([])
     setError(null)
     setNotice(null)
   }
@@ -398,45 +457,86 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     applyCampaign(campaign)
     setSearchResult(null)
     setSelectedPoint(null)
+    setSelectedPinIds([])
     setError(null)
     setNotice(null)
   }
 
   const mapsReady = Boolean((keys.dataforseoLogin && keys.dataforseoPassword) || hosted?.dataforseo)
-  const busy = Boolean(saving || scanning || searching || startingTraffic)
+  const trafficJob = selected?.lastTrafficJob ?? null
+  const trafficRunning = trafficJob?.status === "running"
+  const busy = Boolean(saving || scanning || searching || startingTraffic || stoppingTraffic)
   const scanFinished = campaignScanFinished(selected)
+  const pinsSelectable = Boolean(scanFinished && points.length > 0 && !scanning)
   const showStartTraffic = startTrafficVisible(confirmed)
+  const showStopTraffic = stopTrafficVisible(trafficJob)
   const canStartTraffic = startTrafficEnabled({
     listing: confirmed,
     campaign: selected,
     scanning,
     starting: startingTraffic,
     busy,
+    running: trafficRunning,
   })
   const trafficLabel = startTrafficLabel({ scanning, starting: startingTraffic, scanFinished })
   const step = searching ? 1 : confirmed ? 3 : listings.length > 0 ? 2 : 1
+  const trafficLog = trafficJob?.log ?? []
+  const trafficResults = trafficJob?.results ?? []
+
+  function togglePin(point: GridPointResult) {
+    const pinId = gridPinId(point)
+    setSelectedPoint(point)
+    setSelectedPinIds((current) => (current.includes(pinId) ? current.filter((id) => id !== pinId) : [...current, pinId]))
+  }
+
+  function selectAllPins() {
+    setSelectedPinIds(points.map((point) => gridPinId(point)))
+  }
+
+  function selectNoPins() {
+    setSelectedPinIds([])
+  }
 
   async function onStartTraffic() {
     if (!selected) return
-    const sessions = 3
+    if (selectedPinIds.length === 0) {
+      window.alert(noPinsSelectedMessage())
+      setError(noPinsSelectedMessage())
+      return
+    }
+    const sessions = selectedPinIds.length
     const requests = sessions * 2
     const ok = window.confirm(
-      `Start ${sessions} traffic sessions for ${confirmed?.title || selected.businessName}?\n\nThis uses your Maps traffic runner to search Maps and open the listing profile.\n\nEstimated ${requests} Maps requests (2 per session).`,
+      `Start traffic from ${sessions} selected pin${sessions === 1 ? "" : "s"} for ${confirmed?.title || selected.businessName}?\n\nMaps will search “${activeKeyword || selected.keywords[0] || "this keyword"}” from each pin’s GPS, then open the confirmed listing.\n\nEstimated ${requests} Maps requests (2 per pin).`,
     )
     if (!ok) return
     setStartingTraffic(true)
     setError(null)
     setNotice(null)
+    setTrafficPollError(null)
     try {
-      const payload = await startCampaignTraffic(selected.id, keys, Boolean(hosted?.included && !seller), sessions)
+      const payload = await startCampaignTraffic(selected.id, keys, Boolean(hosted?.included && !seller), selectedPinIds)
       replaceCampaign(payload.campaign)
-      const job = payload.traffic
-      setNotice(`Traffic finished. ${job.sessionsOk} of ${job.sessionsAttempted} sessions opened the listing.`)
-      if (job.lastError && job.sessionsOk === 0) setError(job.lastError)
+      setNotice(`Traffic started from ${sessions} selected pin${sessions === 1 ? "" : "s"}. Watch the live log under the map.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start traffic.")
     } finally {
       setStartingTraffic(false)
+    }
+  }
+
+  async function onStopTraffic() {
+    if (!selected) return
+    setStoppingTraffic(true)
+    setError(null)
+    try {
+      const payload = await stopCampaignTraffic(selected.id)
+      replaceCampaign(payload.campaign)
+      setNotice("Traffic stopped. Remaining sessions were cancelled.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not stop traffic.")
+    } finally {
+      setStoppingTraffic(false)
     }
   }
 
@@ -656,6 +756,18 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                     {trafficLabel}
                   </button>
                 )}
+                {showStopTraffic && (
+                  <button
+                    type="button"
+                    data-testid="stop-traffic"
+                    onClick={() => void onStopTraffic()}
+                    disabled={stoppingTraffic}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-clay/50 bg-clay/10 px-4 font-semibold text-clay hover:bg-clay/20 disabled:opacity-60"
+                  >
+                    {stoppingTraffic && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                    {stoppingTraffic ? "Stopping…" : "Stop Traffic"}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -785,6 +897,9 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 {confirmed
                   ? `Pins mark every ${gridSize}×${gridSize} search point around ${confirmed.title}. Rank 1 is the darkest green, then 2 and 3 in lighter greens; 4–6 yellow, 7–10 orange, 11–15 orange-red, and 16+ or not found in red.`
                   : "Confirm a listing to drop a pin and center the grid on that business."}
+                {pinsSelectable
+                  ? " After a scan, click pins to choose which GPS points get traffic."
+                  : ""}
               </p>
             </div>
             <div className="flex flex-wrap gap-3 text-xs text-muted">
@@ -830,11 +945,47 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             </div>
           )}
 
+          {pinsSelectable && (
+            <div className="mx-5 mb-3 flex flex-wrap items-center gap-2 sm:mx-0">
+              <p className="text-sm text-paper/80">
+                {selectedPinIds.length} of {points.length} pin{points.length === 1 ? "" : "s"} selected for traffic
+              </p>
+              <button
+                type="button"
+                data-testid="select-all-pins"
+                onClick={selectAllPins}
+                className="inline-flex h-8 items-center rounded-lg border border-line px-3 text-xs font-semibold text-paper hover:border-brass"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                data-testid="select-none-pins"
+                onClick={selectNoPins}
+                className="inline-flex h-8 items-center rounded-lg border border-line px-3 text-xs font-semibold text-paper hover:border-brass"
+              >
+                Select none
+              </button>
+            </div>
+          )}
+
           <GridMap
             center={mapCenter}
             points={points}
             selected={selectedPoint}
+            selectedPinIds={selectedPinIds}
+            pinSelectable={pinsSelectable}
             onSelect={setSelectedPoint}
+            onTogglePin={togglePin}
+          />
+
+          <TrafficLivePanel
+            job={trafficJob}
+            log={trafficLog}
+            results={trafficResults}
+            running={trafficRunning}
+            starting={startingTraffic}
+            pollError={trafficPollError}
           />
 
           {selectedPoint && (
@@ -856,6 +1007,13 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               {selectedPoint.address && <p className="mt-1 text-sm text-muted">{selectedPoint.address}</p>}
               {selectedPoint.domain && <p className="mt-1 text-sm text-muted">{selectedPoint.domain}</p>}
               {selectedPoint.placeId && <p className="mt-1 text-xs text-muted">Place ID {selectedPoint.placeId}</p>}
+              {pinsSelectable && (
+                <p className="mt-2 text-xs text-brass">
+                  {selectedPinIds.includes(gridPinId(selectedPoint))
+                    ? "Selected for traffic from this GPS point."
+                    : "Not selected for traffic. Click the pin again to add it."}
+                </p>
+              )}
               <p className="mt-1 text-xs text-muted">
                 {selectedPoint.locationCoordinate || `${selectedPoint.lat.toFixed(5)},${selectedPoint.lng.toFixed(5)}`}
                 {" · "}
@@ -882,8 +1040,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                   {points.map((point) => (
                     <tr
                       key={`${point.row}-${point.col}-${point.keyword}`}
-                      className="cursor-pointer border-t border-line hover:bg-raised/60"
-                      onClick={() => setSelectedPoint(point)}
+                      className={`cursor-pointer border-t border-line hover:bg-raised/60 ${selectedPinIds.includes(gridPinId(point)) ? "bg-brass/5" : ""}`}
+                      onClick={() => (pinsSelectable ? togglePin(point) : setSelectedPoint(point))}
                     >
                       <td className="py-2.5 pr-3 text-muted">
                         R{point.row + 1} C{point.col + 1}
@@ -908,23 +1066,6 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             </div>
           )}
 
-          {selected?.lastTrafficJob && (
-            <div className="mt-6 border-t border-line px-5 pt-4 sm:px-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Last traffic run</p>
-              <p className="mt-2 text-sm text-muted">
-                {formatWhen(selected.lastTrafficJob.startedAt)} · {selected.lastTrafficJob.sessionsOk} of{" "}
-                {selected.lastTrafficJob.sessionsAttempted} sessions opened the listing
-                {selected.lastTrafficJob.requestCount
-                  ? ` · ${selected.lastTrafficJob.requestCount} Maps requests`
-                  : ""}
-                {selected.lastTrafficJob.status === "running" ? " · running" : ""}
-              </p>
-              {selected.lastTrafficJob.lastError && selected.lastTrafficJob.sessionsOk === 0 && (
-                <p className="mt-1 text-sm text-clay">{selected.lastTrafficJob.lastError}</p>
-              )}
-            </div>
-          )}
-
           {selected?.recentGridScans && selected.recentGridScans.length > 0 && (
             <div className="mt-6 border-t border-line px-5 pt-4 sm:px-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Recent grid scans</p>
@@ -939,6 +1080,97 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
           )}
         </section>
       </main>
+    </div>
+  )
+}
+
+function TrafficLivePanel({
+  job,
+  log,
+  results,
+  running,
+  starting,
+  pollError,
+}: {
+  job: TrafficJob | null
+  log: TrafficLogLine[]
+  results: TrafficPinResult[]
+  running: boolean
+  starting: boolean
+  pollError: string | null
+}) {
+  return (
+    <div className="mx-5 mt-4 rounded-xl border border-line bg-ink px-4 py-4 sm:mx-0" data-testid="traffic-live-panel">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Live traffic log</p>
+          <h5 className="font-display text-xl text-paper">Sessions from selected pins</h5>
+        </div>
+        {job && (
+          <p className="text-xs text-muted">
+            {trafficPinStatusLabel(job.status)}
+            {job.sessionsRequested ? ` · ${job.sessionsOk}/${job.sessionsRequested} opened` : ""}
+          </p>
+        )}
+      </div>
+
+      {pollError && <p className="mt-3 text-sm text-clay">{pollError}</p>}
+      {job?.lastError && job.sessionsOk === 0 && job.status !== "stopped" && (
+        <p className="mt-3 text-sm text-clay">{job.lastError}</p>
+      )}
+
+      {(starting || running) && log.length === 0 && (
+        <div className="mt-3 flex items-center gap-2 text-sm text-paper/80">
+          <LoaderCircle className="h-4 w-4 animate-spin text-brass" />
+          {trafficLogLoadingCopy()}
+        </div>
+      )}
+
+      {!job && !starting && (
+        <p className="mt-3 text-sm text-muted">{trafficLogEmptyCopy()}</p>
+      )}
+
+      {log.length > 0 && (
+        <ol className="mt-3 max-h-48 overflow-auto rounded-lg border border-line bg-panel/40 px-3 py-2" data-testid="traffic-log">
+          {log.map((line, index) => (
+            <li key={`${line.at}-${index}`} className="border-b border-line/70 py-1.5 text-sm last:border-b-0">
+              <span className="block text-[11px] text-muted">{formatWhen(line.at)}</span>
+              <span className="text-paper/85">{line.message}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {results.length > 0 && (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[28rem] text-left text-sm" data-testid="traffic-results">
+            <thead className="text-[11px] uppercase tracking-[0.12em] text-muted">
+              <tr>
+                <th className="pb-2 pr-3 font-semibold">Pin</th>
+                <th className="pb-2 pr-3 font-semibold">Coordinate</th>
+                <th className="pb-2 pr-3 font-semibold">Status</th>
+                <th className="pb-2 font-semibold">When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((row) => (
+                <tr key={row.pinId} className="border-t border-line">
+                  <td className="py-2 pr-3 text-paper">
+                    R{row.row + 1} C{row.col + 1}
+                  </td>
+                  <td className="py-2 pr-3 text-muted">
+                    {row.lat.toFixed(5)}, {row.lng.toFixed(5)}
+                  </td>
+                  <td className="py-2 pr-3 text-paper/80">{trafficPinStatusLabel(row.status)}</td>
+                  <td className="py-2 text-muted">
+                    {row.finishedAt ? formatWhen(row.finishedAt) : row.status === "running" || row.status === "pending" ? "In progress" : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

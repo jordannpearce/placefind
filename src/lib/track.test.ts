@@ -8,11 +8,14 @@ import {
   listingsFromSearch,
   scanBusinessEnabled,
   searchChanged,
+  noPinsSelectedMessage,
   startTrafficEnabled,
   startTrafficLabel,
   startTrafficVisible,
+  stopTrafficVisible,
+  trafficLogEmptyCopy,
 } from "./track.ts"
-import type { BusinessListing, Campaign, SearchResponse } from "./types.ts"
+import type { BusinessListing, Campaign, SearchResponse, TrafficJob } from "./types.ts"
 
 const franklin: BusinessListing = {
   title: "Franklin Barbecue",
@@ -153,7 +156,12 @@ describe("start traffic button", () => {
     assert.equal(startTrafficLabel({ starting: true, scanFinished: true }), "Starting traffic…")
     assert.equal(startTrafficLabel({ scanFinished: true }), "Start Traffic")
     assert.equal(startTrafficEnabled({ listing, campaign: scanned, scanning: true }), false)
+    assert.equal(startTrafficEnabled({ listing, campaign: scanned, running: true }), false)
     assert.equal(startTrafficVisible(null), false)
+    assert.equal(stopTrafficVisible({ status: "running" } as TrafficJob), true)
+    assert.equal(stopTrafficVisible({ status: "ok" } as TrafficJob), false)
+    assert.equal(noPinsSelectedMessage(), "Select at least one pin")
+    assert.match(trafficLogEmptyCopy(), /Select pins/)
   })
 })
 

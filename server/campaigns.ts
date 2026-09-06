@@ -120,9 +120,27 @@ export type Campaign = {
   lastTrafficJob: TrafficJob | null
 }
 
+export type TrafficJobStatus = "running" | "ok" | "error" | "stopped"
+
+export type TrafficLogLine = {
+  at: string
+  message: string
+  pinId?: string
+}
+
+export type TrafficPinResult = {
+  pinId: string
+  row: number
+  col: number
+  lat: number
+  lng: number
+  status: "pending" | "running" | "ok" | "fail" | "cancelled"
+  finishedAt: string | null
+}
+
 export type TrafficJob = {
   id: string
-  status: "running" | "ok" | "error"
+  status: TrafficJobStatus
   startedAt: string
   finishedAt: string | null
   sessionsRequested: number
@@ -131,6 +149,9 @@ export type TrafficJob = {
   sessionsFailed: number
   requestCount: number
   lastError: string | null
+  pinIds?: string[]
+  log?: TrafficLogLine[]
+  results?: TrafficPinResult[]
 }
 
 export class CampaignError extends Error {
@@ -337,6 +358,56 @@ function writeCampaigns(campaigns: Campaign[]) {
   writeCollection("campaigns", campaigns)
 }
 
+function normalizeStoredTrafficJob(job: Campaign["lastTrafficJob"] | undefined): TrafficJob | null {
+  if (!job || typeof job !== "object") return null
+  const status =
+    job.status === "running" || job.status === "ok" || job.status === "error" || job.status === "stopped"
+      ? job.status
+      : "error"
+  return {
+    id: String(job.id || ""),
+    status,
+    startedAt: String(job.startedAt || ""),
+    finishedAt: job.finishedAt ?? null,
+    sessionsRequested: Number(job.sessionsRequested) || 0,
+    sessionsAttempted: Number(job.sessionsAttempted) || 0,
+    sessionsOk: Number(job.sessionsOk) || 0,
+    sessionsFailed: Number(job.sessionsFailed) || 0,
+    requestCount: Number(job.requestCount) || 0,
+    lastError: job.lastError ?? null,
+    pinIds: Array.isArray(job.pinIds) ? job.pinIds.map(String) : [],
+    log: Array.isArray(job.log)
+      ? job.log
+          .filter((line): line is TrafficLogLine => Boolean(line && typeof line === "object"))
+          .map((line) => ({
+            at: String(line.at || ""),
+            message: String(line.message || ""),
+            ...(line.pinId ? { pinId: String(line.pinId) } : {}),
+          }))
+      : [],
+    results: Array.isArray(job.results)
+      ? job.results
+          .filter((row): row is TrafficPinResult => Boolean(row && typeof row === "object"))
+          .map((row) => ({
+            pinId: String(row.pinId || ""),
+            row: Number(row.row) || 0,
+            col: Number(row.col) || 0,
+            lat: Number(row.lat) || 0,
+            lng: Number(row.lng) || 0,
+            status:
+              row.status === "pending" ||
+              row.status === "running" ||
+              row.status === "ok" ||
+              row.status === "fail" ||
+              row.status === "cancelled"
+                ? row.status
+                : "pending",
+            finishedAt: row.finishedAt ?? null,
+          }))
+      : [],
+  }
+}
+
 function normalizeStoredCampaign(row: Campaign): Campaign {
   const grid = normalizeGridSize(row.gridSize)
   const spacing = normalizeSpacingMiles(row.spacingMiles)
@@ -361,7 +432,7 @@ function normalizeStoredCampaign(row: Campaign): Campaign {
     lastGridScan: row.lastGridScan ?? null,
     recentScans: Array.isArray(row.recentScans) ? row.recentScans.slice(0, MAX_RECENT_SCANS) : [],
     recentGridScans: Array.isArray(row.recentGridScans) ? row.recentGridScans.slice(0, MAX_RECENT_SCANS) : [],
-    lastTrafficJob: row.lastTrafficJob ?? null,
+    lastTrafficJob: normalizeStoredTrafficJob(row.lastTrafficJob),
   }
 }
 

@@ -5,6 +5,8 @@ import type {
   ConfirmedListing,
   SearchQuery,
   SearchResponse,
+  TrafficJob,
+  TrafficPinResult,
 } from "./types.ts"
 
 export function listingIdentity(listing: Pick<BusinessListing, "placeId" | "title" | "address">): string {
@@ -77,9 +79,10 @@ export function startTrafficEnabled(input: {
   scanning?: boolean
   starting?: boolean
   busy?: boolean
+  running?: boolean
 }): boolean {
   if (!startTrafficVisible(input.listing)) return false
-  if (input.scanning || input.starting || input.busy) return false
+  if (input.scanning || input.starting || input.busy || input.running) return false
   return campaignScanFinished(input.campaign)
 }
 
@@ -88,6 +91,31 @@ export function startTrafficLabel(input: { scanning?: boolean; starting?: boolea
   if (input.starting) return "Starting traffic…"
   if (!input.scanFinished) return "Scan first"
   return "Start Traffic"
+}
+
+export function stopTrafficVisible(job?: TrafficJob | null): boolean {
+  return job?.status === "running"
+}
+
+export function noPinsSelectedMessage() {
+  return "Select at least one pin"
+}
+
+export function trafficLogEmptyCopy() {
+  return "No traffic yet. Select pins on the map, then start traffic."
+}
+
+export function trafficLogLoadingCopy() {
+  return "Starting traffic from the selected pins…"
+}
+
+export function trafficPinStatusLabel(status: TrafficPinResult["status"] | TrafficJob["status"]): string {
+  if (status === "ok") return "Opened"
+  if (status === "fail" || status === "error") return "Failed"
+  if (status === "cancelled" || status === "stopped") return "Stopped"
+  if (status === "running") return "Running"
+  if (status === "pending") return "Waiting"
+  return status
 }
 
 export function searchQueryFromCampaign(campaign: Pick<Campaign, "businessName" | "city" | "state">): SearchQuery {

@@ -415,10 +415,18 @@ export async function startCampaignTraffic(
   id: string,
   keys: ApiKeys,
   hideClientKeys = false,
-  sessions?: number,
+  pinIds?: string[],
 ): Promise<{ campaign: Campaign; traffic: TrafficJob }> {
   return request(`/api/campaigns/${id}/traffic`, {
     method: "POST",
-    body: JSON.stringify(hideClientKeys ? { sessions } : { sessions, ...keys }),
+    body: JSON.stringify(hideClientKeys ? { pinIds } : { pinIds, ...keys }),
   })
+}
+
+export async function stopCampaignTraffic(id: string): Promise<{ campaign: Campaign; traffic: TrafficJob }> {
+  return request(`/api/campaigns/${id}/traffic/stop`, { method: "POST", body: JSON.stringify({}) })
+}
+
+export async function loadCampaignTraffic(id: string): Promise<{ campaign: Campaign; traffic: TrafficJob | null }> {
+  return request(`/api/campaigns/${id}/traffic`)
 }

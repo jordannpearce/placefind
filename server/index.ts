@@ -70,7 +70,7 @@ import {
   scanCampaign,
   updateCampaign,
 } from "./campaigns.ts"
-import { runCampaignTraffic } from "./traffic.ts"
+import { getCampaignTraffic, startCampaignTraffic, stopCampaignTraffic } from "./traffic.ts"
 import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
 import { initStore } from "./store.ts"
@@ -334,10 +334,10 @@ async function start() {
       })
       return
     }
-    const body = (req.body ?? {}) as ApiKeys & { sessions?: number }
+    const body = (req.body ?? {}) as ApiKeys & { pinIds?: string[]; sessions?: number }
     const keys = isSellerMode() ? body : {}
     try {
-      const result = await runCampaignTraffic(String(req.params.id ?? ""), keys, body.sessions, user.id)
+      const result = startCampaignTraffic(String(req.params.id ?? ""), keys, body.pinIds, user.id)
       res.json({ ...result, ...campaignMeta() })
     } catch (error) {
       if (error instanceof CampaignError) {
@@ -345,6 +345,36 @@ async function start() {
         return
       }
       res.status(500).json({ error: "Traffic run failed unexpectedly." })
+    }
+  })
+
+  app.post("/api/campaigns/:id/traffic/stop", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    try {
+      const result = stopCampaignTraffic(String(req.params.id ?? ""), user.id)
+      res.json({ ...result, ...campaignMeta() })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not stop traffic." })
+    }
+  })
+
+  app.get("/api/campaigns/:id/traffic", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    try {
+      const result = getCampaignTraffic(String(req.params.id ?? ""), user.id)
+      res.json({ ...result, ...campaignMeta() })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not load traffic." })
     }
   })
 
