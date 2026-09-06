@@ -1094,7 +1094,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             {[
               { n: 1, label: "Search", detail: "Name, city, and state" },
               { n: 2, label: "Confirm", detail: "Click the right listing" },
-              { n: 3, label: "Scan business", detail: "Keyword and grid" },
+              { n: 3, label: "Scan business", detail: "Keywords and grid" },
             ].map((row) => (
               <li
                 key={row.n}
@@ -2235,7 +2235,7 @@ function SchedulePanel({
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ScheduleFieldset
           title="Scan schedule"
-          detail="Rerun the latest keyword and grid at this time."
+          detail="Rerun the latest keywords and grid at this time."
           schedule={scanSchedule}
           onChange={onScanChange}
         />
