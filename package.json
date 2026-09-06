@@ -14,6 +14,7 @@
     "lint": "oxlint",
     "preview": "tsx server/index.ts",
     "start": "NODE_ENV=production node dist-server/index.js",
+    "db:migrate": "tsx scripts/migrate-postgres.ts",
     "dist:win": "npm run build && electron-builder --win dir --x64 && tsx scripts/make-windows-setup.ts"
   },
   "dependencies": {

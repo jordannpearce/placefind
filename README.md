@@ -44,10 +44,15 @@ App data (users, sessions, orders, issued licenses, mail outbox, rank campaigns)
 
 Production start is `npm run start` (`NODE_ENV=production` + the built Express server). Do not use `npm run dev` on Railway.
 
-1. Create a GitHub repo you own and push this branch.
-2. Create a Railway project, add a **Postgres** plugin, and deploy this web service.
-3. Railway injects `DATABASE_URL`. Set `NODE_ENV=production` and `ADMIN_EMAIL` to your admin inbox.
-4. Copy seller tokens from local `.env` into Railway only if you need them; they are not required for the public site to boot.
+The Railway project **placefind** already has a **Postgres** service. It is linked to the **placefind** web service, so Railway injects `DATABASE_URL`. You do not need to create another database. To look at it: Railway dashboard → **placefind** → **Postgres**.
+
+On boot the app creates users, sessions, orders, issued licenses, mail outbox, and campaigns if they are missing (`server/schema.sql`). To re-apply that schema when `DATABASE_URL` can reach the database:
+
+```bash
+npm run db:migrate
+```
+
+Set `NODE_ENV=production` and `ADMIN_EMAIL` to your admin inbox. Copy seller tokens from local `.env` into Railway only if you need them; they are not required for the public site to boot.
 
 `railway.toml` and `Dockerfile` are in the repo. Health check: `/api/health`.
 
