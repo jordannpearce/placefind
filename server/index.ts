@@ -32,16 +32,6 @@ import { testDataForSeo } from "./dataforseo.ts"
 import { hostedKeyStatus, hydrateHostedKeys, readHostedKeys, writeHostedKeys } from "./hosted-keys.ts"
 import { getInstallerStatus, installerPath, startInstallerBuild, startSetupRepack } from "./installer.ts"
 import {
-  activateLicense,
-  createLicense,
-  keygenPublicStatus,
-  licenseStatus,
-  readIssuedLicenses,
-  readKeygenConfig,
-  testKeygenConnection,
-  writeKeygenConfig,
-} from "./keygen.ts"
-import {
   mailPresets,
   mailStatus,
   passwordResetEmail,
@@ -107,7 +97,7 @@ import { robotsTxt, siteOrigin, sitemapXml } from "./robots.ts"
 import { crawlsForUser, getCrawl, publicCrawl, requestListingCrawl } from "./site-crawl.ts"
 import { initStore } from "./store.ts"
 import { testScrappey } from "./scrappey.ts"
-import { attachUserLicense, checkout, issueAndDeliver, listOrders, ordersForUser, publicOrder, shopSummary } from "./shop.ts"
+import { checkout, listOrders, ordersForUser, publicOrder, shopSummary } from "./shop.ts"
 import { US_STATES } from "./states.ts"
 import type { ApiKeys, SearchQuery } from "./types.ts"
 
@@ -194,7 +184,6 @@ async function start() {
     const hosted = hostedKeyStatus({ revealHints: admin })
     const user = actor(req)
     const desktop = isDesktopRequest(req)
-    const license = user ? await attachUserLicense(user) : await licenseStatus()
     res.json({
       seller: isSellerMode(),
       store: storeOpen() && !desktop,
@@ -211,8 +200,6 @@ async function start() {
         dataforseoHint: hosted.dataforseoHint,
         seller: hosted.seller,
       },
-      license,
-      keygen: keygenPublicStatus(),
       publicUrl: publicSiteUrl(),
     })
   })
@@ -415,14 +402,6 @@ async function start() {
       res.status(400).json({ error: parsed.error })
       return
     }
-    const license = await licenseStatus()
-    if (license.required && !license.valid && (desktop || !storeOpen())) {
-      res.status(402).json({
-        error: license.detail || "Sign in with a PlaceFind account to search.",
-        license,
-      })
-      return
-    }
     const keys = isSellerMode() ? ((req.body ?? {}) as ApiKeys) : {}
     const user = actor(req)
     try {
@@ -559,15 +538,6 @@ async function start() {
   app.post("/api/campaigns/:id/scans", async (req, res) => {
     const user = requireUser(req, res)
     if (!user) return
-    const desktop = isDesktopRequest(req)
-    const license = await licenseStatus()
-    if (license.required && !license.valid && (desktop || !storeOpen())) {
-      res.status(402).json({
-        error: license.detail || "Sign in with a PlaceFind account to scan ranks.",
-        license,
-      })
-      return
-    }
     const body = (req.body ?? {}) as ApiKeys & { keywords?: string[] | string; keyword?: string }
     const keys = isSellerMode() ? body : {}
     const campaign = getCampaign(String(req.params.id ?? ""), user.id)
@@ -630,15 +600,6 @@ async function start() {
     res.setTimeout(10 * 60 * 1000)
     const user = requireUser(req, res)
     if (!user) return
-    const desktop = isDesktopRequest(req)
-    const license = await licenseStatus()
-    if (license.required && !license.valid && (desktop || !storeOpen())) {
-      res.status(402).json({
-        error: license.detail || "Sign in with a PlaceFind account to scan ranks.",
-        license,
-      })
-      return
-    }
     const body = (req.body ?? {}) as ApiKeys & { keywords?: string[] | string; keyword?: string }
     const keys = isSellerMode() ? body : {}
     const requested = normalizeKeywords([
@@ -660,15 +621,6 @@ async function start() {
   app.post("/api/campaigns/:id/traffic", async (req, res) => {
     const user = requireUser(req, res)
     if (!user) return
-    const desktop = isDesktopRequest(req)
-    const license = await licenseStatus()
-    if (license.required && !license.valid && (desktop || !storeOpen())) {
-      res.status(402).json({
-        error: license.detail || "Sign in with a PlaceFind account to start traffic.",
-        license,
-      })
-      return
-    }
     const body = (req.body ?? {}) as ApiKeys & {
       pinIds?: string[]
       keywordIds?: string[]
@@ -746,99 +698,11 @@ async function start() {
     res.json({ results })
   })
 
-  app.get("/api/product", async (req, res) => {
+  app.get("/api/product", (req, res) => {
     res.json({
       product: readProduct(),
-      installer: storeOpen() ? getInstallerStatus() : { status: "idle", log: "", files: [], folder: "", setupPath: "" },
       hosted: hostedKeyStatus({ revealHints: canManage(req.headers.cookie) }),
-      keygen: keygenPublicStatus(),
-      issued: canManage(req.headers.cookie) ? readIssuedLicenses() : [],
-      license: await licenseStatus(),
     })
-  })
-
-  app.get("/api/keygen", (req, res) => {
-    if (!manage(req, res)) return
-    const config = readKeygenConfig()
-    res.json({
-      keygen: keygenPublicStatus(),
-      issued: readIssuedLicenses(),
-      accountId: config.accountId,
-      productId: config.productId,
-      policyId: config.policyId,
-    })
-  })
-
-  app.post("/api/keygen", (req, res) => {
-    if (!manage(req, res)) return
-    const body = (req.body ?? {}) as {
-      accountId?: string
-      productId?: string
-      policyId?: string
-      token?: string
-      rebuild?: boolean
-    }
-    const current = readKeygenConfig()
-    const accountId = body.accountId?.trim() || current.accountId
-    const productId = body.productId?.trim() || current.productId
-    const policyId = body.policyId?.trim() || current.policyId
-    const token = body.token?.trim() || current.token
-    if (!accountId || !productId || !policyId || !token) {
-      res.status(400).json({ error: "Account ID, product ID, policy ID, and token are required." })
-      return
-    }
-    writeKeygenConfig({ accountId, productId, policyId, token })
-    const unpacked = existsSync(path.join(process.cwd(), "release", "win-unpacked", "PlaceFind.exe"))
-    const installer = unpacked && body.rebuild !== false ? startSetupRepack() : getInstallerStatus()
-    res.json({
-      keygen: keygenPublicStatus(),
-      issued: readIssuedLicenses(),
-      installer,
-    })
-  })
-
-  app.post("/api/keygen/test", async (req, res) => {
-    if (!manage(req, res)) return
-    const body = (req.body ?? {}) as { accountId?: string; productId?: string; policyId?: string; token?: string }
-    res.json(await testKeygenConnection(body))
-  })
-
-  app.post("/api/keygen/licenses", async (req, res) => {
-    if (!manage(req, res)) return
-    const body = (req.body ?? {}) as { name?: string; email?: string; sendEmail?: boolean }
-    if (body.sendEmail) {
-      const delivered = await issueAndDeliver({ name: body.name ?? "", email: body.email ?? "", sendEmail: true })
-      if (delivered.error || !delivered.license) {
-        res.status(400).json({ error: delivered.error || "Could not assign a license." })
-        return
-      }
-      res.json({ license: delivered.license, order: delivered.order ? publicOrder(delivered.order) : null, issued: readIssuedLicenses() })
-      return
-    }
-    const result = await createLicense(body)
-    if (result.error || !result.license) {
-      res.status(400).json({ error: result.error || "Could not assign a license." })
-      return
-    }
-    res.json({ license: result.license, issued: readIssuedLicenses() })
-  })
-
-  app.get("/api/license", async (_req, res) => {
-    res.json({ license: await licenseStatus(), seller: isSellerMode() })
-  })
-
-  app.post("/api/license/activate", async (req, res) => {
-    const key = String((req.body ?? {}).key ?? "")
-    if (!key.trim()) {
-      res.status(400).json({ error: "Enter a license key." })
-      return
-    }
-    const license = await activateLicense(key)
-    if (!license.valid) {
-      res.status(400).json({ error: license.detail || "That license key is not valid.", license })
-      return
-    }
-    res.json({ license })
   })
 
   app.get("/api/hosted-keys", (req, res) => {
@@ -901,9 +765,8 @@ async function start() {
       res.status(400).json({ error: result.error || "Could not sign in." })
       return
     }
-    const license = await attachUserLicense(result.user)
     res.setHeader("Set-Cookie", [sessionCookie(createSession(result.user.id)), impersonationCookie("", true)])
-    res.json({ user: result.user, license })
+    res.json({ user: result.user })
   })
 
   app.post("/api/auth/forgot", async (req, res) => {
@@ -932,9 +795,8 @@ async function start() {
       res.status(400).json({ error: result.error || "This reset link is invalid or has expired." })
       return
     }
-    const license = await attachUserLicense(result.user)
     res.setHeader("Set-Cookie", [sessionCookie(createSession(result.user.id)), impersonationCookie("", true)])
-    res.json({ user: result.user, license })
+    res.json({ user: result.user })
   })
 
   app.post("/api/auth/logout", (req, res) => {
@@ -976,7 +838,6 @@ async function start() {
     const result = await checkout(user)
     res.json({
       order: publicOrder(result.order),
-      license: result.license ?? null,
       warning: publicCheckoutWarning(result.error),
     })
   })
@@ -999,13 +860,11 @@ async function start() {
     if (!manage(req, res)) return
     res.json({
       product: readProduct(),
-      keygen: keygenPublicStatus(),
       mail: mailStatus(),
       hosted: hostedKeyStatus({ revealHints: true }),
       shop: shopSummary(),
       users: readUsers().map(publicUser),
       orders: listOrders().map(publicOrder),
-      issued: readIssuedLicenses(),
       outbox: readOutbox().map((row) => ({
         id: row.id,
         to: row.to,
@@ -1191,23 +1050,8 @@ async function start() {
     res.json({ user: result.user, impersonating: result.impersonating })
   })
 
-  app.post("/api/admin/licenses", async (req, res) => {
-    if (!manage(req, res)) return
-    const body = (req.body ?? {}) as { name?: string; email?: string; sendEmail?: boolean }
-    const result = await issueAndDeliver({
-      name: body.name ?? "",
-      email: body.email ?? "",
-      sendEmail: body.sendEmail !== false,
-    })
-    if (result.error || !result.license) {
-      res.status(400).json({ error: result.error || "Could not issue a license." })
-      return
-    }
-    res.json({
-      license: result.license,
-      order: result.order ? publicOrder(result.order) : null,
-      issued: readIssuedLicenses(),
-    })
+  app.post("/api/admin/licenses", (_req, res) => {
+    res.status(410).json({ error: "PlaceFind does not issue product licenses." })
   })
 
   app.post("/api/admin/mail", (req, res) => {

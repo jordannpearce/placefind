@@ -60,15 +60,11 @@ describe("keygen without credentials", () => {
     }
   })
 
-  it("does not require a buyer license when Keygen is not connected", async () => {
+  it("never requires a product license on the SaaS directory", async () => {
     const status = await licenseStatus()
-    if (!status.configured) {
-      assert.equal(status.required, false)
-      assert.equal(status.valid, true)
-    }
-    if (status.seller) {
-      assert.equal(status.required, false)
-    }
+    assert.equal(status.required, false)
+    assert.equal(status.valid, true)
+    assert.equal(status.configured, false)
   })
 
   it("refuses to create a license without a saved admin token", async () => {

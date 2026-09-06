@@ -8,19 +8,19 @@ const FALLBACK_PRESETS: MailPreset[] = [
     type: "welcome",
     label: "Welcome",
     subject: "Welcome to PlaceFind",
-    text: "Hi {{first}},\n\nYour PlaceFind account is ready. Sign in to add your business to the directory and confirm it on Google Maps.\n",
+    text: "Hi {{first}},\n\nYour PlaceFind account is ready. Sign in to add your business to the directory for $150 per month.\n",
   },
   {
     type: "activation",
     label: "Confirm your listing",
     subject: "Confirm your PlaceFind listing",
-    text: "Hi {{first}},\n\nYour PlaceFind account is ready.\n\n1. Sign in and open your account.\n2. Create a listing with your business name, city, and state.\n3. Check Google Maps and confirm the matching place.\n",
+    text: "Hi {{first}},\n\nYour PlaceFind account is ready.\n\n1. Sign in and open your account.\n2. Create a listing with your business name, city, and state.\n3. Open Crawl Website to write the public profile.\n",
   },
   {
     type: "marketing",
     label: "Marketing",
-    subject: "Find local businesses — and see who shows on Maps",
-    text: "Hi {{first}},\n\nPlaceFind is a web directory for local businesses. Browse listings, or add your own and confirm the matching Google Maps place.\n\nSign in when you are ready to publish a profile.\n",
+    subject: "Find local businesses in the PlaceFind directory",
+    text: "Hi {{first}},\n\nPlaceFind is a web directory for local businesses. Browse listings, or add your own for $150 per month.\n\nSign in when you are ready to publish a profile.\n",
   },
   {
     type: "info",
@@ -32,7 +32,7 @@ const FALLBACK_PRESETS: MailPreset[] = [
     type: "updates",
     label: "Updates",
     subject: "What's new in PlaceFind",
-    text: "Hi {{first}},\n\nPlaceFind can look up a Maps listing and track keyword ranks on a grid around your business.\n\nSign in to review your campaigns and run a new scan.\n",
+    text: "Hi {{first}},\n\nPlaceFind is a web directory. Sign in to manage listings, request a website crawl, and read reviews.\n",
   },
 ]
 

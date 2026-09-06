@@ -9,7 +9,7 @@ function order(licenseKey: string | null): Order {
     name: "Pat",
     email: "pat@example.com",
     amount: "49",
-    status: licenseKey ? "paid" : "pending_license",
+    status: licenseKey ? "paid" : "pending",
     licenseId: licenseKey ? "lic1" : null,
     licenseKey,
     createdAt: "2026-09-06T00:00:00.000Z",

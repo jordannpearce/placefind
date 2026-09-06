@@ -121,19 +121,19 @@ export function mailPresets(product = { name: "PlaceFind", price: "49" }): MailP
       type: "welcome",
       label: "Welcome",
       subject: `Welcome to ${product.name}`,
-      text: `Hi {{first}},\n\nYour ${product.name} account is ready. Sign in to add your business to the directory and confirm it on Google Maps.\n`,
+      text: `Hi {{first}},\n\nYour ${product.name} account is ready. Sign in to add your business to the directory for $150 per month.\n`,
     },
     {
       type: "activation",
       label: "Confirm your listing",
       subject: `Confirm your ${product.name} listing`,
-      text: `Hi {{first}},\n\nYour ${product.name} account is ready.\n\n1. Sign in and open your account.\n2. Create a listing with your business name, city, and state.\n3. Check Google Maps and confirm the matching place.\n`,
+      text: `Hi {{first}},\n\nYour ${product.name} account is ready.\n\n1. Sign in and open your account.\n2. Create a listing with your business name, city, and state.\n3. Open Crawl Website to write the public profile.\n`,
     },
     {
       type: "marketing",
       label: "Marketing",
-      subject: "Find local businesses — and see who shows on Maps",
-      text: `Hi {{first}},\n\n${product.name} is a web directory for local businesses. Browse listings, or add your own and confirm the matching Google Maps place.\n\nSign in when you are ready to publish a profile.\n`,
+      subject: "Find local businesses in the PlaceFind directory",
+      text: `Hi {{first}},\n\n${product.name} is a web directory for local businesses. Browse listings, or add your own for $150 per month.\n\nSign in when you are ready to publish a profile.\n`,
     },
     {
       type: "info",
@@ -145,7 +145,7 @@ export function mailPresets(product = { name: "PlaceFind", price: "49" }): MailP
       type: "updates",
       label: "Updates",
       subject: `What's new in ${product.name}`,
-      text: `Hi {{first}},\n\n${product.name} can look up a Maps listing and track keyword ranks on a grid around your business.\n\nSign in to review your campaigns and run a new scan.\n`,
+      text: `Hi {{first}},\n\n${product.name} is a web directory. Sign in to manage listings, request a website crawl, and read reviews.\n`,
     },
   ]
 }
@@ -244,8 +244,8 @@ export function welcomeEmail(input: { name: string; product: string; price: stri
   return {
     to: "",
     subject: `Welcome to ${input.product}`,
-    text: `Hi ${first},\n\nYour ${input.product} account is ready. Sign in to add your business to the directory and confirm it on Google Maps.\n`,
-    html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} account is ready. Sign in to add your business to the directory and confirm it on Google Maps.</p>`,
+    text: `Hi ${first},\n\nYour ${input.product} account is ready. Sign in to add your business to the directory for $150 per month.\n`,
+    html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} account is ready. Sign in to add your business to the directory for $150 per month.</p>`,
   }
 }
 
@@ -259,8 +259,8 @@ export function licenseEmail(input: {
   return {
     to: "",
     subject: `Your ${input.product} account`,
-    text: `Hi ${first},\n\nThanks for joining ${input.product}. Sign in to create a listing and confirm it on Google Maps.\n`,
-    html: `<p>Hi ${escapeHtml(first)},</p><p>Thanks for joining ${escapeHtml(input.product)}. Sign in to create a listing and confirm it on Google Maps.</p>`,
+    text: `Hi ${first},\n\nThanks for joining ${input.product}. Sign in to create a listing for $150 per month.\n`,
+    html: `<p>Hi ${escapeHtml(first)},</p><p>Thanks for joining ${escapeHtml(input.product)}. Sign in to create a listing for $150 per month.</p>`,
   }
 }
 

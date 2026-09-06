@@ -5,10 +5,7 @@ import type {
   CampaignInput,
   HostedKeyStatus,
   InstallerStatus,
-  IssuedLicense,
-  KeygenStatus,
   KeyTestResult,
-  LicenseStatus,
   MailSendResult,
   MailStatus,
   OrderInfo,
@@ -77,94 +74,14 @@ export async function testKeys(keys: ApiKeys): Promise<KeyTestResult[]> {
 
 export async function loadStore(): Promise<{
   product: ProductInfo
-  installer: InstallerStatus
   hosted: HostedKeyStatus
-  keygen: KeygenStatus
-  issued: IssuedLicense[]
-  license: LicenseStatus
 }> {
   const response = await fetch("/api/product", { credentials: "include" })
   if (!response.ok) throw new Error("Could not load product info.")
   return (await response.json()) as {
     product: ProductInfo
-    installer: InstallerStatus
     hosted: HostedKeyStatus
-    keygen: KeygenStatus
-    issued: IssuedLicense[]
-    license: LicenseStatus
   }
-}
-
-export async function saveKeygen(input: {
-  accountId: string
-  productId: string
-  policyId: string
-  token: string
-}): Promise<{ keygen: KeygenStatus; installer: InstallerStatus; issued: IssuedLicense[] }> {
-  const response = await fetch("/api/keygen", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  })
-  const payload = (await response.json()) as {
-    keygen?: KeygenStatus
-    installer?: InstallerStatus
-    issued?: IssuedLicense[]
-    error?: string
-  }
-  if (!response.ok || !payload.keygen || !payload.installer) {
-    throw new Error(payload.error || "Could not save those settings.")
-  }
-  return { keygen: payload.keygen, installer: payload.installer, issued: payload.issued ?? [] }
-}
-
-export async function testKeygen(input: {
-  accountId: string
-  productId: string
-  policyId: string
-  token: string
-}): Promise<{ ok: boolean; message: string }> {
-  const response = await fetch("/api/keygen/test", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  })
-  const payload = (await response.json()) as { ok?: boolean; message?: string; error?: string }
-  if (!response.ok) throw new Error(payload.error || payload.message || "Could not reach that service.")
-  return { ok: Boolean(payload.ok), message: payload.message || "" }
-}
-
-export async function assignLicense(input: { name: string; email: string }): Promise<{
-  license: IssuedLicense
-  issued: IssuedLicense[]
-}> {
-  const response = await fetch("/api/keygen/licenses", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  })
-  const payload = (await response.json()) as { license?: IssuedLicense; issued?: IssuedLicense[]; error?: string }
-  if (!response.ok || !payload.license) {
-    throw new Error(payload.error || "Could not assign a license.")
-  }
-  return { license: payload.license, issued: payload.issued ?? [] }
-}
-
-export async function activateLicenseKey(key: string): Promise<LicenseStatus> {
-  const response = await fetch("/api/license/activate", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key }),
-  })
-  const payload = (await response.json()) as { license?: LicenseStatus; error?: string }
-  if (!response.ok || !payload.license) {
-    throw new Error(payload.error || "Could not activate that key.")
-  }
-  return payload.license
 }
 
 export async function saveHostedKeys(input: {
@@ -250,7 +167,7 @@ export async function resetPassword(input: { token: string; password: string }):
   return payload.user
 }
 
-export async function checkoutOrder(): Promise<{ order: OrderInfo; license: IssuedLicense | null; warning?: string }> {
+export async function checkoutOrder(): Promise<{ order: OrderInfo; warning?: string }> {
   return request("/api/shop/checkout", { method: "POST" })
 }
 
@@ -363,13 +280,11 @@ export async function confirmListingMatch(
 
 export async function loadAdmin(): Promise<{
   product: ProductInfo
-  keygen: KeygenStatus
   mail: MailStatus
   hosted?: HostedKeyStatus
   shop: { orderCount: number; paidCount: number; pendingCount: number }
   users: AuthUser[]
   orders: OrderInfo[]
-  issued: IssuedLicense[]
   outbox: Array<{ id: string; to: string; subject: string; createdAt: string; delivered: boolean; detail: string }>
   mailPresets?: Array<{ type: string; label: string; subject: string; text: string }>
   geoPoints?: GeoPointsStatus
@@ -425,13 +340,6 @@ export async function impersonateAdminUser(id: string): Promise<AuthUser> {
 export async function stopImpersonation(): Promise<AuthUser> {
   const payload = await request<{ user: AuthUser }>("/api/auth/stop-impersonation", { method: "POST" })
   return payload.user
-}
-
-export async function adminIssueLicense(input: { name: string; email: string; sendEmail?: boolean }): Promise<{
-  license: IssuedLicense
-  order: OrderInfo | null
-}> {
-  return request("/api/admin/licenses", { method: "POST", body: JSON.stringify(input) })
 }
 
 export async function saveMail(input: { resendApiKey?: string; fromEmail?: string; fromName?: string }): Promise<MailStatus> {

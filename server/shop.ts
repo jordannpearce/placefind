@@ -1,12 +1,11 @@
 import { randomBytes } from "node:crypto"
 import type { PublicUser } from "./auth.ts"
-import { findUserByEmail } from "./auth.ts"
-import { activateLicense, createLicense, keygenPublicStatus, licenseStatus, type IssuedLicense } from "./keygen.ts"
-import { licenseEmail, pendingLicenseEmail, sendMail } from "./mail.ts"
+import { licenseStatus } from "./keygen.ts"
+import { sendMail, welcomeEmail } from "./mail.ts"
 import { readProduct } from "./product.ts"
 import { readCollection, writeCollection } from "./store.ts"
 
-export type OrderStatus = "paid" | "pending_license"
+export type OrderStatus = "paid" | "pending"
 
 export type Order = {
   id: string
@@ -23,7 +22,10 @@ export type Order = {
 
 function readOrders(): Order[] {
   const rows = readCollection<Order>("orders")
-  return Array.isArray(rows) ? rows : []
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    ...row,
+    status: row.status === "paid" ? "paid" : "pending",
+  }))
 }
 
 function writeOrders(orders: Order[]) {
@@ -44,90 +46,34 @@ export function publicOrder(order: Order) {
     name: order.name,
     email: order.email,
     amount: order.amount,
-    status: order.status,
-    licenseKey: order.licenseKey,
+    status: order.status === "pending_license" ? "pending" : order.status,
     createdAt: order.createdAt,
     emailedAt: order.emailedAt,
   }
 }
 
-function downloadUrl() {
-  return process.env.PLACEFIND_DOWNLOAD_URL?.trim() || "http://127.0.0.1:43141/download"
-}
-
-async function emailLicense(order: Order, key: string) {
+export async function checkout(user: PublicUser): Promise<{ order: Order; error?: string }> {
   const product = readProduct()
-  const message = licenseEmail({
-    name: order.name,
-    product: product.name,
-    key,
-    downloadUrl: downloadUrl(),
-  })
-  const sent = await sendMail({ ...message, to: order.email })
-  return sent.createdAt
-}
-
-export async function checkout(user: PublicUser): Promise<{ order: Order; license?: IssuedLicense; error?: string }> {
-  const product = readProduct()
+  const welcome = welcomeEmail({ name: user.name, product: product.name, price: product.price })
+  const sent = await sendMail({ ...welcome, to: user.email })
   const order: Order = {
     id: randomBytes(8).toString("hex"),
     userId: user.id,
     name: user.name,
     email: user.email,
-    amount: product.price,
-    status: "pending_license",
+    amount: product.price || "150",
+    status: "paid",
     licenseId: null,
     licenseKey: null,
     createdAt: new Date().toISOString(),
-    emailedAt: null,
+    emailedAt: sent.createdAt,
   }
-
-  const issued = keygenPublicStatus().canIssue ? await createLicense({ name: user.name, email: user.email }) : { error: "Keygen is not connected." }
-  if (issued.license) {
-    order.status = "paid"
-    order.licenseId = issued.license.id
-    order.licenseKey = issued.license.key
-    order.emailedAt = await emailLicense(order, issued.license.key)
-  } else {
-    const message = pendingLicenseEmail({ name: user.name, product: product.name })
-    const sent = await sendMail({ ...message, to: user.email })
-    order.emailedAt = sent.createdAt
-    order.status = "pending_license"
-  }
-
   writeOrders([order, ...readOrders()])
-  return { order, license: issued.license, error: issued.license ? undefined : issued.error }
+  return { order }
 }
 
-export async function issueAndDeliver(input: {
-  name: string
-  email: string
-  userId?: string
-  sendEmail?: boolean
-}): Promise<{ order?: Order; license?: IssuedLicense; error?: string }> {
-  const created = await createLicense({ name: input.name, email: input.email })
-  if (!created.license) return { error: created.error }
-
-  const existing = findUserByEmail(input.email)
-  const userId = input.userId || existing?.id || ""
-  const product = readProduct()
-  const order: Order = {
-    id: randomBytes(8).toString("hex"),
-    userId,
-    name: input.name.trim() || existing?.name || input.email,
-    email: input.email.trim().toLowerCase(),
-    amount: product.price,
-    status: "paid",
-    licenseId: created.license.id,
-    licenseKey: created.license.key,
-    createdAt: new Date().toISOString(),
-    emailedAt: null,
-  }
-  if (input.sendEmail !== false) {
-    order.emailedAt = await emailLicense(order, created.license.key)
-  }
-  writeOrders([order, ...readOrders()])
-  return { order, license: created.license }
+export async function issueAndDeliver(): Promise<{ error: string }> {
+  return { error: "PlaceFind does not issue product licenses. Use a signed-in account." }
 }
 
 export function shopSummary() {
@@ -135,7 +81,7 @@ export function shopSummary() {
   return {
     orderCount: orders.length,
     paidCount: orders.filter((order) => order.status === "paid").length,
-    pendingCount: orders.filter((order) => order.status === "pending_license").length,
+    pendingCount: orders.filter((order) => order.status === "pending" || order.status === "pending_license").length,
   }
 }
 
@@ -151,12 +97,6 @@ export function licenseKeysFromOrders(orders: Order[]): string[] {
   return keys
 }
 
-export async function attachUserLicense(user: PublicUser) {
-  const status = await licenseStatus()
-  if (!status.configured || status.valid) return status
-  for (const key of licenseKeysFromOrders(ordersForUser(user.id))) {
-    const next = await activateLicense(key)
-    if (next.valid) return next
-  }
+export async function attachUserLicense(_user?: PublicUser) {
   return licenseStatus()
 }

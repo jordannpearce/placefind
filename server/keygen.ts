@@ -336,68 +336,20 @@ export function clearActivated() {
   if (existsSync(ACTIVATED_FILE)) writeFileSync(ACTIVATED_FILE, "{}")
 }
 
-export async function licenseStatus(force = false): Promise<LicenseStatus> {
-  const pub = readKeygenPublic()
-  const seller = isSellerMode()
-  const configured = Boolean(pub.accountId)
-  const required = configured && !seller
-  const activated = readActivated()
-  if (!configured) {
-    return { required: false, configured: false, valid: true, keyHint: "", code: "", detail: "", expiry: null, seller }
-  }
-  if (seller && !activated?.key) {
-    return { required: false, configured: true, valid: true, keyHint: "", code: "", detail: "Seller copy does not need a customer license.", expiry: null, seller }
-  }
-  if (!activated?.key) {
-    return { required, configured, valid: false, keyHint: "", code: "NOT_FOUND", detail: "Enter the license key you were sent.", expiry: null, seller }
-  }
-  const age = Date.now() - new Date(activated.checkedAt || 0).getTime()
-  if (!force && activated.valid && age < 6 * 60 * 60 * 1000) {
-    return {
-      required,
-      configured,
-      valid: true,
-      keyHint: maskSecret(activated.key),
-      code: activated.code,
-      detail: activated.detail,
-      expiry: activated.expiry,
-      seller,
-    }
-  }
-  const checked = await validateLicenseKey(activated.key)
-  if (checked.code === "NETWORK" && activated.valid) {
-    return {
-      required,
-      configured,
-      valid: true,
-      keyHint: maskSecret(activated.key),
-      code: activated.code,
-      detail: "Could not recheck the license. Using the last valid check.",
-      expiry: activated.expiry,
-      seller,
-    }
-  }
-  writeActivated({
-    key: activated.key,
-    valid: checked.valid,
-    code: checked.code,
-    detail: checked.detail,
-    expiry: checked.expiry,
-    checkedAt: new Date().toISOString(),
-  })
+export async function licenseStatus(_force = false): Promise<LicenseStatus> {
   return {
-    required,
-    configured,
-    valid: checked.valid,
-    keyHint: maskSecret(activated.key),
-    code: checked.code,
-    detail: checked.detail,
-    expiry: checked.expiry,
-    seller,
+    required: false,
+    configured: false,
+    valid: true,
+    keyHint: "",
+    code: "",
+    detail: "",
+    expiry: null,
+    seller: isSellerMode(),
   }
 }
 
-export async function activateLicense(key: string): Promise<LicenseStatus> {
+export async function activateLicense(_key: string): Promise<LicenseStatus> {
   const checked = await validateLicenseKey(key)
   if (checked.valid) {
     writeActivated({

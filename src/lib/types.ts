@@ -145,8 +145,8 @@ export type OrderInfo = {
   name: string
   email: string
   amount: string
-  status: "paid" | "pending_license"
-  licenseKey: string | null
+  status: "paid" | "pending"
+  licenseKey?: string | null
   createdAt: string
   emailedAt: string | null
 }
@@ -273,8 +273,6 @@ export type RuntimeInfo = {
   user: AuthUser | null
   impersonating?: ImpersonatingInfo | null
   hosted: HostedKeyStatus
-  license: LicenseStatus
-  keygen: KeygenStatus
   publicUrl?: string
 }
 

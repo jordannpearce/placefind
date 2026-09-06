@@ -24,7 +24,7 @@ describe("licenseEmail", () => {
     })
     assert.equal(message.subject.includes("account"), true)
     assert.equal(/download|windows|license key|setup\.exe/i.test(message.text + message.html), false)
-    assert.equal(/directory|listing|google maps/i.test(message.text), true)
+    assert.equal(/directory|listing/i.test(message.text), true)
   })
 })
 
@@ -32,7 +32,7 @@ describe("welcomeEmail", () => {
   it("names the product and price", () => {
     const message = welcomeEmail({ name: "Jordan", product: "PlaceFind", price: "49" })
     assert.equal(message.subject, "Welcome to PlaceFind")
-    assert.equal(/directory|listing|google maps/i.test(message.text), true)
+    assert.equal(/directory|listing/i.test(message.text), true)
     assert.equal(/download|windows|license key|setup\.exe/i.test(message.text + message.html), false)
     assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.text), false)
     assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.html), false)
