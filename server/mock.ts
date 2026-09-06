@@ -27,6 +27,7 @@ const SAMPLES: Omit<BusinessListing, "matchScore" | "isBestMatch" | "mapsUrl" | 
     priceLevel: "moderate",
     placeId: "sample-franklin",
     cid: "sample-franklin-cid",
+    image: "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&w=1200&q=80",
     lat: 30.2701,
     lng: -97.7313,
   },
@@ -92,11 +93,15 @@ export const SAMPLE_SEARCHES = [
 
 export function searchMockBusinesses(query: SearchQuery): BusinessListing[] {
   const state = toStateAbbr(query.state)
+  const hasName = query.name.trim().length >= 2
+  const keyword = query.keyword?.trim().toLowerCase() ?? ""
   const hits = SAMPLES.filter((sample) => {
-    const nameOk = namesMatch(sample.title, query.name)
+    const hay = `${sample.title} ${sample.category ?? ""} ${(sample.categories ?? []).join(" ")}`.toLowerCase()
+    const nameOk = hasName ? namesMatch(sample.title, query.name) : true
+    const keywordOk = keyword ? hay.includes(keyword) : true
     const cityOk = !query.city || sample.city?.toLowerCase() === query.city.toLowerCase()
     const stateOk = !state || sample.state === state
-    return nameOk && cityOk && stateOk
+    return (hasName ? nameOk : keywordOk) && cityOk && stateOk
   }).map((sample) => {
     const listing: BusinessListing = {
       ...sample,

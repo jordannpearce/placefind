@@ -4,11 +4,15 @@ Windows desktop software that looks up a Google Maps listing from a business nam
 
 ## For visitors
 
-Open the site and run a **test scan**. Enter a business name, city, and state to see the same listing result PlaceFind shows on Windows: name, address, phone, rating, and a Maps link.
+The public homepage explains how PlaceFind helps a business find other businesses that appear on Google Maps. It includes a canned sample listing (Franklin Barbecue in Austin) and one optional sample search.
 
-- Test scan: [http://127.0.0.1:43141/](http://127.0.0.1:43141/)
+Live test scans live on **`/try`** (also `/demo`) after sign-in. They are not the first thing on the public site.
+
+- Home: [http://127.0.0.1:43141/](http://127.0.0.1:43141/)
 - Buy: [http://127.0.0.1:43141/buy](http://127.0.0.1:43141/buy)
 - Download: [http://127.0.0.1:43141/download](http://127.0.0.1:43141/download)
+- Internal test scan (signed-in): [http://127.0.0.1:43141/try](http://127.0.0.1:43141/try)
+- Legal: `/terms` · `/policy` (`/privacy`) · `/email-policy` · `/data-policy` · `/refund`
 
 The public site does not ask visitors for setup details. Buy a license, download the Windows setup, and unlock the desktop app with the key from your account page. Admin and seller tools are not in the public navigation.
 
@@ -98,7 +102,7 @@ Until Resend is connected, those messages stay in the Admin outbox on this compu
 
 The Keygen admin token never goes into the installer. Buyer copies only get your public account and product IDs so they can validate a key. The seller copy on this machine does not ask for a customer license.
 
-Keys are encrypted on disk and inside the Windows setup. Buyers never see the values, and the public Test scan has no Settings or API-key form. The installed copy has no Sell page. A determined person who unpacks the app could still recover them, so treat this as hiding keys from customers, not as a vault.
+Keys are encrypted on disk and inside the Windows setup. Buyers never see the values, and the public site has no Settings form. The installed copy has no Sell page. A determined person who unpacks the app could still recover them, so treat this as hiding keys from customers, not as a vault.
 
 You can also build from a terminal:
 

@@ -59,7 +59,7 @@ export function AdminGeoPoints({
         Upload a CSV of GPS points for US cities. Track can use those coordinates as a backup when building a rank
         scan. This copy maps the real file headers: city, state abbreviation (or state name / state_id), latitude,
         and longitude. Optional zips and population are kept. Aliases such as lat, lng, gps, city_ascii, and coord
-        also work. Rankings still come from Maps — this file only supplies points. On Railway, re-upload the same
+        also work. Rankings still come from Maps — this file only supplies points. After a fresh deploy, re-upload the same
         CSV here if the server disk was reset.
       </p>
       <p className="mt-3 text-sm text-paper/80">

@@ -1,5 +1,12 @@
 const VENDOR_TALK =
-  /dataforseo|scrappey|keygen|resend|api keys?|api password|hosted keys?|seller keys?|\btokens?\b/i
+  /dataforseo|scrappey|keygen|resend|paddle|leaflet|railway|api keys?|api password|hosted keys?|seller keys?|when a key is saved|\btokens?\b/i
+
+export const SAMPLE_SEARCH_USED_MESSAGE =
+  "This sample search is already in use. Download PlaceFind to run unlimited lookups."
+
+export function sampleSearchUsedMessage() {
+  return SAMPLE_SEARCH_USED_MESSAGE
+}
 
 export function leaksVendorTalk(text: string): boolean {
   return VENDOR_TALK.test(text)
@@ -32,7 +39,7 @@ export function usingCityGpsBackupNote() {
 }
 
 export function mapsKeysMissingAdminMessage() {
-  return "Maps rank tracking is not configured. Save Maps search credentials on Admin, or set the Railway Maps variables, before a Track scan can run."
+  return "Maps rank tracking is not configured. Save Maps search credentials on Admin, or set the server Maps variables, before a Track scan can run."
 }
 
 export function publicPinScanMessage(text: string | undefined): string {

@@ -74,7 +74,8 @@ export function rankListings(listings: BusinessListing[], query: SearchQuery): B
 }
 
 export function mapsSearchUrl(query: SearchQuery): string {
-  const q = [query.name, query.city, toStateName(query.state)].filter(Boolean).join(" ")
+  const term = query.keyword?.trim() || query.name
+  const q = [term, query.city, toStateName(query.state)].filter(Boolean).join(" ")
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`
 }
 
