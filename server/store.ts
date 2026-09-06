@@ -140,6 +140,27 @@ function persistJson(name: StoreCollection) {
   writeJsonFile(fileFor(name), memory[name])
 }
 
+export function uniqueRowsByKey(rows: JsonRow[], key: string): JsonRow[] {
+  const seen = new Set<string>()
+  const unique: JsonRow[] = []
+  for (const row of rows) {
+    const id = String(row[key] ?? "").trim()
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    unique.push(row)
+  }
+  return unique
+}
+
+const persistTail = new Map<StoreCollection, Promise<void>>()
+
+function enqueuePostgresPersist(name: StoreCollection) {
+  const previous = persistTail.get(name) ?? Promise.resolve()
+  const next = previous.catch(() => undefined).then(() => persistPostgres(name))
+  persistTail.set(name, next)
+  return next
+}
+
 function postgresUrl() {
   const url = process.env.DATABASE_URL?.trim() ?? ""
   if (/^postgres(ql)?:\/\//i.test(url)) return url
@@ -207,19 +228,29 @@ async function persistPostgres(name: StoreCollection) {
         await client.query("INSERT INTO mail_outbox (id, payload) VALUES ($1,$2::jsonb)", [row.id, JSON.stringify(row)])
       }
     } else if (name === "campaigns") {
-      await client.query("DELETE FROM campaigns")
-      for (const row of rows) {
-        await client.query("INSERT INTO campaigns (id, payload) VALUES ($1,$2::jsonb)", [row.id, JSON.stringify(row)])
+      const unique = uniqueRowsByKey(rows, "id")
+      const ids = unique.map((row) => String(row.id))
+      for (const row of unique) {
+        await client.query(
+          `INSERT INTO campaigns (id, payload) VALUES ($1,$2::jsonb)
+           ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload`,
+          [row.id, JSON.stringify(row)],
+        )
       }
+      if (ids.length === 0) await client.query("DELETE FROM campaigns")
+      else await client.query("DELETE FROM campaigns WHERE NOT (id = ANY($1::text[]))", [ids])
     } else if (name === "scan_runs") {
-      await client.query("DELETE FROM scan_runs")
-      for (const row of rows) {
-        await client.query("INSERT INTO scan_runs (id, campaign_id, payload) VALUES ($1,$2,$3::jsonb)", [
-          row.id,
-          row.campaignId,
-          JSON.stringify(row),
-        ])
+      const unique = uniqueRowsByKey(rows, "id")
+      const ids = unique.map((row) => String(row.id))
+      for (const row of unique) {
+        await client.query(
+          `INSERT INTO scan_runs (id, campaign_id, payload) VALUES ($1,$2,$3::jsonb)
+           ON CONFLICT (id) DO UPDATE SET campaign_id = EXCLUDED.campaign_id, payload = EXCLUDED.payload`,
+          [row.id, row.campaignId, JSON.stringify(row)],
+        )
       }
+      if (ids.length === 0) await client.query("DELETE FROM scan_runs")
+      else await client.query("DELETE FROM scan_runs WHERE NOT (id = ANY($1::text[]))", [ids])
     } else if (name === "password_resets") {
       await client.query("DELETE FROM password_resets")
       for (const row of rows) {
@@ -291,6 +322,7 @@ export function resetStoreForTests(dir?: string) {
   loaded = true
   driver = "json"
   pool = null
+  persistTail.clear()
   for (const name of Object.keys(memory) as StoreCollection[]) memory[name] = []
 }
 
@@ -321,7 +353,7 @@ export function writeCollection<T>(name: StoreCollection, rows: T[]) {
     persistJson(name)
     return
   }
-  void persistPostgres(name).catch((error) => {
+  void enqueuePostgresPersist(name).catch((error) => {
     console.error(`PlaceFind could not persist ${name} to Postgres.`, error)
   })
 }

@@ -3,7 +3,23 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
-import { initStore, readCollection, reloadStoreFromDisk, resetStoreForTests, storeDriver, writeCollection } from "./store.ts"
+import { initStore, readCollection, reloadStoreFromDisk, resetStoreForTests, storeDriver, uniqueRowsByKey, writeCollection } from "./store.ts"
+
+describe("uniqueRowsByKey", () => {
+  it("keeps the first campaign id when the persist list has duplicates", () => {
+    const rows = uniqueRowsByKey(
+      [
+        { id: "46ca81d3eb3b38d5", name: "first" },
+        { id: "20a4f084e7757f15", name: "other" },
+        { id: "46ca81d3eb3b38d5", name: "duplicate" },
+      ],
+      "id",
+    )
+    assert.equal(rows.length, 2)
+    assert.equal(rows[0]?.name, "first")
+    assert.equal(rows[1]?.id, "20a4f084e7757f15")
+  })
+})
 
 describe("store", () => {
   after(() => {
