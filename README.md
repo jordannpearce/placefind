@@ -1,92 +1,64 @@
-# GridPins
+# PlaceFind
 
-SaaS Google Maps grid rank tracker. Agencies and brands create a workspace, confirm a listing, and scan an N×N GPS lattice. An optional AI Visibility add-on ($199/month per brand) lets you type 10 prompts and scan each one 4 times against ChatGPT, Perplexity, Gemini, Copilot, Google AI Mode, and Grok.
+Windows desktop software that looks up a Google Maps listing from a business name, city, and state.
 
-The marketing site, login, dashboard, and admin live in this same Next.js app. Without Maps API or Resend keys it still runs: accounts with access can use sample Austin coffee rankings, and emails land in a local inbox. Without a Cloro key, AI prompt scans use sample answers.
+It uses two keys you already have:
 
-## Run it locally
+- **DataForSEO** — live Google Maps search (`serp/google/maps/live/advanced`). This returns structured name, address, phone, rating, hours, place ID, and CID.
+- **Scrappey** — opens the Maps listing page in a real browser session and fills in extra details DataForSEO missed.
+
+Without keys, PlaceFind still runs in sample mode so you can try the workflow.
+
+## Run it
 
 ```bash
 npm install
-cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://127.0.0.1:43127](http://127.0.0.1:43127).
+Open [http://127.0.0.1:43141](http://127.0.0.1:43141).
 
-### Seeded accounts
-
-| Role | Email | Password |
-| --- | --- | --- |
-| Admin | tmrapp1995@gmail.com | (the password you set when the project was created) |
-
-There is no public demo account. Self-serve signups stay unpaid with no tracker access until they subscribe. To let someone try the product, create them in Admin and set a trial length (hours or days). That stores `trial_ends_at` on the user. When it expires and they have no active Paddle subscription, they get the same paywall as unpaid accounts.
-
-Without `DATABASE_URL`, accounts live in `.data/gridpin.json` (gitignored). Delete that file to reseed.
-
-With `DATABASE_URL` (Railway Postgres), the same seed runs on the first empty database.
-
-### Resend emails
-
-Paste a Resend API key and from-address in **Admin → Emails**, or set `RESEND_API_KEY` and `RESEND_FROM`. If those are empty, GridPins writes the HTML to the outbox. Sign-up shows **Open the activation email**, and admins can browse every message under **Admin → Emails**.
-
-From Admin you can:
-
-- Add users and agencies by hand, including a trial timer for testers
-- Open a user’s workspace as if you were them
-- Check which accounts receive marketing, product updates, and notifications
-
-### Live Maps scans
-
-Starter ($20) includes 5 live Maps scans each calendar month on the hosted admin key — that account never enters or sees a key. Extra scans are $5 each on Account.
-
-Pro and Advanced paste their own Maps API login in **Account** or the tracker Settings gear. Admin can also put keys in `.env.local` for hosted Starter scans and the admin account:
+On Windows, after `npm install`:
 
 ```bash
-DATAFORSEO_LOGIN=your_login
-DATAFORSEO_PASSWORD=your_password
+npm run desktop
 ```
 
-Optional extra-scan catalog overrides (otherwise GridPins can create the $5 product in Paddle):
+That starts the local server and opens the Electron window.
+
+## Build a Windows installer
+
+On a Windows machine with Node 20+:
 
 ```bash
-PADDLE_EXTRA_SCAN_PRICE_ID=
-PADDLE_EXTRA_SCAN_PRODUCT_ID=
+npm run dist:win
 ```
 
-Each pin is one live Maps task. A 7×7 scan is 49 tasks per keyword. Never send hosted API keys to the Starter client.
+`release/` will contain an NSIS installer and a portable `.exe`.
 
-### AI Visibility add-on
+## Add your keys
 
-$199 per month per brand, on every plan. Ten prompts you type, four scans each, saved as history. Paste the Cloro API key in **Admin** (or `CLORO_API_KEY`). Customers never see the key. Optional Paddle IDs:
+Open **Settings** in the app:
+
+1. Paste your Scrappey API key from [scrappey.com](https://scrappey.com).
+2. Paste your DataForSEO dashboard login and **API password** (not the website password).
+3. Click **Test connection**, then search.
+
+Keys are stored only on that computer (`localStorage` in the desktop window). You can also put defaults in a `.env` file:
 
 ```bash
-CLORO_API_KEY=
-PADDLE_AI_VISIBILITY_PRICE_ID=
-PADDLE_AI_VISIBILITY_PRODUCT_ID=
+cp .env.example .env
 ```
 
-If those Paddle IDs are empty, GridPins can create the $199/month product. Without a Cloro key, the workspace still shows sample model answers. Adding a brand asks for company name, street, city, state, ZIP, phone, and website. City and state set the local Maps location. Each prompt scan shows whether the brand appeared, which competitors were named, and the full model answer.
+## How a search works
 
-## Product
+1. You type a business name, city, and state.
+2. DataForSEO searches Google Maps for that name in that city.
+3. PlaceFind scores the results and picks the best listing match.
+4. If Scrappey is enabled, it opens that listing page and merges phone, website, hours, and claim status when they were missing.
 
-- Marketing site, pricing, contact form, and Get found opt-in
-- Email/password accounts with activation
-- Dashboard of campaigns per brand and location
-- Tracker with multiple keywords, grid size, radius, and schedules
-- Account billing via Paddle (overlay checkout, webhooks, customer portal): Starter $20 (1 campaign, 5 hosted live scans/month, extra scans $5), Pro $50 (5 campaigns, extra slots $5 each up to 10, own Maps API key), Advanced $250 (50 campaigns, own Maps API key). Optional AI Visibility $199/month per brand (10 prompts, 4 scans each). Set the Paddle default payment link to `https://gridpins.com/pricing`. Railway: `PADDLE_API_KEY`, `PADDLE_ENVIRONMENT=production`, `PADDLE_WEBHOOK_SECRET`, `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`, `NEXT_PUBLIC_PADDLE_PRICE_*`.
-- Admin: users, agencies, impersonation, Resend, Cloro API key, targeted mail. Admins can create AI Visibility brands (company name, street, city, state, ZIP, phone, website) and assign them to a user account or every account in an agency.
-- Agency accounts have a Leads page for Get Found leads that were assigned and emailed to the agency.
-- Public homepage ships an interactive sample map beside the hero so visitors can click pins without signing in
+## Sample searches (no keys)
 
-## How a grid scan works
-
-1. Build a square lattice around the listing. A 7×7 scan is 49 coordinates.
-2. POST one Maps task per pin with the searcher’s `location_coordinate` as `latitude,longitude,zoom`.
-3. Match the business in the organic Maps results and take its rank.
-4. Color the pin from green (local pack) through red.
-
-## Notes
-
-- Nominatim geocodes the center. No Google Maps JavaScript key is required.
-- Do not commit `.env.local` or `.data/`.
+- Franklin Barbecue — Austin, TX
+- Joe's Pizza — New York, NY
+- Pike Place Fish — Seattle, WA

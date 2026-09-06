@@ -5,11 +5,13 @@ export type SearchQuery = {
 }
 
 export type ApiKeys = {
-  scrappeyKey: string
-  dataforseoLogin: string
-  dataforseoPassword: string
-  enrichWithScrappey: boolean
+  scrappeyKey?: string
+  dataforseoLogin?: string
+  dataforseoPassword?: string
+  enrichWithScrappey?: boolean
 }
+
+export type ListingSource = "dataforseo" | "scrappey" | "sample"
 
 export type HoursRow = {
   day: string
@@ -38,7 +40,7 @@ export type BusinessListing = {
   lng?: number | null
   mapsUrl: string
   image?: string | null
-  source: "dataforseo" | "scrappey" | "sample"
+  source: ListingSource
   matchScore: number
   isBestMatch: boolean
 }
@@ -54,14 +56,9 @@ export type SearchResponse = {
   elapsedMs: number
 }
 
-export type HistoryItem = SearchQuery & {
-  id: string
-  at: string
-  title?: string
-}
-
 export type KeyTestResult = {
   ok: boolean
   service: "dataforseo" | "scrappey"
   message: string
+  detail?: string
 }
