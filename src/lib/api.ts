@@ -300,6 +300,16 @@ export async function setAdminUserStatus(id: string, status: "active" | "suspend
   return payload.user
 }
 
+export async function impersonateAdminUser(id: string): Promise<AuthUser> {
+  const payload = await request<{ user: AuthUser }>(`/api/admin/users/${id}/impersonate`, { method: "POST" })
+  return payload.user
+}
+
+export async function stopImpersonation(): Promise<AuthUser> {
+  const payload = await request<{ user: AuthUser }>("/api/auth/stop-impersonation", { method: "POST" })
+  return payload.user
+}
+
 export async function adminIssueLicense(input: { name: string; email: string; sendEmail?: boolean }): Promise<{
   license: IssuedLicense
   order: OrderInfo | null

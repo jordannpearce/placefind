@@ -67,4 +67,19 @@ describe("navLinks", () => {
     const staff = navLinks({ desktop: true, store: false, admin: true, user: admin }).map((link) => link.label)
     assert.ok(staff.includes("Admin"))
   })
+
+  it("hides Admin chrome while viewing as a customer", () => {
+    const viewing = {
+      desktop: false,
+      store: true,
+      admin: false,
+      user,
+      impersonating: { name: user.name, email: user.email },
+    } satisfies NavAccess
+    const labels = navLinks(viewing).map((link) => link.label)
+    assert.equal(labels.includes("Admin"), false)
+    assert.equal(labels.includes("Sell"), false)
+    assert.equal(allowedPath("/admin", viewing), "/account")
+    assert.equal(allowedPath("/sell", viewing), "/account")
+  })
 })

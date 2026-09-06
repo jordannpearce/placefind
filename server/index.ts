@@ -10,14 +10,20 @@ import {
   createSession,
   deleteManagedUser,
   hasAdminUser,
+  impersonatingFromCookie,
+  impersonationCookie,
   issuePasswordReset,
   login,
+  parseCookies,
   publicUser,
   readUsers,
   resetPasswordWithToken,
+  SESSION_COOKIE,
   sessionCookie,
   setUserStatus,
   signup,
+  startImpersonation,
+  stopImpersonation,
   storeOpen,
   updateManagedUser,
   userFromCookie,
@@ -150,6 +156,7 @@ async function start() {
       admin,
       bootstrap: !hasAdminUser(),
       user,
+      impersonating: impersonatingFromCookie(req.headers.cookie),
       hosted: {
         included: hosted.included,
         scrappey: hosted.scrappey,
@@ -476,7 +483,7 @@ async function start() {
     const product = readProduct()
     const welcome = welcomeEmail({ name: result.user.name, product: product.name, price: product.price })
     await sendMail({ ...welcome, to: result.user.email })
-    res.setHeader("Set-Cookie", sessionCookie(token))
+    res.setHeader("Set-Cookie", [sessionCookie(token), impersonationCookie("", true)])
     res.json({ user: result.user })
   })
 
@@ -488,7 +495,7 @@ async function start() {
       return
     }
     const license = await attachUserLicense(result.user)
-    res.setHeader("Set-Cookie", sessionCookie(createSession(result.user.id)))
+    res.setHeader("Set-Cookie", [sessionCookie(createSession(result.user.id)), impersonationCookie("", true)])
     res.json({ user: result.user, license })
   })
 
@@ -519,17 +526,25 @@ async function start() {
       return
     }
     const license = await attachUserLicense(result.user)
-    res.setHeader("Set-Cookie", sessionCookie(createSession(result.user.id)))
+    res.setHeader("Set-Cookie", [sessionCookie(createSession(result.user.id)), impersonationCookie("", true)])
     res.json({ user: result.user, license })
   })
 
   app.post("/api/auth/logout", (req, res) => {
-    const token = (req.headers.cookie || "").includes("pf_session=")
-      ? (req.headers.cookie || "").split("pf_session=")[1]?.split(";")[0]
-      : ""
-    if (token) clearSession(decodeURIComponent(token))
-    res.setHeader("Set-Cookie", sessionCookie("", true))
+    const token = parseCookies(req.headers.cookie)[SESSION_COOKIE]
+    if (token) clearSession(token)
+    res.setHeader("Set-Cookie", [sessionCookie("", true), impersonationCookie("", true)])
     res.json({ ok: true })
+  })
+
+  app.post("/api/auth/stop-impersonation", (req, res) => {
+    const result = stopImpersonation(req.headers.cookie)
+    if (result.error || !result.user) {
+      res.status(400).json({ error: result.error || "You are not viewing as another user." })
+      return
+    }
+    res.setHeader("Set-Cookie", impersonationCookie("", true))
+    res.json({ user: result.user, impersonating: null })
   })
 
   app.get("/api/auth/me", (req, res) => {
@@ -537,6 +552,7 @@ async function start() {
     res.json({
       user: actor(req),
       admin: canManage(req.headers.cookie),
+      impersonating: impersonatingFromCookie(req.headers.cookie),
       store: storeOpen() && !desktop,
       desktop,
       bootstrap: !hasAdminUser(),
@@ -668,6 +684,21 @@ async function start() {
       return
     }
     res.json({ user: result.user, users: readUsers().map(publicUser) })
+  })
+
+  app.post("/api/admin/users/:id/impersonate", (req, res) => {
+    if (!manage(req, res)) return
+    const result = startImpersonation(req.headers.cookie, String(req.params.id ?? ""))
+    if (result.error || !result.user || !result.token) {
+      const missing = result.error === "That user was not found."
+      const forbidden = result.error === "You cannot view the app as another admin."
+      res.status(missing ? 404 : forbidden ? 403 : 400).json({
+        error: result.error || "Could not view the app as that user.",
+      })
+      return
+    }
+    res.setHeader("Set-Cookie", impersonationCookie(result.token))
+    res.json({ user: result.user, impersonating: result.impersonating })
   })
 
   app.post("/api/admin/licenses", async (req, res) => {

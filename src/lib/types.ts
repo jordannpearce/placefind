@@ -183,6 +183,11 @@ export type MailSendResult = {
   outbox: OutboxRow[]
 }
 
+export type ImpersonatingInfo = {
+  name: string
+  email: string
+}
+
 export type RuntimeInfo = {
   seller: boolean
   store: boolean
@@ -190,6 +195,7 @@ export type RuntimeInfo = {
   admin: boolean
   bootstrap: boolean
   user: AuthUser | null
+  impersonating?: ImpersonatingInfo | null
   hosted: HostedKeyStatus
   license: LicenseStatus
   keygen: KeygenStatus

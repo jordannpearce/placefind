@@ -11,13 +11,19 @@ import {
   FORGOT_PASSWORD_MESSAGE,
   hashPassword,
   hashResetToken,
+  impersonatingFromCookie,
+  IMPERSONATE_COOKIE,
   issuePasswordReset,
   login,
   parseCookies,
   resetForgotRateLimitForTests,
   resetPasswordWithToken,
+  SESSION_COOKIE,
   setUserStatus,
+  signImpersonation,
   signup,
+  startImpersonation,
+  stopImpersonation,
   userFromCookie,
   verifyPassword,
 } from "./auth.ts"
@@ -224,5 +230,120 @@ describe("password reset", () => {
     const reused = resetPasswordWithToken({ token: issued.rawToken!, password: "anotherpass1" })
     assert.equal(reused.user, undefined)
     assert.equal(reused.error, "This reset link is invalid or has expired.")
+  })
+})
+
+describe("impersonation", () => {
+  function isolate() {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-auth-impersonate-")))
+  }
+
+  after(() => {
+    delete process.env.PLACEFIND_DATA_DIR
+    reloadStoreFromDisk()
+  })
+
+  function viewingCookie(sessionToken: string, impersonateToken: string) {
+    return `${SESSION_COOKIE}=${sessionToken}; ${IMPERSONATE_COOKIE}=${impersonateToken}`
+  }
+
+  it("lets an admin view as a customer and stop to restore the admin", () => {
+    isolate()
+    const admin = signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const customer = createManagedUser({
+      name: "Casey",
+      email: "casey@example.com",
+      password: "password12",
+      role: "customer",
+    })
+    const adminToken = createSession(admin.user!.id)
+    const adminCookie = `${SESSION_COOKIE}=${adminToken}`
+    const started = startImpersonation(adminCookie, customer.user!.id)
+    assert.equal(started.error, undefined)
+    assert.equal(started.user?.email, "casey@example.com")
+    assert.deepEqual(started.impersonating, { name: "Casey", email: "casey@example.com" })
+    assert.ok(started.token)
+
+    const viewing = viewingCookie(adminToken, started.token!)
+    assert.equal(userFromCookie(viewing)?.email, "casey@example.com")
+    assert.equal(canManage(viewing), false)
+    assert.deepEqual(impersonatingFromCookie(viewing), { name: "Casey", email: "casey@example.com" })
+    assert.equal(canManage(adminCookie), true)
+
+    const stopped = stopImpersonation(viewing)
+    assert.equal(stopped.error, undefined)
+    assert.equal(stopped.user?.email, "ada@example.com")
+    assert.equal(stopped.user?.role, "admin")
+    assert.equal(userFromCookie(adminCookie)?.email, "ada@example.com")
+    assert.equal(canManage(adminCookie), true)
+    assert.equal(impersonatingFromCookie(adminCookie), null)
+  })
+
+  it("rejects impersonation when the caller is not an admin", () => {
+    isolate()
+    signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const customer = createManagedUser({
+      name: "Casey",
+      email: "casey@example.com",
+      password: "password12",
+      role: "customer",
+    })
+    const other = createManagedUser({
+      name: "Pat",
+      email: "pat@example.com",
+      password: "password12",
+      role: "customer",
+    })
+    assert.equal(startImpersonation(undefined, customer.user!.id).error, "Admin access is required.")
+    const customerCookie = `${SESSION_COOKIE}=${createSession(customer.user!.id)}`
+    assert.equal(startImpersonation(customerCookie, other.user!.id).error, "Admin access is required.")
+    assert.equal(canManage(customerCookie), false)
+  })
+
+  it("blocks viewing as another admin and still allows a suspended customer", () => {
+    isolate()
+    const admin = signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const otherAdmin = createManagedUser({
+      name: "Bea",
+      email: "bea@example.com",
+      password: "password12",
+      role: "admin",
+    })
+    const customer = createManagedUser({
+      name: "Sam",
+      email: "sam@example.com",
+      password: "password12",
+      role: "customer",
+    })
+    setUserStatus(customer.user!.id, "suspended", admin.user!.id)
+    const adminCookie = `${SESSION_COOKIE}=${createSession(admin.user!.id)}`
+    assert.equal(startImpersonation(adminCookie, otherAdmin.user!.id).error, "You cannot view the app as another admin.")
+    const started = startImpersonation(adminCookie, customer.user!.id)
+    assert.equal(started.error, undefined)
+    const viewing = viewingCookie(adminCookie.split("=")[1], started.token!)
+    assert.equal(userFromCookie(viewing)?.email, "sam@example.com")
+    assert.equal(userFromCookie(viewing)?.status, "suspended")
+    assert.equal(canManage(viewing), false)
+  })
+
+  it("rejects a tampered or expired impersonation cookie", () => {
+    isolate()
+    const admin = signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const customer = createManagedUser({
+      name: "Casey",
+      email: "casey@example.com",
+      password: "password12",
+      role: "customer",
+    })
+    const adminToken = createSession(admin.user!.id)
+    const expired = signImpersonation({
+      impersonatorId: admin.user!.id,
+      userId: customer.user!.id,
+      exp: Date.now() - 1000,
+    })
+    assert.equal(userFromCookie(viewingCookie(adminToken, `${expired}tampered`))?.email, "ada@example.com")
+    assert.equal(canManage(viewingCookie(adminToken, expired)), true)
+    assert.equal(impersonatingFromCookie(viewingCookie(adminToken, expired)), null)
+    assert.equal(stopImpersonation(viewingCookie(adminToken, expired)).error, "You are not viewing as another user.")
   })
 })

@@ -13,10 +13,18 @@ import { ResultPanel } from "./components/ResultPanel.tsx"
 import { SearchForm } from "./components/SearchForm.tsx"
 import { TrackPage } from "./components/TrackPage.tsx"
 import { SellPage } from "./components/SellPage.tsx"
-import { loadRuntime, searchBusiness } from "./lib/api.ts"
+import { loadRuntime, searchBusiness, stopImpersonation } from "./lib/api.ts"
 import { allowedPath, clientIsDesktop, currentPath, type AppPath } from "./lib/nav.ts"
 import { emptyKeys, loadHistory, pushHistory } from "./lib/storage.ts"
-import type { AuthUser, HistoryItem, HostedKeyStatus, LicenseStatus, SearchQuery, SearchResponse } from "./lib/types.ts"
+import type {
+  AuthUser,
+  HistoryItem,
+  HostedKeyStatus,
+  ImpersonatingInfo,
+  LicenseStatus,
+  SearchQuery,
+  SearchResponse,
+} from "./lib/types.ts"
 
 const emptyQuery = (): SearchQuery => ({ name: "", city: "", state: "" })
 
@@ -36,9 +44,10 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [license, setLicense] = useState<LicenseStatus | null>(null)
   const [publicUrl, setPublicUrl] = useState("")
+  const [impersonating, setImpersonating] = useState<ImpersonatingInfo | null>(null)
   const [runtimeReady, setRuntimeReady] = useState(false)
 
-  const access = { desktop, store, admin, user }
+  const access = { desktop, store, admin, user, impersonating }
 
   useEffect(() => {
     const onPop = () => setPath(currentPath())
@@ -57,6 +66,7 @@ export default function App() {
         setAdmin(runtime.admin)
         setBootstrap(Boolean(runtime.bootstrap))
         setUser(runtime.user)
+        setImpersonating(runtime.impersonating ?? null)
         setLicense(runtime.license)
         setPublicUrl(runtime.publicUrl ?? "")
         const dest = allowedPath(currentPath(), {
@@ -64,6 +74,7 @@ export default function App() {
           store: Boolean(runtime.store) && !nextDesktop,
           admin: runtime.admin,
           user: runtime.user,
+          impersonating: runtime.impersonating ?? null,
         })
         if (dest !== currentPath()) {
           window.history.replaceState({}, "", dest)
@@ -94,11 +105,13 @@ export default function App() {
       setAdmin(runtime.admin)
       setLicense(runtime.license)
       setUser(runtime.user ?? nextUser)
+      setImpersonating(runtime.impersonating ?? null)
       const next = dest ?? allowedPath(desktop || nextDesktop ? "/" : "/account", {
         desktop: nextDesktop,
         store: Boolean(runtime.store) && !nextDesktop,
         admin: runtime.admin,
         user: runtime.user ?? nextUser,
+        impersonating: runtime.impersonating ?? null,
       })
       window.history.pushState({}, "", next)
       setPath(next)
@@ -164,6 +177,24 @@ export default function App() {
     <div className="min-h-screen bg-ink">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(224,177,91,0.08),transparent_28%),radial-gradient(circle_at_80%_0%,rgba(111,154,120,0.08),transparent_24%)]" />
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-5 sm:px-6">
+        {impersonating && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brass/40 bg-brass/10 px-4 py-3">
+            <p className="text-sm text-paper">
+              Viewing as {impersonating.name} ({impersonating.email})
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void stopImpersonation()
+                  .then((next) => refreshSession(next, "/admin"))
+                  .catch(() => setImpersonating(null))
+              }}
+              className="rounded-lg bg-brass px-3 py-1.5 text-xs font-semibold text-ink hover:bg-[#ecc77a]"
+            >
+              Stop viewing
+            </button>
+          </div>
+        )}
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">
@@ -188,9 +219,11 @@ export default function App() {
           </div>
         </header>
 
-        {admin && path === "/sell" && <SellPage />}
-        {path === "/admin" && admin && <AdminPage currentUserId={user?.id} />}
-        {path === "/admin" && !admin && <AdminLogin bootstrap={bootstrap} onAuthed={onAdminAuthed} />}
+        {admin && !impersonating && path === "/sell" && <SellPage />}
+        {path === "/admin" && admin && !impersonating && (
+          <AdminPage currentUserId={user?.id} onViewAs={(next) => void refreshSession(next, "/account")} />
+        )}
+        {path === "/admin" && !admin && !impersonating && <AdminLogin bootstrap={bootstrap} onAuthed={onAdminAuthed} />}
         {!desktop && (admin || store) && path === "/download" && <DownloadPage onTryScan={() => go("/")} />}
         {!desktop && store && path === "/buy" && <BuyPage user={user} onAuthed={onAuthed} onTryScan={() => go("/")} />}
         {path === "/account" && user && (
@@ -200,6 +233,7 @@ export default function App() {
             onLogout={() => {
               setUser(null)
               setAdmin(false)
+              setImpersonating(null)
               window.history.pushState({}, "", "/login")
               setPath("/login")
             }}

@@ -7,6 +7,7 @@ export type NavAccess = {
   store: boolean
   admin: boolean
   user: AuthUser | null
+  impersonating?: { name: string; email: string } | null
 }
 
 export function currentPath(): AppPath {
@@ -28,10 +29,10 @@ export function clientIsDesktop(): boolean {
 }
 
 export function allowedPath(next: AppPath, access: NavAccess): AppPath {
-  const { desktop, store, admin, user } = access
-  if (next === "/admin") return "/admin"
+  const { desktop, store, admin, user, impersonating } = access
+  if (next === "/admin") return impersonating ? (user ? "/account" : "/") : "/admin"
   if (next === "/reset") return "/reset"
-  if (next === "/sell") return admin ? "/sell" : "/admin"
+  if (next === "/sell") return admin ? "/sell" : impersonating ? "/account" : "/admin"
   if (next === "/join") {
     if (desktop) return user ? "/" : "/login"
     return store ? "/buy" : "/"

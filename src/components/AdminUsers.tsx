@@ -1,6 +1,6 @@
 import { LoaderCircle } from "lucide-react"
 import { useMemo, useState } from "react"
-import { createAdminUser, deleteAdminUser, setAdminUserStatus, updateAdminUser } from "../lib/api.ts"
+import { createAdminUser, deleteAdminUser, impersonateAdminUser, setAdminUserStatus, updateAdminUser } from "../lib/api.ts"
 import type { AuthUser } from "../lib/types.ts"
 
 type Draft = {
@@ -24,9 +24,10 @@ type Props = {
   onUsers: (users: AuthUser[] | ((current: AuthUser[]) => AuthUser[])) => void
   onError: (message: string | null) => void
   onMessage: (message: string | null) => void
+  onViewAs: (user: AuthUser) => void
 }
 
-export function AdminUsers({ users, currentUserId, onUsers, onError, onMessage }: Props) {
+export function AdminUsers({ users, currentUserId, onUsers, onError, onMessage, onViewAs }: Props) {
   const [createDraft, setCreateDraft] = useState<Draft>(emptyDraft)
   const [editId, setEditId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<Draft>(emptyDraft)
@@ -60,8 +61,8 @@ export function AdminUsers({ users, currentUserId, onUsers, onError, onMessage }
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Users</p>
       <h2 className="mt-1 font-display text-3xl text-paper">Manage accounts</h2>
       <p className="mt-3 text-sm leading-6 text-muted">
-        Create, edit, suspend, or delete customer and admin accounts. Suspended users cannot sign in on the website or
-        the desktop app.
+        Create, edit, suspend, or delete customer and admin accounts. Use View as user to open the site as that
+        customer. Suspended users cannot sign in on the website or the desktop app, but you can still view as them.
       </p>
 
       <form
@@ -232,6 +233,20 @@ export function AdminUsers({ users, currentUserId, onUsers, onError, onMessage }
                         </div>
                       ) : (
                         <div className="flex flex-wrap gap-2">
+                          {row.role !== "admin" && (
+                            <button
+                              type="button"
+                              disabled={busy === `view-${row.id}`}
+                              onClick={() =>
+                                void run(`view-${row.id}`, async () => {
+                                  onViewAs(await impersonateAdminUser(row.id))
+                                })
+                              }
+                              className="rounded-lg border border-brass px-3 py-1.5 text-xs font-semibold text-brass hover:bg-brass/10 disabled:opacity-40"
+                            >
+                              View as user
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => {

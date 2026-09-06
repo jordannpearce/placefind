@@ -1,4 +1,4 @@
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto"
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto"
 import { isPackagedBuyer } from "./runtime.ts"
 import { readCollection, writeCollection } from "./store.ts"
 
@@ -31,8 +31,16 @@ type Session = {
 }
 
 export const SESSION_COOKIE = "pf_session"
+export const IMPERSONATE_COOKIE = "pf_impersonate"
+export const IMPERSONATION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 export const FORGOT_PASSWORD_MESSAGE = "If that email is on file, we sent a reset link."
 export const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000
+
+export type ImpersonatingInfo = {
+  name: string
+  email: string
+}
+
 const FORGOT_RATE_WINDOW_MS = 15 * 60 * 1000
 const FORGOT_RATE_LIMIT = 5
 
@@ -354,8 +362,54 @@ export function parseCookies(header?: string) {
   return out
 }
 
-export function userFromCookie(header?: string): PublicUser | null {
-  const token = parseCookies(header)[SESSION_COOKIE]
+function cookieValue(name: string, token: string, clear = false) {
+  const parts = [`${name}=${clear ? "" : token}`, "Path=/", "HttpOnly", "SameSite=Lax"]
+  if (clear) parts.push("Max-Age=0")
+  else parts.push("Max-Age=2592000")
+  return parts.join("; ")
+}
+
+function impersonationSecret() {
+  return process.env.PLACEFIND_SESSION_SECRET?.trim() || "placefind-impersonate-v1"
+}
+
+function signedEqual(left: string, right: string) {
+  const a = createHash("sha256").update(left).digest()
+  const b = createHash("sha256").update(right).digest()
+  return a.length === b.length && timingSafeEqual(a, b) && left.length === right.length
+}
+
+export function signImpersonation(input: { impersonatorId: string; userId: string; exp?: number }) {
+  const payload = {
+    impersonatorId: input.impersonatorId,
+    userId: input.userId,
+    exp: input.exp ?? Date.now() + IMPERSONATION_TTL_MS,
+  }
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url")
+  const mac = createHmac("sha256", impersonationSecret()).update(body).digest("base64url")
+  return `${body}.${mac}`
+}
+
+export function verifyImpersonation(token: string): { impersonatorId: string; userId: string } | null {
+  const [body, mac] = token.split(".")
+  if (!body || !mac) return null
+  const expected = createHmac("sha256", impersonationSecret()).update(body).digest("base64url")
+  if (!signedEqual(mac, expected)) return null
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as {
+      impersonatorId?: string
+      userId?: string
+      exp?: number
+    }
+    if (!payload.impersonatorId || !payload.userId) return null
+    if (typeof payload.exp !== "number" || payload.exp <= Date.now()) return null
+    return { impersonatorId: payload.impersonatorId, userId: payload.userId }
+  } catch {
+    return null
+  }
+}
+
+function userFromSessionToken(token?: string): PublicUser | null {
   if (!token) return null
   const session = readSessions().find((row) => row.token === token)
   if (!session) return null
@@ -364,16 +418,68 @@ export function userFromCookie(header?: string): PublicUser | null {
   return publicUser(user)
 }
 
+export function sessionContext(header?: string): { user: PublicUser; impersonator: PublicUser | null } | null {
+  const cookies = parseCookies(header)
+  const sessionUser = userFromSessionToken(cookies[SESSION_COOKIE])
+  const signed = cookies[IMPERSONATE_COOKIE] ? verifyImpersonation(cookies[IMPERSONATE_COOKIE]) : null
+  if (signed && sessionUser) {
+    const impersonator = findUserById(signed.impersonatorId)
+    const target = findUserById(signed.userId)
+    if (
+      impersonator &&
+      impersonator.role === "admin" &&
+      userStatus(impersonator) === "active" &&
+      sessionUser.id === impersonator.id &&
+      target &&
+      target.role !== "admin"
+    ) {
+      return { user: publicUser(target), impersonator: publicUser(impersonator) }
+    }
+  }
+  if (!sessionUser) return null
+  return { user: sessionUser, impersonator: null }
+}
+
+export function userFromCookie(header?: string): PublicUser | null {
+  return sessionContext(header)?.user ?? null
+}
+
+export function impersonatingFromCookie(header?: string): ImpersonatingInfo | null {
+  const ctx = sessionContext(header)
+  if (!ctx?.impersonator) return null
+  return { name: ctx.user.name, email: ctx.user.email }
+}
+
 export function sessionCookie(token: string, clear = false) {
-  const parts = [
-    `${SESSION_COOKIE}=${clear ? "" : token}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-  ]
-  if (clear) parts.push("Max-Age=0")
-  else parts.push("Max-Age=2592000")
-  return parts.join("; ")
+  return cookieValue(SESSION_COOKIE, token, clear)
+}
+
+export function impersonationCookie(token: string, clear = false) {
+  return cookieValue(IMPERSONATE_COOKIE, token, clear)
+}
+
+export function startImpersonation(
+  header: string | undefined,
+  targetId: string,
+): { user?: PublicUser; impersonating?: ImpersonatingInfo; token?: string; error?: string } {
+  if (!canManage(header)) return { error: "Admin access is required." }
+  const actor = userFromCookie(header)
+  if (!actor || actor.role !== "admin") return { error: "Admin access is required." }
+  const target = findUserById(targetId)
+  if (!target) return { error: "That user was not found." }
+  if (target.role === "admin") return { error: "You cannot view the app as another admin." }
+  const token = signImpersonation({ impersonatorId: actor.id, userId: target.id })
+  return {
+    user: publicUser(target),
+    impersonating: { name: target.name, email: target.email },
+    token,
+  }
+}
+
+export function stopImpersonation(header?: string): { user?: PublicUser; error?: string } {
+  const ctx = sessionContext(header)
+  if (!ctx?.impersonator) return { error: "You are not viewing as another user." }
+  return { user: ctx.impersonator }
 }
 
 export function canLocalBootstrap() {
@@ -384,11 +490,11 @@ export function canLocalBootstrap() {
 
 export function canManage(header?: string) {
   if (isPackagedBuyer()) return false
-  const user = userFromCookie(header)
-  if (user?.role === "admin") return true
+  const ctx = sessionContext(header)
+  if (!ctx || ctx.impersonator) return false
   // Seller/dev mode is never admin. The only bootstrap is the first account
   // (or ADMIN_EMAIL) becoming an admin — not an open admin session.
-  return false
+  return ctx.user.role === "admin"
 }
 
 export function storeOpen() {

@@ -6,7 +6,13 @@ import { AdminEmail } from "./AdminEmail.tsx"
 import { AdminUsers } from "./AdminUsers.tsx"
 import { MapsSearchPanel } from "./MapsSearchPanel.tsx"
 
-export function AdminPage({ currentUserId }: { currentUserId?: string }) {
+export function AdminPage({
+  currentUserId,
+  onViewAs,
+}: {
+  currentUserId?: string
+  onViewAs: (user: AuthUser) => void
+}) {
   const [users, setUsers] = useState<AuthUser[]>([])
   const [orders, setOrders] = useState<OrderInfo[]>([])
   const [issued, setIssued] = useState<IssuedLicense[]>([])
@@ -63,6 +69,7 @@ export function AdminPage({ currentUserId }: { currentUserId?: string }) {
         onUsers={setUsers}
         onError={setError}
         onMessage={setMessage}
+        onViewAs={onViewAs}
       />
 
       <AdminEmail
