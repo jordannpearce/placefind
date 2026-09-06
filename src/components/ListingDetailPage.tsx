@@ -1,6 +1,5 @@
 import { ExternalLink, LoaderCircle, Mail, MapPin, Phone, Star } from "lucide-react"
 import { useEffect, useState } from "react"
-import { joinHref, loginHref } from "../lib/account.ts"
 import { createListingReview, loadListing, requestListingQuote } from "../lib/api.ts"
 import { listingLocation, listingPath, listingRedirectPath, mapsStatusDetail } from "../lib/listings.ts"
 import { LISTING_PRICE_LABEL } from "../lib/pricing.ts"
@@ -275,24 +274,21 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
         ) : (
           <div className="mt-6 rounded-xl border border-line bg-ink px-4 py-4">
             <p className="text-sm leading-6 text-paper">Reviews come from PlaceFind accounts so shops can trust the desk.</p>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              Sign in or create a free neighbor account to leave a review. PlaceFind does not charge $150 for reviews or
-              quotes.
-            </p>
+            <p className="mt-2 text-sm leading-6 text-muted">Sign in or join to leave a review. You can still request a quote below without an account.</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => onGo(loginHref(listingPath(listing)))}
+                onClick={() => onGo("/login")}
                 className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
               >
                 Sign in
               </button>
               <button
                 type="button"
-                onClick={() => onGo(joinHref("member", listingPath(listing)))}
+                onClick={() => onGo("/join")}
                 className="h-11 rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
               >
-                Join free
+                Join
               </button>
             </div>
           </div>
@@ -307,36 +303,13 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
         ) : (
           <>
             <p className="mt-3 text-sm leading-6 text-muted">
-              Tell them what you need. PlaceFind sends your note to the contact email on this listing. The shop writes you back themselves. Quote requests use a free account — not a $150 listing.
+              Tell them what you need. PlaceFind sends your note to the contact email on this listing. The shop writes you back themselves.
             </p>
             {quoteSent && (
               <p className="mt-4 rounded-xl border border-moss/40 bg-moss/10 px-4 py-3 text-sm text-moss">
                 Sent. The shop can write you at the email you left.
               </p>
             )}
-            {!user ? (
-              <div className="mt-5 rounded-xl border border-line bg-ink px-4 py-4">
-                <p className="text-sm leading-6 text-muted">
-                  Sign in or create a free neighbor account to request a quote. PlaceFind does not bill that account.
-                </p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => onGo(loginHref(listingPath(listing)))}
-                    className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
-                  >
-                    Sign in
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onGo(joinHref("member", listingPath(listing)))}
-                    className="h-11 rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
-                  >
-                    Join free
-                  </button>
-                </div>
-              </div>
-            ) : (
             <form
               className="mt-5 grid gap-3"
               onSubmit={(event) => {
@@ -392,7 +365,6 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
                 Request a quote
               </button>
             </form>
-            )}
           </>
         )}
       </section>

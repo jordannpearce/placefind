@@ -1,7 +1,6 @@
 import { ArrowRight, BadgeDollarSign, NotebookPen, Store } from "lucide-react"
 import { useEffect, useState } from "react"
 import { searchDirectory } from "../lib/api.ts"
-import { listBusinessHref } from "../lib/account.ts"
 import { listingLocation, listingPath } from "../lib/listings.ts"
 import { LISTING_PRICE_LABEL, listingPriceCopy } from "../lib/pricing.ts"
 import { CITY_PHOTOS } from "../lib/sample-listing.ts"
@@ -52,7 +51,7 @@ export function HomePage({ user, onGo }: Props) {
             </button>
             <button
               type="button"
-              onClick={() => onGo(listBusinessHref(user))}
+              onClick={() => onGo(user ? "/listings/new" : "/join")}
               className="inline-flex h-12 items-center rounded-lg border border-line px-5 text-sm text-paper hover:border-brass"
             >
               {user ? "Create a listing" : `List your business · ${LISTING_PRICE_LABEL}`}
@@ -80,8 +79,7 @@ export function HomePage({ user, onGo }: Props) {
               <li className="rounded-xl border border-line bg-panel px-4 py-3">
                 <p className="text-sm font-semibold text-paper">1. Create an account</p>
                 <p className="mt-1 text-sm leading-6 text-muted">
-                  Businesses join to own a listing. Neighbors create a free account to leave reviews and request quotes
-                  — that account is not billed $150.
+                  Join PlaceFind with your name and email. That account owns the listings you publish.
                 </p>
               </li>
               <li className="rounded-xl border border-line bg-panel px-4 py-3">
@@ -127,8 +125,8 @@ export function HomePage({ user, onGo }: Props) {
             <NotebookPen className="h-5 w-5 text-brass" />
             <h4 className="mt-3 font-display text-xl text-paper">Reviews and enhanced info</h4>
             <p className="mt-2 text-sm leading-6 text-muted">
-              Neighbors leave reviews and request quotes from a free account. After Crawl Website, the public profile
-              also shows an article written from the listing keywords and facts found on the site.
+              Visitors leave reviews. After Crawl Website, the public profile also shows an article written from the
+              listing keywords and facts found on the site.
             </p>
           </article>
         </div>
@@ -158,7 +156,7 @@ export function HomePage({ user, onGo }: Props) {
             <div className="mt-5 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => onGo(listBusinessHref(user))}
+                onClick={() => onGo(user ? "/listings/new" : "/join")}
                 className="inline-flex h-11 items-center rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
               >
                 {user ? "Create a listing" : "List your business"}
@@ -224,7 +222,7 @@ export function HomePage({ user, onGo }: Props) {
             <div className="mt-6 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => onGo(listBusinessHref(user))}
+                onClick={() => onGo(user ? "/listings/new" : "/join")}
                 className="inline-flex h-11 items-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
               >
                 {user ? "Create a listing" : "Start a listing"}

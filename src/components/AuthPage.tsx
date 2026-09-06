@@ -1,5 +1,4 @@
 import { useState } from "react"
-import type { JoinIntent } from "../lib/account.ts"
 import { forgotPassword, login, signup } from "../lib/api.ts"
 import type { AuthUser } from "../lib/types.ts"
 
@@ -8,13 +7,12 @@ type Props = {
   title?: string
   intro?: string
   publicUrl?: string
-  joinIntent?: JoinIntent
   onAuthed: (user: AuthUser) => void
   onGoLogin?: () => void
   onGoJoin?: () => void
 }
 
-export function AuthPage({ mode = "login", title, intro, joinIntent = "business", onAuthed, onGoLogin, onGoJoin }: Props) {
+export function AuthPage({ mode = "login", title, intro, onAuthed, onGoLogin, onGoJoin }: Props) {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -41,12 +39,9 @@ export function AuthPage({ mode = "login", title, intro, joinIntent = "business"
       </h2>
       <p className="mt-3 text-sm leading-6 text-muted">
         {view === "join"
-          ? intro ||
-            (joinIntent === "member"
-              ? "Create a free PlaceFind account to leave reviews and request quotes. This account is not billed. Listing a business is $150 per month on a separate business account."
-              : "Create a PlaceFind account to list your business for $150 per month.")
+          ? intro || "Create a PlaceFind account to list your business for $150 per month."
           : view === "login"
-            ? intro || "Sign in to manage a listing, leave a review, or request a quote."
+            ? intro || "Sign in to manage your listings or request a website crawl."
             : "Enter the email on your PlaceFind account. If it is on file, we will send a one-time reset link."}
       </p>
       {view === "join" && (
@@ -57,7 +52,7 @@ export function AuthPage({ mode = "login", title, intro, joinIntent = "business"
             setBusy(true)
             setError(null)
             try {
-              onAuthed(await signup({ name, email, password, kind: joinIntent === "member" ? "member" : "business" }))
+              onAuthed(await signup({ name, email, password }))
             } catch (err) {
               setError(err instanceof Error ? err.message : "Could not create the account.")
             } finally {
