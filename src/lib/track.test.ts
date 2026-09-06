@@ -8,11 +8,15 @@ import {
   listingsFromSearch,
   scanBusinessEnabled,
   searchChanged,
+  listedTrafficKeywords,
+  noKeywordsSelectedMessage,
   noPinsSelectedMessage,
+  selectedKeywordsInListedOrder,
   startTrafficEnabled,
   startTrafficLabel,
   startTrafficVisible,
   stopTrafficVisible,
+  trafficKeywordHelpCopy,
   trafficLogEmptyCopy,
 } from "./track.ts"
 import type { BusinessListing, Campaign, SearchResponse, TrafficJob } from "./types.ts"
@@ -161,7 +165,22 @@ describe("start traffic button", () => {
     assert.equal(stopTrafficVisible({ status: "running" } as TrafficJob), true)
     assert.equal(stopTrafficVisible({ status: "ok" } as TrafficJob), false)
     assert.equal(noPinsSelectedMessage(), "Select at least one pin")
+    assert.equal(noKeywordsSelectedMessage(), "Select at least one keyword")
     assert.match(trafficLogEmptyCopy(), /Select pins/)
+    assert.match(trafficKeywordHelpCopy(), /selected pin GPS/)
+    assert.match(trafficKeywordHelpCopy(), /listed order/)
+  })
+
+  it("keeps selected keywords in campaign listed order", () => {
+    const listed = listedTrafficKeywords(
+      campaign({ keywords: ["barbecue", "brisket", "smoked meats"] }),
+    )
+    assert.deepEqual(listed, ["barbecue", "brisket", "smoked meats"])
+    assert.deepEqual(selectedKeywordsInListedOrder(listed, ["smoked meats", "barbecue", "unknown"]), [
+      "barbecue",
+      "smoked meats",
+    ])
+    assert.deepEqual(selectedKeywordsInListedOrder(listed, []), [])
   })
 })
 

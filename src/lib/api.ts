@@ -447,11 +447,12 @@ export async function startCampaignTraffic(
   id: string,
   keys: ApiKeys,
   hideClientKeys = false,
-  pinIds?: string[],
+  input?: { pinIds?: string[]; keywordIds?: string[]; keywords?: string[] } | string[],
 ): Promise<{ campaign: Campaign; traffic: TrafficJob }> {
+  const selection = Array.isArray(input) ? { pinIds: input } : input ?? {}
   return request(`/api/campaigns/${id}/traffic`, {
     method: "POST",
-    body: JSON.stringify(hideClientKeys ? { pinIds } : { pinIds, ...keys }),
+    body: JSON.stringify(hideClientKeys ? selection : { ...selection, ...keys }),
   })
 }
 

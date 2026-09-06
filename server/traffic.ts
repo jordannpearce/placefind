@@ -393,7 +393,7 @@ export function stopCampaignTraffic(
         finishedAt: now,
         results,
       },
-      "Stop requested. Remaining sessions were cancelled.",
+      "Stop requested. Remaining keyword and pin pairs were cancelled.",
     )
   })
   const latest = getCampaign(id, userId)
@@ -412,10 +412,6 @@ function createPendingResults(pairs: TrafficPair[]): TrafficPinResult[] {
     status: "pending",
     finishedAt: null,
   }))
-}
-
-function resultIndex(pairs: TrafficPair[], pinId: string, keyword: string): number {
-  return pairs.findIndex((pair) => pair.pinId === pinId && pair.keyword.toLowerCase() === keyword.toLowerCase())
 }
 
 function snapshotFromSessions(
@@ -439,15 +435,18 @@ function snapshotFromSessions(
 function cancelRemainingPairs(
   pairs: TrafficPair[],
   pinResults: TrafficPinResult[],
+  pinId: string,
   fromIndex: number,
   now: string,
 ): TrafficPair[] {
   const cancelled: TrafficPair[] = []
   for (let index = fromIndex; index < pairs.length; index += 1) {
+    const pair = pairs[index]
+    if (!pair || pair.pinId !== pinId) continue
     const current = pinResults[index]
     if (!current || current.status === "ok" || current.status === "fail" || current.status === "cancelled") continue
     pinResults[index] = { ...current, status: "cancelled", finishedAt: now }
-    cancelled.push(pairs[index]!)
+    cancelled.push(pair)
   }
   return cancelled
 }
@@ -481,12 +480,7 @@ async function executeTrafficJob(input: {
       const handle = handleFor(input.campaignId, input.jobId)
       if (handle?.stopRequested || input.signal.aborted) {
         const now = new Date().toISOString()
-        const remaining = cancelRemainingPairs(
-          pairs.filter((row) => row.pinId === pin.pinId),
-          pinResults,
-          index,
-          now,
-        )
+        const remaining = cancelRemainingPairs(pairs, pinResults, pin.pinId, index, now)
         persistJob(input.campaignId, input.jobId, (job) => {
           let next = snapshotFromSessions(job, sessionResults, pinResults)
           for (const cancelled of remaining.length ? remaining : [pair]) {
@@ -569,7 +563,7 @@ async function executeTrafficJob(input: {
 export function startCampaignTraffic(
   id: string,
   rawKeys: ApiKeys,
-  pinIds?: string[] | unknown,
+  pinIds?: string[] | TrafficStartInput | unknown,
   userId?: string | null,
 ): { campaign: Campaign; traffic: TrafficJob } {
   const campaign = getCampaign(id, userId)
@@ -583,35 +577,43 @@ export function startCampaignTraffic(
     throw new CampaignError(trafficRunnerMissingMessage(), 400)
   }
 
-  const requestedIds = normalizePinIds(pinIds)
+  const startInput = parseTrafficStartInput(pinIds)
+  const requestedIds = normalizePinIds(startInput.pinIds)
   const pins = pinsForTraffic(campaign, requestedIds)
   if (pins.length === 0) throw new CampaignError(noPinsSelectedMessage(), 400)
+
+  const keywords = selectTrafficKeywords(campaign, startInput)
+  if (keywords.length === 0) throw new CampaignError(noKeywordsSelectedMessage(), 400)
 
   const current = normalizeTrafficJob(campaign.lastTrafficJob)
   if (current?.status === "running" && runningJobs.has(campaign.id)) {
     throw new CampaignError(trafficAlreadyRunningMessage(), 409)
   }
 
+  const pairs = pairsForTraffic(pins, keywords)
   const startedAt = new Date().toISOString()
   const job: TrafficJob = {
     id: newId(),
     status: "running",
     startedAt,
     finishedAt: null,
-    sessionsRequested: pins.length,
+    sessionsRequested: pairs.length,
     sessionsAttempted: 0,
     sessionsOk: 0,
     sessionsFailed: 0,
     requestCount: 0,
     lastError: null,
     pinIds: pins.map((pin) => pin.pinId),
+    keywords,
+    keywordIds: keywords.map((keyword, index) => campaignKeywordId(keyword, index)),
     log: [],
-    results: createPendingResults(pins),
+    results: createPendingResults(pairs),
   }
   const trafficSchedule = campaign.trafficSchedule
     ? {
         ...campaign.trafficSchedule,
         lastSelectedPinIds: pins.map((pin) => pin.pinId),
+        lastSelectedKeywords: keywords,
       }
     : campaign.trafficSchedule
   const next = saveCampaign({ ...campaign, lastTrafficJob: job, trafficSchedule, updatedAt: startedAt })
@@ -629,6 +631,7 @@ export function startCampaignTraffic(
     key: keys.scrappeyKey,
     listing,
     pins,
+    keywords,
     signal: abort.signal,
   }).catch((error) => {
     persistJob(next.id, job.id, (currentJob) =>

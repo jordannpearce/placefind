@@ -101,12 +101,32 @@ export function noPinsSelectedMessage() {
   return "Select at least one pin"
 }
 
+export function noKeywordsSelectedMessage() {
+  return "Select at least one keyword"
+}
+
+export function trafficKeywordHelpCopy() {
+  return "Traffic will search that keyword on Maps from the selected pin GPS, then open the confirmed listing when it appears. If several keywords are selected, each pin runs them in listed order."
+}
+
 export function trafficLogEmptyCopy() {
-  return "No traffic yet. Select pins on the map, then start traffic."
+  return "No traffic yet. Select pins on the map and keywords to search, then start traffic."
 }
 
 export function trafficLogLoadingCopy() {
-  return "Starting traffic from the selected pins…"
+  return "Starting traffic from the selected pins and keywords…"
+}
+
+export function listedTrafficKeywords(campaign: Pick<Campaign, "keywords" | "lastGridScan" | "businessName"> | null | undefined): string[] {
+  if (!campaign) return []
+  if (campaign.keywords.length > 0) return campaign.keywords
+  const fallback = (campaign.lastGridScan?.keyword || campaign.businessName || "").trim()
+  return fallback ? [fallback] : []
+}
+
+export function selectedKeywordsInListedOrder(listed: string[], selected: string[]): string[] {
+  const picked = new Set(selected.map((keyword) => keyword.toLowerCase()))
+  return listed.filter((keyword) => picked.has(keyword.toLowerCase()))
 }
 
 export function trafficPinStatusLabel(status: TrafficPinResult["status"] | TrafficJob["status"]): string {

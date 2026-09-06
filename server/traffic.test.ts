@@ -17,14 +17,18 @@ import {
   mapsKeywordAtPinUrl,
   mapsKeywordNearUrl,
   MAX_TRAFFIC_LOG_LINES,
+  noKeywordsSelectedMessage,
   noPinsSelectedMessage,
   normalizeTrafficSessions,
+  pairsForTraffic,
   pinsForTraffic,
   pickTrafficOrigins,
   resetTrafficRuntimeForTests,
   runCampaignTraffic,
+  selectTrafficKeywords,
   startCampaignTraffic,
   stopCampaignTraffic,
+  trafficPairLabel,
   trafficRunnerMissingMessage,
 } from "./traffic.ts"
 
@@ -399,6 +403,113 @@ describe("runCampaignTraffic", () => {
       assert.equal(urls.some((url) => /Austin|city/i.test(url) && url.includes("maps/search")), false)
       assert.ok(urls.some((url) => url.includes("query_place_id=ChIJ123")))
       assert.ok(profiles.size >= 2)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("preserves campaign keyword order and rejects an empty selection", async () => {
+    isolateKeys()
+    process.env.SCRAPPEY_API_KEY = "scp_test_runner_key"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-traffic-keywords-")))
+    const created = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue", "brisket", "smoked meats"],
+        placeId: "ChIJ123",
+        center: { lat: 30.27, lng: -97.74 },
+      },
+      "user-a",
+    )
+    const scanned = attachScan(created, true)
+    assert.deepEqual(selectTrafficKeywords(scanned, { keywords: ["smoked meats", "barbecue"] }), [
+      "barbecue",
+      "smoked meats",
+    ])
+    assert.deepEqual(selectTrafficKeywords(scanned, { keywordIds: ["2", "0"] }), ["barbecue", "smoked meats"])
+    assert.deepEqual(selectTrafficKeywords(scanned), ["barbecue", "brisket", "smoked meats"])
+    assert.deepEqual(selectTrafficKeywords(scanned, { keywords: [] }), [])
+    const pins = pinsForTraffic(scanned, pinIdsFor(scanned))
+    const pairs = pairsForTraffic(pins, ["barbecue", "smoked meats"])
+    assert.deepEqual(
+      pairs.map((pair) => `${pair.pinId}:${pair.keyword}`),
+      ["0:0:barbecue", "0:0:smoked meats", "0:1:barbecue", "0:1:smoked meats"],
+    )
+    await assert.rejects(
+      () => runCampaignTraffic(created.id, emptyApiKeys(), { pinIds: pinIdsFor(scanned), keywords: [] }, "user-a"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error)
+        assert.equal(error.message, noKeywordsSelectedMessage())
+        assert.equal((error as { status?: number }).status, 400)
+        return true
+      },
+    )
+    await assert.rejects(
+      () => runCampaignTraffic(created.id, emptyApiKeys(), { pinIds: pinIdsFor(scanned), keywordIds: [] }, "user-a"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error)
+        assert.equal(error.message, noKeywordsSelectedMessage())
+        return true
+      },
+    )
+  })
+
+  it("searches selected keywords in listed order from each pin and names them in the log", async () => {
+    isolateKeys()
+    process.env.SCRAPPEY_API_KEY = "scp_test_runner_key"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-traffic-kworder-")))
+    const created = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue", "brisket", "smoked meats"],
+        placeId: "ChIJ123",
+        center: { lat: 30.27, lng: -97.74 },
+      },
+      "user-a",
+    )
+    const scanned = attachScan(created, true)
+    const originalFetch = globalThis.fetch
+    const urls: string[] = []
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || "{}")) as { url?: string }
+      if (body.url) urls.push(body.url)
+      return new Response(JSON.stringify({ solution: { verified: true, currentUrl: body.url, markdown: "# Franklin Barbecue" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }) as typeof fetch
+
+    try {
+      const result = await runCampaignTraffic(
+        created.id,
+        emptyApiKeys(),
+        { pinIds: ["0:0"], keywords: ["smoked meats", "barbecue"] },
+        "user-a",
+      )
+      assert.equal(result.traffic.status, "ok")
+      assert.deepEqual(result.traffic.keywords, ["barbecue", "smoked meats"])
+      assert.equal(result.traffic.sessionsRequested, 2)
+      assert.equal(result.traffic.sessionsOk, 2)
+      const searchUrls = urls.filter((url) => url.includes("/maps/search/"))
+      const firstBarbecue = searchUrls.findIndex((url) => url.includes("/maps/search/barbecue/@30.28,-97.75,17z"))
+      const firstSmoked = searchUrls.findIndex((url) => url.includes("/maps/search/smoked%20meats/@30.28,-97.75,17z"))
+      assert.ok(firstBarbecue >= 0)
+      assert.ok(firstSmoked >= 0)
+      assert.ok(firstBarbecue < firstSmoked)
+      assert.ok(result.traffic.log?.every((line) => !line.pinId || (line.keyword && /\d+\.\d+,\s*-?\d+\.\d+/.test(line.message))))
+      assert.ok(result.traffic.log?.some((line) => line.message.includes("barbecue") && line.message.includes("30.28000")))
+      assert.ok(result.traffic.log?.some((line) => line.message.includes("smoked meats") && line.message.includes("30.28000")))
+      assert.equal(trafficPairLabel("barbecue", { lat: 30.28, lng: -97.75 }), "“barbecue” · 30.28000, -97.75000")
+      assert.deepEqual(
+        result.traffic.results?.map((row) => `${row.pinId}:${row.keyword}:${row.status}`),
+        ["0:0:barbecue:ok", "0:0:smoked meats:ok"],
+      )
     } finally {
       globalThis.fetch = originalFetch
     }

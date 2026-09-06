@@ -416,10 +416,20 @@ async function start() {
       })
       return
     }
-    const body = (req.body ?? {}) as ApiKeys & { pinIds?: string[]; sessions?: number }
+    const body = (req.body ?? {}) as ApiKeys & {
+      pinIds?: string[]
+      keywordIds?: string[]
+      keywords?: string[]
+      sessions?: number
+    }
     const keys = isSellerMode() ? body : {}
     try {
-      const result = startCampaignTraffic(String(req.params.id ?? ""), keys, body.pinIds, user.id)
+      const result = startCampaignTraffic(
+        String(req.params.id ?? ""),
+        keys,
+        { pinIds: body.pinIds, keywordIds: body.keywordIds, keywords: body.keywords },
+        user.id,
+      )
       res.json({ ...result, ...campaignMeta() })
     } catch (error) {
       if (error instanceof CampaignError) {

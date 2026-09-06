@@ -25,8 +25,12 @@ import {
   confirmedListingFromSearch,
   listingsFromSearch,
   campaignScanFinished,
+  listedTrafficKeywords,
+  noKeywordsSelectedMessage,
   noPinsSelectedMessage,
   scanBusinessEnabled,
+  selectedKeywordsInListedOrder,
+  trafficKeywordHelpCopy,
   searchChanged,
   searchQueryFromCampaign,
   startTrafficEnabled,
@@ -84,7 +88,7 @@ function emptyScanSchedule(): ScanSchedule {
 }
 
 function emptyTrafficSchedule(): TrafficSchedule {
-  return { ...emptyScanSchedule(), pinMode: "selected", lastSelectedPinIds: [] }
+  return { ...emptyScanSchedule(), pinMode: "selected", lastSelectedPinIds: [], lastSelectedKeywords: [] }
 }
 
 function scanWhen(run: { finishedAt?: string; scannedAt?: string; startedAt?: string }) {
@@ -115,6 +119,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [confirmed, setConfirmed] = useState<ConfirmedListing | null>(null)
   const [selectedPoint, setSelectedPoint] = useState<GridPointResult | null>(null)
   const [selectedPinIds, setSelectedPinIds] = useState<string[]>([])
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([])
   const [previewCenter, setPreviewCenter] = useState<GeoPoint | null>(null)
   const [scans, setScans] = useState<GridScanRun[]>([])
   const [compareFromId, setCompareFromId] = useState("")
@@ -168,6 +173,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setSpacingMiles(1)
       setPreviewCenter(null)
       setSelectedPinIds([])
+      setSelectedKeywords([])
       setScanScheduleDraft(emptyScanSchedule())
       setTrafficScheduleDraft(emptyTrafficSchedule())
       return
@@ -180,6 +186,9 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setSpacingMiles(campaign.spacingMiles ?? 1)
     setPreviewCenter(campaign.center || campaign.lastGridScan?.center || null)
     setSelectedPinIds(campaign.trafficSchedule?.lastSelectedPinIds ?? [])
+    const listed = listedTrafficKeywords(campaign)
+    const remembered = campaign.trafficSchedule?.lastSelectedKeywords ?? []
+    setSelectedKeywords(remembered.length ? selectedKeywordsInListedOrder(listed, remembered) : listed)
     setScanScheduleDraft(campaign.scanSchedule ?? emptyScanSchedule())
     setTrafficScheduleDraft(campaign.trafficSchedule ?? emptyTrafficSchedule())
   }
@@ -283,6 +292,16 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   }, [points])
 
   useEffect(() => {
+    const listed = listedTrafficKeywords(selected)
+    setSelectedKeywords((current) => {
+      if (listed.length === 0) return current.length === 0 ? current : []
+      const next = selectedKeywordsInListedOrder(listed, current.length ? current : listed)
+      if (next.length === current.length && next.every((keyword, index) => keyword === current[index])) return current
+      return next
+    })
+  }, [selected?.id, selected?.keywords, selected?.lastGridScan?.keyword, selected?.businessName])
+
+  useEffect(() => {
     if (!selected?.id || selected.lastTrafficJob?.status !== "running") return
     let active = true
     const poll = async () => {
@@ -294,7 +313,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
         const job = payload.traffic
         if (job && job.status !== "running") {
           if (job.status === "stopped") {
-            setNotice("Traffic stopped. Remaining sessions were cancelled.")
+            setNotice("Traffic stopped. Remaining keyword and pin pairs were cancelled.")
           } else if (job.sessionsAttempted > 0) {
             setNotice(`Traffic finished. ${job.sessionsOk} of ${job.sessionsAttempted} sessions opened the listing.`)
           }
@@ -412,6 +431,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       replaceCampaign(next)
       setKeywordDraft("")
       if (!activeKeyword) setActiveKeyword(keyword)
+      setSelectedKeywords((current) => (current.some((row) => row.toLowerCase() === keyword.toLowerCase()) ? current : [...current, keyword]))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add that keyword.")
     } finally {
@@ -427,6 +447,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       const next = await updateCampaign(selected.id, { keywords: selected.keywords.filter((row) => row !== keyword) })
       replaceCampaign(next)
       if (activeKeyword.toLowerCase() === keyword.toLowerCase()) setActiveKeyword(next.keywords[0] || "")
+      setSelectedKeywords((current) => current.filter((row) => row.toLowerCase() !== keyword.toLowerCase()))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not remove that keyword.")
     } finally {
@@ -553,6 +574,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const step = searching ? 1 : confirmed ? 3 : listings.length > 0 ? 2 : 1
   const trafficLog = trafficJob?.log ?? []
   const trafficResults = trafficJob?.results ?? []
+  const trafficKeywords = listedTrafficKeywords(selected)
 
   function togglePin(point: GridPointResult) {
     const pinId = gridPinId(point)
@@ -568,6 +590,14 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setSelectedPinIds([])
   }
 
+  function toggleTrafficKeyword(keyword: string) {
+    setSelectedKeywords((current) =>
+      current.some((row) => row.toLowerCase() === keyword.toLowerCase())
+        ? current.filter((row) => row.toLowerCase() !== keyword.toLowerCase())
+        : selectedKeywordsInListedOrder(trafficKeywords, [...current, keyword]),
+    )
+  }
+
   async function onStartTraffic() {
     if (!selected) return
     if (selectedPinIds.length === 0) {
@@ -575,10 +605,17 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setError(noPinsSelectedMessage())
       return
     }
-    const sessions = selectedPinIds.length
+    const keywords = selectedKeywordsInListedOrder(trafficKeywords, selectedKeywords)
+    if (keywords.length === 0) {
+      window.alert(noKeywordsSelectedMessage())
+      setError(noKeywordsSelectedMessage())
+      return
+    }
+    const sessions = selectedPinIds.length * keywords.length
     const requests = sessions * 2
+    const keywordList = keywords.map((keyword) => `“${keyword}”`).join(", then ")
     const ok = window.confirm(
-      `Start traffic from ${sessions} selected pin${sessions === 1 ? "" : "s"} for ${confirmed?.title || selected.businessName}?\n\nMaps will search “${activeKeyword || selected.keywords[0] || "this keyword"}” from each pin’s GPS, then open the confirmed listing.\n\nEstimated ${requests} Maps requests (2 per pin).`,
+      `Start traffic from ${selectedPinIds.length} selected pin${selectedPinIds.length === 1 ? "" : "s"} × ${keywords.length} keyword${keywords.length === 1 ? "" : "s"} for ${confirmed?.title || selected.businessName}?\n\nFor each selected pin, Maps will search ${keywordList} from that pin’s GPS, then open the confirmed listing when it appears.\n\nEstimated ${requests} Maps requests (2 per pin×keyword).`,
     )
     if (!ok) return
     setStartingTraffic(true)
@@ -586,9 +623,15 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setNotice(null)
     setTrafficPollError(null)
     try {
-      const payload = await startCampaignTraffic(selected.id, keys, Boolean(hosted?.included && !seller), selectedPinIds)
+      const payload = await startCampaignTraffic(selected.id, keys, Boolean(hosted?.included && !seller), {
+        pinIds: selectedPinIds,
+        keywords,
+        keywordIds: keywords,
+      })
       replaceCampaign(payload.campaign)
-      setNotice(`Traffic started from ${sessions} selected pin${sessions === 1 ? "" : "s"}. Watch the live log under the map.`)
+      setNotice(
+        `Traffic started from ${selectedPinIds.length} pin${selectedPinIds.length === 1 ? "" : "s"} × ${keywords.length} keyword${keywords.length === 1 ? "" : "s"} in listed order. Watch the live log under the map.`,
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start traffic.")
     } finally {
@@ -603,7 +646,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     try {
       const payload = await stopCampaignTraffic(selected.id)
       replaceCampaign(payload.campaign)
-      setNotice("Traffic stopped. Remaining sessions were cancelled.")
+      setNotice("Traffic stopped. Remaining keyword and pin pairs were cancelled.")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not stop traffic.")
     } finally {
@@ -685,6 +728,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
           ...trafficScheduleDraft,
           utcOffsetMinutes: trafficScheduleDraft.timeZone === "local" ? utcOffsetMinutes : undefined,
           lastSelectedPinIds: selectedPinIds,
+          lastSelectedKeywords: selectedKeywordsInListedOrder(listedTrafficKeywords(selected), selectedKeywords),
         },
       })
       replaceCampaign(next)
@@ -1043,6 +1087,43 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 })}
               </div>
             )}
+
+            {showStartTraffic && trafficKeywords.length > 0 && (
+              <div className="mt-5 rounded-xl border border-brass/25 bg-brass/5 px-4 py-4" data-testid="traffic-keyword-panel">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Start Traffic keywords</p>
+                <p className="mt-2 text-sm text-paper/80">{trafficKeywordHelpCopy()}</p>
+                <ul className="mt-3 grid gap-2">
+                  {trafficKeywords.map((keyword) => {
+                    const checked = selectedKeywords.some((row) => row.toLowerCase() === keyword.toLowerCase())
+                    return (
+                      <li key={keyword}>
+                        <label className="flex items-start gap-3 text-sm text-paper">
+                          <input
+                            type="checkbox"
+                            data-testid={`traffic-keyword-${keyword}`}
+                            checked={checked}
+                            onChange={() => toggleTrafficKeyword(keyword)}
+                            className="mt-0.5 h-4 w-4 accent-[#c9a227]"
+                          />
+                          <span>
+                            <span className="font-semibold">{keyword}</span>
+                            <span className="mt-0.5 block text-xs text-muted">
+                              Search this keyword on Maps from each selected pin GPS, then open the confirmed listing when it appears.
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    )
+                  })}
+                </ul>
+                <p className="mt-3 text-xs text-muted">
+                  Selected keywords run in listed order for each selected pin
+                  {selectedKeywords.length > 0
+                    ? `: ${selectedKeywordsInListedOrder(trafficKeywords, selectedKeywords).join(" → ")}.`
+                    : "."}
+                </p>
+              </div>
+            )}
           </section>
         )}
 
@@ -1342,6 +1423,7 @@ function TrafficLivePanel({
             <thead className="text-[11px] uppercase tracking-[0.12em] text-muted">
               <tr>
                 <th className="pb-2 pr-3 font-semibold">Pin</th>
+                <th className="pb-2 pr-3 font-semibold">Keyword</th>
                 <th className="pb-2 pr-3 font-semibold">Coordinate</th>
                 <th className="pb-2 pr-3 font-semibold">Status</th>
                 <th className="pb-2 font-semibold">When</th>
@@ -1349,10 +1431,11 @@ function TrafficLivePanel({
             </thead>
             <tbody>
               {results.map((row) => (
-                <tr key={row.pinId} className="border-t border-line">
+                <tr key={`${row.pinId}-${row.keyword || ""}`} className="border-t border-line">
                   <td className="py-2 pr-3 text-paper">
                     R{row.row + 1} C{row.col + 1}
                   </td>
+                  <td className="py-2 pr-3 text-paper/80">{row.keyword || "—"}</td>
                   <td className="py-2 pr-3 text-muted">
                     {row.lat.toFixed(5)}, {row.lng.toFixed(5)}
                   </td>

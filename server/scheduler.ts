@@ -107,7 +107,17 @@ function runDueTraffic(campaign: Campaign, now: Date) {
   })
   console.log(`PlaceFind scheduler: starting traffic for ${campaign.id} (${campaign.name}).`)
   try {
-    startCampaignTraffic(campaign.id, emptyApiKeys(), pinIds, campaign.userId)
+    startCampaignTraffic(
+      campaign.id,
+      emptyApiKeys(),
+      {
+        pinIds,
+        keywords: campaign.trafficSchedule?.lastSelectedKeywords?.length
+          ? campaign.trafficSchedule.lastSelectedKeywords
+          : undefined,
+      },
+      campaign.userId,
+    )
   } catch (error) {
     const message = error instanceof CampaignError ? error.message : "Traffic failed."
     console.log(`PlaceFind scheduler: traffic for ${campaign.id} failed. ${message}`)
