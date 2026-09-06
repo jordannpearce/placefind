@@ -1,8 +1,9 @@
 import { Check, Copy, LoaderCircle } from "lucide-react"
 import { useEffect, useState } from "react"
 import { adminIssueLicense, loadAdmin, saveMail, testMail } from "../lib/api.ts"
-import type { AuthUser, IssuedLicense, MailStatus, OrderInfo } from "../lib/types.ts"
+import type { AuthUser, HostedKeyStatus, IssuedLicense, MailStatus, OrderInfo } from "../lib/types.ts"
 import { AdminUsers } from "./AdminUsers.tsx"
+import { MapsSearchPanel } from "./MapsSearchPanel.tsx"
 
 export function AdminPage({ currentUserId }: { currentUserId?: string }) {
   const [users, setUsers] = useState<AuthUser[]>([])
@@ -10,6 +11,7 @@ export function AdminPage({ currentUserId }: { currentUserId?: string }) {
   const [issued, setIssued] = useState<IssuedLicense[]>([])
   const [outbox, setOutbox] = useState<Array<{ id: string; to: string; subject: string; delivered: boolean; detail: string }>>([])
   const [mail, setMail] = useState<MailStatus | null>(null)
+  const [hosted, setHosted] = useState<HostedKeyStatus | null>(null)
   const [shop, setShop] = useState({ orderCount: 0, paidCount: 0, pendingCount: 0 })
   const [keygenReady, setKeygenReady] = useState(false)
   const [name, setName] = useState("")
@@ -31,6 +33,7 @@ export function AdminPage({ currentUserId }: { currentUserId?: string }) {
     setIssued(admin.issued)
     setOutbox(admin.outbox)
     setMail(admin.mail)
+    setHosted(admin.hosted ?? null)
     setShop(admin.shop)
     setKeygenReady(admin.keygen.canIssue)
     setFromEmail(admin.mail.fromEmail)
@@ -49,6 +52,13 @@ export function AdminPage({ currentUserId }: { currentUserId?: string }) {
         users={users}
         currentUserId={currentUserId}
         onUsers={setUsers}
+        onError={setError}
+        onMessage={setMessage}
+      />
+
+      <MapsSearchPanel
+        hosted={hosted}
+        onHosted={setHosted}
         onError={setError}
         onMessage={setMessage}
       />

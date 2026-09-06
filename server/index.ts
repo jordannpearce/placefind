@@ -121,7 +121,8 @@ async function start() {
   })
 
   app.get("/api/runtime", async (req, res) => {
-    const hosted = hostedKeyStatus()
+    const admin = canManage(req.headers.cookie)
+    const hosted = hostedKeyStatus({ revealHints: admin })
     const user = actor(req)
     const desktop = isDesktopRequest(req)
     const license = user ? await attachUserLicense(user) : await licenseStatus()
@@ -129,7 +130,7 @@ async function start() {
       seller: isSellerMode(),
       store: storeOpen() && !desktop,
       desktop,
-      admin: canManage(req.headers.cookie),
+      admin,
       bootstrap: !hasAdminUser(),
       user,
       hosted: {
@@ -265,8 +266,9 @@ async function start() {
   })
 
   app.post("/api/test-keys", async (req, res) => {
+    if (!manage(req, res)) return
     const hosted = readHostedKeys()
-    const body = isSellerMode() ? ((req.body ?? {}) as ApiKeys) : {}
+    const body = (req.body ?? {}) as ApiKeys
     const login = body.dataforseoLogin || hosted.dataforseoLogin
     const password = body.dataforseoPassword || hosted.dataforseoPassword
     const scrappey = body.scrappeyKey || hosted.scrappeyKey
@@ -284,7 +286,7 @@ async function start() {
     res.json({
       product: readProduct(),
       installer: storeOpen() ? getInstallerStatus() : { status: "idle", log: "", files: [], folder: "", setupPath: "" },
-      hosted: hostedKeyStatus(),
+      hosted: hostedKeyStatus({ revealHints: canManage(req.headers.cookie) }),
       keygen: keygenPublicStatus(),
       issued: canManage(req.headers.cookie) ? readIssuedLicenses() : [],
       license: await licenseStatus(),
@@ -375,8 +377,9 @@ async function start() {
     res.json({ license })
   })
 
-  app.get("/api/hosted-keys", (_req, res) => {
-    res.json(hostedKeyStatus())
+  app.get("/api/hosted-keys", (req, res) => {
+    if (!manage(req, res)) return
+    res.json(hostedKeyStatus({ revealHints: true }))
   })
 
   app.post("/api/hosted-keys", (req, res) => {
@@ -494,6 +497,7 @@ async function start() {
       product: readProduct(),
       keygen: keygenPublicStatus(),
       mail: mailStatus(),
+      hosted: hostedKeyStatus({ revealHints: true }),
       shop: shopSummary(),
       users: readUsers().map(publicUser),
       orders: listOrders().map(publicOrder),

@@ -9,6 +9,7 @@ import {
   bestGridRank,
   buildGridPoints,
   createCampaign,
+  mapsKeysMissingMessage,
   mergeKeywordRanks,
   normalizeGridSize,
   normalizeKeywords,
@@ -251,5 +252,11 @@ describe("mergeKeywordRanks", () => {
       merged.map((row) => row.keyword),
       ["barbecue"],
     )
+  })
+})
+
+describe("mapsKeysMissingMessage", () => {
+  it("does not tell operators to open Settings", () => {
+    assert.equal(/settings/i.test(mapsKeysMissingMessage()), false)
   })
 })

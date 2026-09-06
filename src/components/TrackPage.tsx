@@ -439,9 +439,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               </div>
               {!mapsReady && (
                 <p className="mt-4 rounded-xl border border-clay/40 px-4 py-3 text-sm text-clay">
-                  {seller
-                    ? "Rank scans need live Maps search. Add keys in Settings, or seal them on Sell."
-                    : "Maps rank tracking is not ready on this copy yet."}
+                  Maps rank tracking is not ready on this copy yet.
                 </p>
               )}
               {mapsReady && (

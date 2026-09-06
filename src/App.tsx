@@ -1,5 +1,5 @@
-import { Download, Settings } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { Download } from "lucide-react"
+import { useEffect, useState } from "react"
 import { AccountPage } from "./components/AccountPage.tsx"
 import { AdminLogin } from "./components/AdminLogin.tsx"
 import { AdminPage } from "./components/AdminPage.tsx"
@@ -12,10 +12,9 @@ import { ResultPanel } from "./components/ResultPanel.tsx"
 import { SearchForm } from "./components/SearchForm.tsx"
 import { TrackPage } from "./components/TrackPage.tsx"
 import { SellPage } from "./components/SellPage.tsx"
-import { SettingsPanel } from "./components/SettingsPanel.tsx"
 import { loadRuntime, searchBusiness } from "./lib/api.ts"
 import { allowedPath, clientIsDesktop, currentPath, type AppPath } from "./lib/nav.ts"
-import { loadHistory, loadKeys, pushHistory, saveKeys } from "./lib/storage.ts"
+import { emptyKeys, loadHistory, pushHistory } from "./lib/storage.ts"
 import type { AuthUser, HistoryItem, HostedKeyStatus, LicenseStatus, SearchQuery, SearchResponse } from "./lib/types.ts"
 
 const emptyQuery = (): SearchQuery => ({ name: "", city: "", state: "" })
@@ -23,12 +22,10 @@ const emptyQuery = (): SearchQuery => ({ name: "", city: "", state: "" })
 export default function App() {
   const [path, setPath] = useState<AppPath>(currentPath)
   const [query, setQuery] = useState<SearchQuery>(emptyQuery)
-  const [keys, setKeys] = useState(loadKeys)
   const [history, setHistory] = useState(loadHistory)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<SearchResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [hosted, setHosted] = useState<HostedKeyStatus | null>(null)
   const [seller, setSeller] = useState(false)
   const [store, setStore] = useState(true)
@@ -121,24 +118,11 @@ export default function App() {
     setPath("/admin")
   }
 
-  const modeLabel = useMemo(() => {
-    const dfs = Boolean((keys.dataforseoLogin && keys.dataforseoPassword) || hosted?.dataforseo)
-    const scrappey = Boolean(keys.scrappeyKey || hosted?.scrappey)
-    const licensed = desktop && license?.configured ? (license.valid ? "Licensed · " : "License needed · ") : ""
-    if (desktop) {
-      if (dfs || scrappey) return `${licensed}Maps search is ready`
-      return `${licensed}Maps search is not configured yet`
-    }
-    if (dfs && scrappey) return `${licensed}${hosted?.included || store ? "Maps search is ready" : "Live Maps search"}`
-    if (dfs || scrappey) return `${licensed}Live Maps search`
-    return `${licensed}Sample preview`
-  }, [keys, hosted, license, store, desktop])
-
   async function runSearch(next = query) {
     setLoading(true)
     setError(null)
     try {
-      const payload = await searchBusiness(next, keys, Boolean(hosted?.included && !seller))
+      const payload = await searchBusiness(next, emptyKeys(), true)
       setResult(payload)
       if (payload.error && !payload.best) setError(payload.error)
       setHistory(pushHistory(next, payload.best?.title))
@@ -168,7 +152,6 @@ export default function App() {
   }
 
   const lookupBlocked = Boolean(license?.required && !license.valid && desktop)
-  const showSettings = admin || seller
   const needsDesktopLogin = desktop && !user && path !== "/admin"
   const needsTrackLogin = !desktop && path === "/track" && !user
   const showLookup = path === "/" && !lookupBlocked && !needsDesktopLogin
@@ -197,16 +180,6 @@ export default function App() {
               >
                 <Download className="h-4 w-4" />
                 Export
-              </button>
-            )}
-            {showSettings && (path === "/" || path === "/track") && !lookupBlocked && !needsDesktopLogin && (
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="inline-flex h-10 items-center gap-2 rounded-lg border border-line px-3 text-sm text-paper/80 hover:border-brass"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
               </button>
             )}
           </div>
@@ -246,7 +219,7 @@ export default function App() {
         {(path === "/" || path === "/track") && lookupBlocked && license && user && (
           <LicenseGate license={license} onActivated={setLicense} />
         )}
-        {showTrack && <TrackPage keys={keys} hosted={hosted} seller={seller} desktop={desktop} />}
+        {showTrack && <TrackPage keys={emptyKeys()} hosted={hosted} seller={seller} desktop={desktop} />}
         {showLookup && (
           <div className="grid flex-1 gap-6 lg:grid-cols-[20rem_1fr]">
             <aside className="rounded-2xl border border-line bg-panel p-5">
@@ -268,7 +241,6 @@ export default function App() {
                 onHistory={useHistory}
                 submitLabel={desktop ? "Find listing" : "Run test scan"}
               />
-              <p className="mt-5 border-t border-line pt-4 text-xs text-muted">{modeLabel}</p>
             </aside>
             <main>
               <ResultPanel loading={loading} result={result} error={error && !result?.best ? error : null} />
@@ -276,19 +248,6 @@ export default function App() {
           </div>
         )}
       </div>
-
-      <SettingsPanel
-        open={settingsOpen}
-        keys={keys}
-        hosted={hosted}
-        seller={seller}
-        license={license}
-        onChange={(next) => {
-          setKeys(next)
-          saveKeys(next)
-        }}
-        onClose={() => setSettingsOpen(false)}
-      />
     </div>
   )
 }

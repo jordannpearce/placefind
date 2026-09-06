@@ -232,6 +232,7 @@ export async function loadAdmin(): Promise<{
   product: ProductInfo
   keygen: KeygenStatus
   mail: MailStatus
+  hosted?: HostedKeyStatus
   shop: { orderCount: number; paidCount: number; pendingCount: number }
   users: AuthUser[]
   orders: OrderInfo[]

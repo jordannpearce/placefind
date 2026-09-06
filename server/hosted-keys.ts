@@ -104,17 +104,18 @@ export function readHostedKeys(): HostedKeys {
   return keys
 }
 
-export function hostedKeyStatus(): HostedKeyStatus {
+export function hostedKeyStatus(options?: { revealHints?: boolean }): HostedKeyStatus {
   const keys = readHostedKeys()
   const scrappey = Boolean(keys.scrappeyKey)
   const dataforseo = Boolean(keys.dataforseoLogin && keys.dataforseoPassword)
   const seller = isSellerMode()
+  const revealHints = Boolean(options?.revealHints)
   return {
     included: scrappey || dataforseo,
     scrappey,
     dataforseo,
-    scrappeyHint: seller ? maskSecret(keys.scrappeyKey) : "",
-    dataforseoHint: seller && keys.dataforseoLogin ? maskSecret(keys.dataforseoLogin) : "",
+    scrappeyHint: revealHints ? maskSecret(keys.scrappeyKey) : "",
+    dataforseoHint: revealHints && keys.dataforseoLogin ? maskSecret(keys.dataforseoLogin) : "",
     seller,
   }
 }
@@ -129,7 +130,7 @@ export function writeHostedKeys(input: Partial<HostedKeys>): HostedKeyStatus {
   mkdirSync(path.dirname(DATA_FILE), { recursive: true })
   writeFileSync(DATA_FILE, sealKeys(next))
   injectHostedKeysIntoUnpacked()
-  return hostedKeyStatus()
+  return hostedKeyStatus({ revealHints: true })
 }
 
 export function injectHostedKeysIntoUnpacked(): boolean {

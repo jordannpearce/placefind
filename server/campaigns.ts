@@ -377,7 +377,7 @@ export function selectScanKeywords(campaign: Campaign, requested?: string[]): st
 
 export function mapsKeysMissingMessage() {
   return isSellerMode()
-    ? "Add a DataForSEO login and API password in Settings, or seal them on Sell, before running a rank scan."
+    ? "Add a DataForSEO login and API password in Admin, or seal them on Sell, before running a rank scan."
     : "Maps search is not configured, so a rank scan cannot run."
 }
 

@@ -82,7 +82,7 @@ Until Resend is connected, those messages stay in the Admin outbox on this compu
 
 The Keygen admin token never goes into the installer. Buyer copies only get your public account and product IDs so they can validate a key. The seller copy on this machine does not ask for a customer license.
 
-Keys are encrypted on disk and inside the Windows setup. Buyers never see the values in Settings, and the installed copy has no Sell page. A determined person who unpacks the app could still recover them, so treat this as hiding keys from customers, not as a vault.
+Keys are encrypted on disk and inside the Windows setup. Buyers never see the values, and the public Test scan has no Settings or API-key form. The installed copy has no Sell page. A determined person who unpacks the app could still recover them, so treat this as hiding keys from customers, not as a vault.
 
 You can also build from a terminal:
 
@@ -98,13 +98,13 @@ The setup file is unsigned unless you add your own Windows code-signing certific
 
 ## Add your keys
 
-On the seller machine, open **Sell** (or **Settings** on a copy that is not the public store):
+On the seller machine, open **Admin** (Maps search / Scan services). **Sell** can still bake the same keys into the Windows setup:
 
 1. Paste your Scrappey API key from [scrappey.com](https://scrappey.com).
 2. Paste your DataForSEO dashboard login and **API password**.
-3. Click **Test connection**, then search.
+3. Save. The public Test scan uses those keys and never shows the values.
 
-If you saved keys on **Sell**, buyers never see a key form. If you also connected Keygen, they unlock the app with the license key you assigned.
+If you saved keys on **Admin**, visitors never see a key form. If you also connected Keygen, they unlock the app with the license key you assigned.
 
 Optional Keygen defaults for the seller machine:
 
