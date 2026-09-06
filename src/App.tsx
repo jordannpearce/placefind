@@ -6,7 +6,7 @@ import { ResultPanel } from "./components/ResultPanel.tsx"
 import { SearchForm } from "./components/SearchForm.tsx"
 import { SellPage } from "./components/SellPage.tsx"
 import { SettingsPanel } from "./components/SettingsPanel.tsx"
-import { loadStore, searchBusiness } from "./lib/api.ts"
+import { loadRuntime, searchBusiness } from "./lib/api.ts"
 import { currentPath, type AppPath } from "./lib/nav.ts"
 import { loadHistory, loadKeys, pushHistory, saveKeys } from "./lib/storage.ts"
 import type { HistoryItem, HostedKeyStatus, SearchQuery, SearchResponse } from "./lib/types.ts"
@@ -23,6 +23,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [hosted, setHosted] = useState<HostedKeyStatus | null>(null)
+  const [seller, setSeller] = useState(true)
 
   useEffect(() => {
     const onPop = () => setPath(currentPath())
@@ -31,20 +32,28 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    void loadStore()
-      .then((store) => setHosted(store.hosted))
+    void loadRuntime()
+      .then((runtime) => {
+        setHosted(runtime.hosted)
+        setSeller(runtime.seller)
+        if (!runtime.seller && (currentPath() === "/sell" || currentPath() === "/download")) {
+          window.history.replaceState({}, "", "/")
+          setPath("/")
+        }
+      })
       .catch(() => setHosted(null))
   }, [])
 
   function go(next: AppPath) {
-    window.history.pushState({}, "", next)
-    setPath(next)
+    const dest = seller ? next : "/"
+    window.history.pushState({}, "", dest)
+    setPath(dest)
   }
 
   const modeLabel = useMemo(() => {
     const dfs = Boolean((keys.dataforseoLogin && keys.dataforseoPassword) || hosted?.dataforseo)
     const scrappey = Boolean(keys.scrappeyKey || hosted?.scrappey)
-    if (dfs && scrappey) return hosted?.dataforseo || hosted?.scrappey ? "Live Maps with included keys" : "Live Maps + listing page"
+    if (dfs && scrappey) return hosted?.included ? "Maps search is ready" : "Live Maps + listing page"
     if (dfs) return "Live Maps (DataForSEO)"
     if (scrappey) return "Live Maps page (Scrappey)"
     return "Sample mode"
@@ -54,7 +63,7 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const payload = await searchBusiness(next, keys)
+      const payload = await searchBusiness(next, keys, Boolean(hosted?.included && !seller))
       setResult(payload)
       if (payload.error && !payload.best) setError(payload.error)
       setHistory(pushHistory(next, payload.best?.title))
@@ -93,7 +102,7 @@ export default function App() {
             <h1 className="font-display text-3xl text-paper sm:text-4xl">PlaceFind</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <AppNav path={path} onGo={go} />
+            <AppNav path={path} seller={seller} onGo={go} />
             {path === "/" && result?.best && (
               <button
                 type="button"
@@ -117,8 +126,8 @@ export default function App() {
           </div>
         </header>
 
-        {path === "/sell" && <SellPage />}
-        {path === "/download" && <DownloadPage />}
+        {seller && path === "/sell" && <SellPage />}
+        {seller && path === "/download" && <DownloadPage />}
         {path === "/" && (
           <div className="grid flex-1 gap-6 lg:grid-cols-[20rem_1fr]">
             <aside className="rounded-2xl border border-line bg-panel p-5">
@@ -143,6 +152,8 @@ export default function App() {
       <SettingsPanel
         open={settingsOpen}
         keys={keys}
+        hosted={hosted}
+        seller={seller}
         onChange={(next) => {
           setKeys(next)
           saveKeys(next)

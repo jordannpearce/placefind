@@ -1,10 +1,16 @@
-import type { ApiKeys, HostedKeyStatus, InstallerStatus, KeyTestResult, ProductInfo, SearchQuery, SearchResponse } from "./types.ts"
+import type { ApiKeys, HostedKeyStatus, InstallerStatus, KeyTestResult, ProductInfo, RuntimeInfo, SearchQuery, SearchResponse } from "./types.ts"
 
-export async function searchBusiness(query: SearchQuery, keys: ApiKeys): Promise<SearchResponse> {
+export async function loadRuntime(): Promise<RuntimeInfo> {
+  const response = await fetch("/api/runtime")
+  if (!response.ok) throw new Error("Could not load app status.")
+  return (await response.json()) as RuntimeInfo
+}
+
+export async function searchBusiness(query: SearchQuery, keys: ApiKeys, hideClientKeys = false): Promise<SearchResponse> {
   const response = await fetch("/api/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...query, ...keys }),
+    body: JSON.stringify(hideClientKeys ? query : { ...query, ...keys }),
   })
   const payload = (await response.json()) as SearchResponse & { error?: string }
   if (!response.ok && !payload.best && !payload.others) {

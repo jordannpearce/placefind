@@ -125,7 +125,7 @@ export function SellPage() {
         <section className="rounded-2xl border border-line bg-panel p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Keys in the installer</p>
           <p className="mt-2 text-sm leading-6 text-muted">
-            Paste your keys here. They are written into the Setup file buyers download, so they can search without adding keys. Your DataForSEO and Scrappey accounts pay for those searches.
+            Paste your keys here. They are encrypted into the Setup file. Buyers search with your keys and never see the values. Your DataForSEO and Scrappey accounts pay for those searches.
           </p>
           {keysReady && (
             <p className="mt-3 text-sm text-moss">

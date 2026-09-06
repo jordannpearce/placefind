@@ -29,7 +29,7 @@ npm run desktop
 4. Download `PlaceFind-Setup-1.0.0.exe`, or copy it from `/workspace/release/`.
 5. Send buyers the Setup file after they pay.
 
-Keys stay in `.data/hosted-keys.json` on this machine (not committed) and are copied into the Windows app.
+Keys are encrypted on disk and inside the Windows setup. Buyers never see the values in Settings, and the installed copy has no Sell page. A determined person who unpacks the app could still recover them, so treat this as hiding keys from customers, not as a vault.
 
 You can also build from a terminal:
 
@@ -51,7 +51,7 @@ Open **Settings** in the app:
 2. Paste your DataForSEO dashboard login and **API password**.
 3. Click **Test connection**, then search.
 
-If you saved keys on **Sell**, buyers can skip this step.
+If you saved keys on **Sell**, buyers never see a key form. Search just works.
 
 ## How a search works
 

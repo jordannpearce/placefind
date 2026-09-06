@@ -1,21 +1,25 @@
 import { X } from "lucide-react"
 import { useState } from "react"
 import { testKeys } from "../lib/api.ts"
-import type { ApiKeys, KeyTestResult } from "../lib/types.ts"
+import type { ApiKeys, HostedKeyStatus, KeyTestResult } from "../lib/types.ts"
 
 type Props = {
   open: boolean
   keys: ApiKeys
+  hosted: HostedKeyStatus | null
+  seller: boolean
   onChange: (keys: ApiKeys) => void
   onClose: () => void
 }
 
-export function SettingsPanel({ open, keys, onChange, onClose }: Props) {
+export function SettingsPanel({ open, keys, hosted, seller, onChange, onClose }: Props) {
   const [testing, setTesting] = useState(false)
   const [results, setResults] = useState<KeyTestResult[]>([])
   const [error, setError] = useState<string | null>(null)
 
   if (!open) return null
+
+  const keysHidden = Boolean(hosted?.included && !seller)
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/50">
@@ -23,7 +27,7 @@ export function SettingsPanel({ open, keys, onChange, onClose }: Props) {
         <div className="mb-6 flex items-center justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Settings</p>
-            <h2 className="font-display text-2xl text-paper">API keys</h2>
+            <h2 className="font-display text-2xl text-paper">{keysHidden ? "About this copy" : "API keys"}</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-md p-2 text-muted hover:bg-raised hover:text-paper">
             <X className="h-5 w-5" />
@@ -31,72 +35,75 @@ export function SettingsPanel({ open, keys, onChange, onClose }: Props) {
         </div>
 
         <div className="grid gap-4 overflow-y-auto pr-1">
-          <p className="text-sm leading-6 text-muted">
-            Optional. If the seller already put keys in this copy, you can leave these blank and search. Otherwise paste
-            a Scrappey key and a DataForSEO login plus API password.
-          </p>
-
-          <label className="grid gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Scrappey API key</span>
-            <input
-              type="password"
-              value={keys.scrappeyKey}
-              onChange={(event) => onChange({ ...keys, scrappeyKey: event.target.value })}
-              placeholder="scp_…"
-              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-            />
-          </label>
-
-          <label className="grid gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">DataForSEO login</span>
-            <input
-              value={keys.dataforseoLogin}
-              onChange={(event) => onChange({ ...keys, dataforseoLogin: event.target.value })}
-              placeholder="you@company.com"
-              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-            />
-          </label>
-
-          <label className="grid gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">DataForSEO API password</span>
-            <input
-              type="password"
-              value={keys.dataforseoPassword}
-              onChange={(event) => onChange({ ...keys, dataforseoPassword: event.target.value })}
-              placeholder="API password, not your site password"
-              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-            />
-          </label>
-
-          <label className="flex items-start gap-3 text-sm text-paper/80">
-            <input
-              type="checkbox"
-              checked={keys.enrichWithScrappey}
-              onChange={(event) => onChange({ ...keys, enrichWithScrappey: event.target.checked })}
-              className="mt-1"
-            />
-            After DataForSEO finds a listing, open the Maps page with Scrappey for extra details
-          </label>
-
-          <button
-            type="button"
-            disabled={testing}
-            onClick={async () => {
-              setTesting(true)
-              setError(null)
-              try {
-                setResults(await testKeys(keys))
-              } catch (err) {
-                setResults([])
-                setError(err instanceof Error ? err.message : "Could not test keys.")
-              } finally {
-                setTesting(false)
-              }
-            }}
-            className="h-11 rounded-lg border border-brass text-sm font-semibold text-brass hover:bg-brass/10 disabled:opacity-60"
-          >
-            {testing ? "Testing…" : "Test connection"}
-          </button>
+          {keysHidden ? (
+            <p className="text-sm leading-6 text-muted">
+              Maps search is ready on this copy. You do not need to enter API keys.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm leading-6 text-muted">
+                Paste keys here only on your seller copy. Buyers never see these fields once keys are sealed into the
+                Windows setup.
+              </p>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Scrappey API key</span>
+                <input
+                  type="password"
+                  value={keys.scrappeyKey}
+                  onChange={(event) => onChange({ ...keys, scrappeyKey: event.target.value })}
+                  placeholder="scp_…"
+                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">DataForSEO login</span>
+                <input
+                  value={keys.dataforseoLogin}
+                  onChange={(event) => onChange({ ...keys, dataforseoLogin: event.target.value })}
+                  placeholder="you@company.com"
+                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">DataForSEO API password</span>
+                <input
+                  type="password"
+                  value={keys.dataforseoPassword}
+                  onChange={(event) => onChange({ ...keys, dataforseoPassword: event.target.value })}
+                  placeholder="API password, not your website password"
+                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+                />
+              </label>
+              <label className="flex items-start gap-3 text-sm text-paper/80">
+                <input
+                  type="checkbox"
+                  checked={keys.enrichWithScrappey}
+                  onChange={(event) => onChange({ ...keys, enrichWithScrappey: event.target.checked })}
+                  className="mt-1"
+                />
+                After DataForSEO finds a listing, open the Maps page with Scrappey for extra details
+              </label>
+              <button
+                type="button"
+                disabled={testing}
+                onClick={async () => {
+                  setTesting(true)
+                  setError(null)
+                  try {
+                    setResults(await testKeys(keys))
+                  } catch (err) {
+                    setResults([])
+                    setError(err instanceof Error ? err.message : "Could not test keys.")
+                  } finally {
+                    setTesting(false)
+                  }
+                }}
+                className="h-11 rounded-lg border border-brass text-sm font-semibold text-brass hover:bg-brass/10 disabled:opacity-60"
+              >
+                {testing ? "Testing…" : "Test connection"}
+              </button>
+            </>
+          )}
 
           {error && <p className="text-sm text-clay">{error}</p>}
           {results.map((result) => (

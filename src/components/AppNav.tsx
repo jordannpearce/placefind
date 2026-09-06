@@ -1,20 +1,23 @@
 import type { AppPath } from "../lib/nav.ts"
 
-const LINKS: { href: AppPath; label: string }[] = [
-  { href: "/", label: "Lookup" },
-  { href: "/sell", label: "Sell" },
-  { href: "/download", label: "Download" },
-]
-
 type Props = {
   path: AppPath
+  seller: boolean
   onGo: (path: AppPath) => void
 }
 
-export function AppNav({ path, onGo }: Props) {
+export function AppNav({ path, seller, onGo }: Props) {
+  const links: { href: AppPath; label: string }[] = seller
+    ? [
+        { href: "/", label: "Lookup" },
+        { href: "/sell", label: "Sell" },
+        { href: "/download", label: "Download" },
+      ]
+    : [{ href: "/", label: "Lookup" }]
+
   return (
     <nav className="flex flex-wrap items-center gap-1">
-      {LINKS.map((link) => {
+      {links.map((link) => {
         const active = path === link.href
         return (
           <a

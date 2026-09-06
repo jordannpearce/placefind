@@ -4,9 +4,10 @@ import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { testDataForSeo } from "./dataforseo.ts"
-import { hostedKeyStatus, writeHostedKeys } from "./hosted-keys.ts"
+import { hostedKeyStatus, readHostedKeys, writeHostedKeys } from "./hosted-keys.ts"
 import { getInstallerStatus, installerPath, startInstallerBuild, startSetupRepack } from "./installer.ts"
 import { readProduct, writeProduct } from "./product.ts"
+import { isSellerMode } from "./runtime.ts"
 import { searchBusiness } from "./search.ts"
 import { testScrappey } from "./scrappey.ts"
 import { US_STATES } from "./states.ts"
@@ -44,7 +45,23 @@ async function start() {
   app.use(express.json({ limit: "1mb" }))
 
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, name: "PlaceFind" })
+    const hosted = hostedKeyStatus()
+    res.json({ ok: true, name: "PlaceFind", seller: isSellerMode(), keysIncluded: hosted.included })
+  })
+
+  app.get("/api/runtime", (_req, res) => {
+    const hosted = hostedKeyStatus()
+    res.json({
+      seller: isSellerMode(),
+      hosted: {
+        included: hosted.included,
+        scrappey: hosted.scrappey,
+        dataforseo: hosted.dataforseo,
+        scrappeyHint: hosted.scrappeyHint,
+        dataforseoHint: hosted.dataforseoHint,
+        seller: hosted.seller,
+      },
+    })
   })
 
   app.get("/api/states", (_req, res) => {
@@ -57,7 +74,7 @@ async function start() {
       res.status(400).json({ error: parsed.error })
       return
     }
-    const keys = (req.body ?? {}) as ApiKeys
+    const keys = isSellerMode() ? ((req.body ?? {}) as ApiKeys) : {}
     try {
       const result = await searchBusiness(parsed.query, keys)
       res.json(result)
@@ -67,23 +84,27 @@ async function start() {
   })
 
   app.post("/api/test-keys", async (req, res) => {
-    const body = (req.body ?? {}) as ApiKeys
+    const hosted = readHostedKeys()
+    const body = isSellerMode() ? ((req.body ?? {}) as ApiKeys) : {}
+    const login = body.dataforseoLogin || hosted.dataforseoLogin
+    const password = body.dataforseoPassword || hosted.dataforseoPassword
+    const scrappey = body.scrappeyKey || hosted.scrappeyKey
     const results = []
-    if (body.dataforseoLogin && body.dataforseoPassword) {
-      results.push(await testDataForSeo(body.dataforseoLogin, body.dataforseoPassword))
-    }
-    if (body.scrappeyKey) {
-      results.push(await testScrappey(body.scrappeyKey))
-    }
+    if (login && password) results.push(await testDataForSeo(login, password))
+    if (scrappey) results.push(await testScrappey(scrappey))
     if (results.length === 0) {
-      res.status(400).json({ error: "Add a key to test." })
+      res.status(400).json({ error: "No keys are available to test." })
       return
     }
     res.json({ results })
   })
 
   app.get("/api/product", (_req, res) => {
-    res.json({ product: readProduct(), installer: getInstallerStatus(), hosted: hostedKeyStatus() })
+    res.json({
+      product: readProduct(),
+      installer: isSellerMode() ? getInstallerStatus() : { status: "idle", log: "", files: [], folder: "", setupPath: "" },
+      hosted: hostedKeyStatus(),
+    })
   })
 
   app.get("/api/hosted-keys", (_req, res) => {
@@ -91,6 +112,10 @@ async function start() {
   })
 
   app.post("/api/hosted-keys", (req, res) => {
+    if (!isSellerMode()) {
+      res.status(403).json({ error: "API keys are managed by the seller." })
+      return
+    }
     const body = (req.body ?? {}) as {
       scrappeyKey?: string
       dataforseoLogin?: string
@@ -113,6 +138,10 @@ async function start() {
   })
 
   app.post("/api/installer/build", (_req, res) => {
+    if (!isSellerMode()) {
+      res.status(403).json({ error: "The Windows setup is created by the seller." })
+      return
+    }
     res.json(startInstallerBuild())
   })
 

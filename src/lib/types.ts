@@ -92,8 +92,15 @@ export type ProductInfo = {
 }
 
 export type HostedKeyStatus = {
+  included: boolean
   scrappey: boolean
   dataforseo: boolean
   scrappeyHint: string
   dataforseoHint: string
+  seller: boolean
+}
+
+export type RuntimeInfo = {
+  seller: boolean
+  hosted: HostedKeyStatus
 }

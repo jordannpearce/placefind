@@ -25,7 +25,7 @@ export function DownloadPage() {
         <p className="mt-3 text-sm leading-6 text-muted">{product?.pitch}</p>
         <p className="mt-4 font-display text-3xl text-brass">${product?.price ?? "49"}</p>
         <p className="mt-1 text-xs text-muted">
-          One-time license for the Windows app. Maps lookups use the seller’s DataForSEO and Scrappey keys when those were included in this setup.
+          One-time license for the Windows app. Search works as soon as they install it. Your API keys stay hidden.
         </p>
 
         {setup ? (
