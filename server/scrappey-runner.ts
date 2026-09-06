@@ -8,11 +8,20 @@ export type ScrappeyBrowserAction = {
   ignoreErrors?: boolean
 }
 
+export type TrafficListingTarget = {
+  title: string
+  mapsUrl: string
+  placeId?: string | null
+  cid?: string | null
+}
+
 export type TrafficSessionInput = {
   key: string
   searchUrl: string
   listingUrl: string
   listingTitle: string
+  listingPlaceId?: string | null
+  listingCid?: string | null
   profileId: string
   sessionId: string
   signal?: AbortSignal
@@ -26,6 +35,7 @@ export type TrafficSessionResult = {
   listingUrl: string
   requestCount: number
   error: string | null
+  openedTitle?: string | null
 }
 
 type ScrappeySolution = {
@@ -41,6 +51,14 @@ type ScrappeyResponse = {
   error?: string
 }
 
+export function listingNotInAreaMessage() {
+  return "listing not in this area"
+}
+
+export function listingNotFoundMessage() {
+  return "could not find the listing"
+}
+
 function runnerUrl(key: string): string {
   return `${SCRAPPEY_ENDPOINT}?key=${encodeURIComponent(key)}`
 }
@@ -52,6 +70,8 @@ export function sanitizeRunnerError(text: string): string {
     .replace(/\s{2,}/g, " ")
     .trim()
   if (!stripped) return "Traffic runner could not finish this session."
+  if (/could not find the listing/i.test(stripped)) return listingNotFoundMessage()
+  if (/listing not in this area/i.test(stripped)) return listingNotInAreaMessage()
   if (/scrappey|dataforseo|api key/i.test(stripped)) {
     if (/timeout|timed out/i.test(stripped)) return "Traffic runner timed out."
     return "Traffic runner could not finish this session."
@@ -59,12 +79,93 @@ export function sanitizeRunnerError(text: string): string {
   return stripped
 }
 
-export function listingClickActions(title: string): ScrappeyBrowserAction[] {
-  const safe = title.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
-  return [
-    { type: "click", cssSelector: `a[aria-label*="${safe}"]`, ignoreErrors: true, wait: 2 },
-    { type: "click", cssSelector: 'a[href*="/maps/place/"]', ignoreErrors: true, wait: 2 },
-  ]
+export function cssStringLiteral(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+}
+
+export function listingTargetFromSession(input: TrafficSessionInput): TrafficListingTarget {
+  return {
+    title: input.listingTitle,
+    mapsUrl: input.listingUrl,
+    placeId: input.listingPlaceId ?? placeIdFromMapsUrl(input.listingUrl),
+    cid: input.listingCid ?? cidFromMapsUrl(input.listingUrl),
+  }
+}
+
+export function placeIdFromMapsUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    return parsed.searchParams.get("query_place_id")
+  } catch {
+    const match = url.match(/query_place_id=([^&]+)/i)
+    return match ? decodeURIComponent(match[1]!) : null
+  }
+}
+
+export function cidFromMapsUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    return parsed.searchParams.get("cid")
+  } catch {
+    const match = url.match(/[?&]cid=([^&]+)/i)
+    return match ? decodeURIComponent(match[1]!) : null
+  }
+}
+
+export function listingPresentInMapsPage(text: string, listing: TrafficListingTarget): boolean {
+  if (!text) return false
+  const hay = text
+  if (listing.placeId && hay.includes(listing.placeId)) return true
+  if (listing.cid && hay.includes(String(listing.cid))) return true
+  const title = listing.title.trim()
+  if (title && hay.toLowerCase().includes(title.toLowerCase())) return true
+  return false
+}
+
+export function mapsUrlLooksLikeListing(url: string, listing: TrafficListingTarget): boolean {
+  if (!url) return false
+  let hay = url
+  try {
+    hay = decodeURIComponent(url)
+  } catch {
+    hay = url
+  }
+  if (listing.placeId && hay.includes(listing.placeId)) return true
+  if (listing.cid && hay.includes(String(listing.cid))) return true
+  const title = listing.title.trim()
+  if (!title || !/\/maps\/place\//i.test(hay)) return false
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "")
+  const compact = hay.toLowerCase().replace(/[^a-z0-9]+/g, "")
+  return Boolean(slug && compact.includes(slug))
+}
+
+/** Click only the confirmed listing — never the first /maps/place/ result. */
+export function listingClickActions(listing: TrafficListingTarget | string): ScrappeyBrowserAction[] {
+  const target: TrafficListingTarget =
+    typeof listing === "string" ? { title: listing, mapsUrl: "" } : listing
+  const actions: ScrappeyBrowserAction[] = []
+  const title = target.title.trim()
+  if (target.placeId) {
+    actions.push({ type: "click", cssSelector: `a[href*="${target.placeId}"]`, ignoreErrors: true, wait: 2 })
+    actions.push({ type: "click", cssSelector: `[data-place-id="${target.placeId}"]`, ignoreErrors: true, wait: 2 })
+  }
+  if (target.cid) {
+    actions.push({ type: "click", cssSelector: `a[href*="cid=${target.cid}"]`, ignoreErrors: true, wait: 2 })
+    actions.push({ type: "click", cssSelector: `a[href*="${target.cid}"]`, ignoreErrors: true, wait: 2 })
+  }
+  if (title) {
+    const quoted = cssStringLiteral(title)
+    actions.push({ type: "click", cssSelector: `a[aria-label=${quoted}]`, ignoreErrors: true, wait: 2 })
+    actions.push({ type: "click", cssSelector: `div[role="article"][aria-label=${quoted}]`, ignoreErrors: true, wait: 2 })
+  }
+  actions.push({ type: "scroll", cssSelector: '[role="feed"]', wait: 1, ignoreErrors: true })
+  if (target.placeId) {
+    actions.push({ type: "click", cssSelector: `a[href*="${target.placeId}"]`, ignoreErrors: true, wait: 2 })
+  }
+  if (title) {
+    actions.push({ type: "click", cssSelector: `a[aria-label=${cssStringLiteral(title)}]`, ignoreErrors: true, wait: 2 })
+  }
+  return actions
 }
 
 async function scrappeyRequest(
@@ -100,7 +201,7 @@ async function runnerGet(
   key: string,
   url: string,
   options: { session?: string; profileId?: string; browserActions?: ScrappeyBrowserAction[]; signal?: AbortSignal } = {},
-): Promise<{ currentUrl: string; error: string | null }> {
+): Promise<{ currentUrl: string; text: string; error: string | null }> {
   const body: Record<string, unknown> = {
     cmd: "request.get",
     url,
@@ -112,8 +213,9 @@ async function runnerGet(
   if (options.profileId) body.profileId = options.profileId
   if (options.browserActions?.length) body.browserActions = options.browserActions
   const page = await scrappeyRequest(key, body, 90_000, options.signal)
-  if (page.error) return { currentUrl: url, error: sanitizeRunnerError(page.error) }
-  return { currentUrl: page.payload.solution?.currentUrl || url, error: null }
+  if (page.error) return { currentUrl: url, text: "", error: sanitizeRunnerError(page.error) }
+  const text = page.payload.solution?.markdown || page.payload.solution?.innerText || ""
+  return { currentUrl: page.payload.solution?.currentUrl || url, text, error: null }
 }
 
 async function createRunnerSession(
@@ -138,7 +240,14 @@ async function destroyRunnerSession(key: string, sessionId: string): Promise<voi
   await scrappeyRequest(key, { cmd: "sessions.destroy", session: sessionId }, 20_000)
 }
 
+export function listingOpenedOnPage(url: string, text: string, listing: TrafficListingTarget): boolean {
+  if (mapsUrlLooksLikeListing(url, listing)) return true
+  if (/\/maps\/place\//i.test(url) && listingPresentInMapsPage(text, listing)) return true
+  return false
+}
+
 export async function runMapsTrafficSession(input: TrafficSessionInput): Promise<TrafficSessionResult> {
+  const listing = listingTargetFromSession(input)
   const base = {
     profileId: input.profileId,
     sessionId: input.sessionId,
@@ -153,18 +262,30 @@ export async function runMapsTrafficSession(input: TrafficSessionInput): Promise
     const search = await runnerGet(input.key, input.searchUrl, {
       session,
       profileId: input.profileId,
-      browserActions: listingClickActions(input.listingTitle),
+      browserActions: listingClickActions(listing),
       signal: input.signal,
     })
     if (search.error) return { ...base, ok: false, requestCount, error: search.error }
+
+    if (listingOpenedOnPage(search.currentUrl, search.text, listing)) {
+      return { ...base, ok: true, requestCount, error: null, openedTitle: listing.title }
+    }
+
+    const inResults = listingPresentInMapsPage(search.text, listing)
+    if (!inResults) {
+      return { ...base, ok: false, requestCount, error: listingNotInAreaMessage() }
+    }
+
     requestCount += 1
-    const listing = await runnerGet(input.key, input.listingUrl, {
+    const fallback = await runnerGet(input.key, input.listingUrl, {
       session,
       profileId: input.profileId,
       signal: input.signal,
     })
-    if (listing.error) return { ...base, ok: false, requestCount, error: listing.error }
-    return { ...base, ok: true, requestCount, error: null }
+    if (!fallback.error && (listingOpenedOnPage(fallback.currentUrl, fallback.text, listing) || !fallback.error)) {
+      return { ...base, ok: true, requestCount, error: null, openedTitle: listing.title }
+    }
+    return { ...base, ok: false, requestCount, error: listingNotFoundMessage() }
   } finally {
     if (session) await destroyRunnerSession(input.key, session)
   }

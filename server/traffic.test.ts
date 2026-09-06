@@ -6,7 +6,7 @@ import { after, afterEach, describe, it } from "node:test"
 import { createCampaign, getCampaign, type Campaign, type GridScanRun } from "./campaigns.ts"
 import { emptyApiKeys, resetHostedKeysCacheForTests } from "./hosted-keys.ts"
 import { leaksVendorTalk, publicTrafficMessage } from "./public-copy.ts"
-import { listingClickActions, sanitizeRunnerError } from "./scrappey-runner.ts"
+import { listingClickActions, listingNotInAreaMessage, sanitizeRunnerError } from "./scrappey-runner.ts"
 import { reloadStoreFromDisk, resetStoreForTests, writeCollection } from "./store.ts"
 import {
   appendTrafficLog,
@@ -124,11 +124,17 @@ describe("sanitizeRunnerError", () => {
 })
 
 describe("listingClickActions", () => {
-  it("uses official click actions for the listing name and Maps place link", () => {
-    const actions = listingClickActions('Joe\'s "Pizza"')
-    assert.equal(actions[0]?.type, "click")
-    assert.match(actions[0]?.cssSelector || "", /aria-label/)
-    assert.equal(actions[1]?.cssSelector, 'a[href*="/maps/place/"]')
+  it("targets the confirmed placeId, CID, and exact title — not the first Maps result", () => {
+    const actions = listingClickActions({
+      title: 'Joe\'s "Pizza"',
+      mapsUrl: "https://www.google.com/maps/search/?api=1&query=Joe&query_place_id=ChIJ-joe",
+      placeId: "ChIJ-joe",
+      cid: "12345",
+    })
+    assert.ok(actions.some((action) => action.cssSelector === 'a[href*="ChIJ-joe"]'))
+    assert.ok(actions.some((action) => action.cssSelector === 'a[href*="cid=12345"]'))
+    assert.ok(actions.some((action) => /aria-label="Joe\\'s \\"Pizza\\""/.test(action.cssSelector || "") || /aria-label="Joe/.test(action.cssSelector || "")))
+    assert.equal(actions.some((action) => action.cssSelector === 'a[href*="/maps/place/"]'), false)
     assert.equal(actions[0]?.ignoreErrors, true)
   })
 })
@@ -397,8 +403,9 @@ describe("runCampaignTraffic", () => {
       assert.equal(result.campaign.lastTrafficJob?.status, "ok")
       assert.ok((result.traffic.log?.length ?? 0) >= 4)
       assert.ok(result.traffic.log?.some((line) => /Started pin/.test(line.message)))
-      assert.ok(result.traffic.log?.some((line) => /Searching Maps/.test(line.message)))
-      assert.ok(result.traffic.log?.some((line) => /Listing opened/.test(line.message)))
+      assert.ok(result.traffic.log?.some((line) => /searching barbecue at 30\.28,-97\.75/.test(line.message)))
+      assert.ok(result.traffic.log?.some((line) => /opened Franklin Barbecue/.test(line.message)))
+      assert.ok(result.traffic.log?.some((line) => /searching barbecue at /.test(line.message)))
       assert.equal(result.traffic.results?.length, 2)
       assert.ok(result.traffic.results?.every((row) => row.status === "ok"))
       assert.ok(cmds.includes("sessions.create"))
@@ -653,5 +660,51 @@ describe("runCampaignTraffic", () => {
     assert.equal(latest?.lastTrafficJob?.status, "error")
     assert.match(latest?.lastTrafficJob?.lastError || "", /server restarted/)
     assert.ok(latest?.lastTrafficJob?.log?.some((line) => /server restarted/.test(line.message)))
+  })
+
+  it("fails one session when the confirmed listing is not in that pin's results, without throwing 500", async () => {
+    isolateKeys()
+    process.env.SCRAPPEY_API_KEY = "scp_test_runner_key"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-traffic-nomatch-")))
+    const created = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue"],
+        placeId: "ChIJ123",
+        listingTitle: "Franklin Barbecue",
+        center: { lat: 30.27, lng: -97.74 },
+      },
+      "user-a",
+    )
+    const scanned = attachScan(created, true)
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || "{}")) as { url?: string }
+      return new Response(
+        JSON.stringify({
+          solution: {
+            verified: true,
+            currentUrl: body.url,
+            markdown: "# La Barbecue\n# Terry Black's Barbecue",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      )
+    }) as typeof fetch
+
+    try {
+      const result = await runCampaignTraffic(created.id, emptyApiKeys(), ["0:0"], "user-a")
+      assert.equal(result.traffic.status, "error")
+      assert.equal(result.traffic.sessionsFailed, 1)
+      assert.equal(result.traffic.sessionsOk, 0)
+      assert.equal(result.traffic.results?.[0]?.status, "fail")
+      assert.ok(result.traffic.log?.some((line) => line.message.includes(listingNotInAreaMessage())))
+      assert.equal(result.traffic.lastError, listingNotInAreaMessage())
+    } finally {
+      globalThis.fetch = originalFetch
+    }
   })
 })

@@ -53,6 +53,8 @@ export function publicTrafficMessage(text: string | undefined): string {
   if (/\bat\s+\S+\s+\(/.test(text) || /stack trace/i.test(text)) {
     return "Traffic runner could not finish. Try again in a moment."
   }
+  if (/listing not in this area/i.test(stripped)) return "listing not in this area"
+  if (/could not find the listing/i.test(stripped)) return "could not find the listing"
   if (!VENDOR_TALK.test(stripped) && !/add your|in settings/i.test(stripped)) return stripped
   if (/timeout|timed out/i.test(stripped)) return "Traffic runner timed out. Try again in a moment."
   if (/not configured|missing/i.test(stripped)) return "Traffic runner is not configured."

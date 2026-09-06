@@ -22,7 +22,12 @@ import { defaultTrafficSchedule } from "./schedule.ts"
 import { mergeHostedKeys, trafficRunnerConfigured } from "./hosted-keys.ts"
 import { publicTrafficMessage } from "./public-copy.ts"
 import { isSellerMode } from "./runtime.ts"
-import { runMapsTrafficSession, type TrafficSessionResult } from "./scrappey-runner.ts"
+import {
+  listingNotFoundMessage,
+  listingNotInAreaMessage,
+  runMapsTrafficSession,
+  type TrafficSessionResult,
+} from "./scrappey-runner.ts"
 import type { ApiKeys } from "./types.ts"
 
 export const DEFAULT_TRAFFIC_SESSIONS = DEFAULT_TRAFFIC_SEARCHES
@@ -205,23 +210,28 @@ export function confirmedListingForTraffic(campaign: Campaign): {
   title: string
   mapsUrl: string
   keyword: string
+  placeId: string
+  cid: string | null
 } | null {
   const placeId = campaign.placeId?.trim() ?? ""
   const scanned = Boolean(campaign.lastGridScan || campaign.lastScan)
   if (!placeId || !scanned) return null
 
   const grid = campaign.lastGridScan
-  const foundPoint = grid?.points.find((point) => point.rank != null && point.mapsUrl)
+  const foundPoint = grid?.points.find((point) => point.rank != null && (point.placeId === placeId || point.mapsUrl))
   const scanHit = campaign.lastScan?.results.find((row) => row.rank != null && row.mapsUrl)
-  const title = foundPoint?.listingTitle || scanHit?.listingTitle || campaign.listingTitle || campaign.businessName
-  const mapsUrl =
-    foundPoint?.mapsUrl ||
-    scanHit?.mapsUrl ||
-    mapsPlaceUrlFromCampaign(campaign, title, foundPoint?.address || scanHit?.address || campaign.listingAddress || "")
+  const title = campaign.listingTitle || foundPoint?.listingTitle || scanHit?.listingTitle || campaign.businessName
+  const mapsUrl = mapsPlaceUrlFromCampaign(
+    campaign,
+    title,
+    foundPoint?.address || scanHit?.address || campaign.listingAddress || "",
+  ) || foundPoint?.mapsUrl || scanHit?.mapsUrl
   if (!mapsUrl) return null
   return {
     title,
     mapsUrl,
+    placeId,
+    cid: foundPoint?.cid ?? null,
     keyword: grid?.keyword || campaign.keywords[0] || campaign.businessName,
   }
 }
@@ -469,7 +479,7 @@ async function executeTrafficJob(input: {
   campaignId: string
   jobId: string
   key: string
-  listing: { title: string; mapsUrl: string }
+  listing: { title: string; mapsUrl: string; placeId: string; cid: string | null }
   pins: TrafficOrigin[]
   keywords: string[]
   pairs: TrafficPair[]
@@ -527,7 +537,7 @@ async function executeTrafficJob(input: {
       persistJob(input.campaignId, input.jobId, (job) =>
         appendTrafficLog(
           job,
-          `Searching Maps for “${keyword}” from ${pinCoordLabel(pin)}.`,
+          `searching ${keyword} at ${pin.lat},${pin.lng}`,
           pin.pinId,
           keyword,
         ),
@@ -538,6 +548,8 @@ async function executeTrafficJob(input: {
         searchUrl: mapsKeywordAtPinUrl(keyword, pin),
         listingUrl: input.listing.mapsUrl,
         listingTitle: input.listing.title,
+        listingPlaceId: input.listing.placeId,
+        listingCid: input.listing.cid,
         profileId: `pf-maps-${input.campaignId.slice(0, 8)}-${index}-${newId().slice(0, 6)}`,
         sessionId: `pf-traffic-${input.campaignId.slice(0, 8)}-${index}-${newId().slice(0, 6)}`,
         signal: input.signal,
@@ -553,10 +565,13 @@ async function executeTrafficJob(input: {
       persistJob(input.campaignId, input.jobId, (job) => {
         let next = snapshotFromSessions(job, sessionResults, pinResults)
         if (result.ok) {
-          next = appendTrafficLog(next, `${label} · Listing opened.`, pin.pinId, keyword)
+          next = appendTrafficLog(next, `opened ${result.openedTitle || input.listing.title} · ${pinCoordLabel(pin)}`, pin.pinId, keyword)
           next = appendTrafficLog(next, `${label} · Session finished.`, pin.pinId, keyword)
         } else {
-          const fail = publicJobError(result.error) || "Session failed."
+          const fail = publicJobError(result.error) || listingNotFoundMessage()
+          if (fail === listingNotInAreaMessage() || fail === listingNotFoundMessage()) {
+            next = appendTrafficLog(next, `${fail} · ${pinCoordLabel(pin)}`, pin.pinId, keyword)
+          }
           next = appendTrafficLog(next, `${label} · Session failed. ${fail}`, pin.pinId, keyword)
         }
         return next
