@@ -85,6 +85,7 @@ describe("normalizeTrafficSchedule", () => {
       50,
     )
     assert.equal(normalizeTrafficSchedule(null).value?.lastSearchCount, 3)
+    assert.equal(normalizeTrafficSchedule({ lastSearchCount: 8 }).value?.lastSearchCount, 8)
   })
 })
 
