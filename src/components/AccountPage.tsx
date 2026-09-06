@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { deleteListing, loadAccount, logout } from "../lib/api.ts"
 import { listingLocation, listingPath, mapsStatusLabel } from "../lib/listings.ts"
 import type { AccountUsage, AuthUser, DirectoryListing } from "../lib/types.ts"
+import { OwnerDeskTools } from "./OwnerDeskTools.tsx"
 import { UsageCard } from "./UsageCard.tsx"
 
 type Props = {
@@ -60,7 +61,21 @@ export function AccountPage({ user, onLogout, onGo }: Props) {
             onClick={() => onGo("/dashboard")}
             className="h-11 rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
           >
-            Crawl Website
+            Dashboard
+          </button>
+          <button
+            type="button"
+            onClick={() => onGo("/track")}
+            className="h-11 rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
+          >
+            Rank tracker
+          </button>
+          <button
+            type="button"
+            onClick={() => onGo("/track#traffic")}
+            className="h-11 rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
+          >
+            Traffic
           </button>
           <button
             type="button"
@@ -72,6 +87,18 @@ export function AccountPage({ user, onLogout, onGo }: Props) {
           >
             Sign out
           </button>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-line bg-panel p-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Owner tools</p>
+        <h3 className="mt-2 font-display text-2xl text-paper">Rank tracker and Traffic</h3>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          Signed-in owners can scan a rank grid and start Traffic from the tracker. These tools stay off the public
+          directory.
+        </p>
+        <div className="mt-4">
+          <OwnerDeskTools onGo={onGo} />
         </div>
       </section>
 

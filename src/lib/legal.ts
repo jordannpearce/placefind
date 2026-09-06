@@ -79,7 +79,7 @@ export const LEGAL_PAGES: LegalPage[] = [
         heading: "Information you give us",
         body: [
           "When you create an account we store your name, email, and a hashed password. When you add a listing we store the business name, city, state, category, keywords, and optional phone, email, website, and hours.",
-          "If you run Track or save a campaign, we store the business name, city, state, keywords, and scan results you asked us to keep so you can come back to them.",
+          "If you save a campaign from a signed-in account, we store the business name, city, state, keywords, and scan results you asked us to keep so you can come back to them.",
         ],
       },
       {
@@ -163,7 +163,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "Research data you create",
         body: [
-          "Campaigns, keywords, map points, scan results, and traffic jobs you start. This data belongs to your account. Other customers cannot see it.",
+          "Campaigns, keywords, map points, and scan results you start from a signed-in account. This data belongs to your account. Other customers cannot see it.",
         ],
       },
       {

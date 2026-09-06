@@ -79,10 +79,28 @@ describe("navLinks", () => {
     assert.equal(guest.includes("Test scan"), false)
     assert.equal(guest.includes("Download"), false)
     assert.equal(guest.includes("Buy"), false)
-    const labels = navLinks({ desktop: false, store: true, admin: false, user }).map((link) => link.label)
-    assert.deepEqual(labels, ["Home", "Directory", "Create listing", "Crawl", "Account"])
+    assert.equal(guest.includes("Track"), false)
+    assert.equal(guest.includes("Traffic"), false)
+    assert.equal(guest.includes("Rank tracker"), false)
+    assert.equal(guest.includes("Maps"), false)
+    const guestHrefs = navLinks({ desktop: false, store: true, admin: false, user: null }).map((link) => link.href)
+    assert.equal(guestHrefs.some((href) => href.startsWith("/track")), false)
+    const signedIn = navLinks({ desktop: false, store: true, admin: false, user })
+    const labels = signedIn.map((link) => link.label)
+    assert.deepEqual(labels, [
+      "Home",
+      "Directory",
+      "Create listing",
+      "Dashboard",
+      "Rank tracker",
+      "Traffic",
+      "Account",
+    ])
+    assert.equal(signedIn.find((link) => link.label === "Rank tracker")?.href, "/track")
+    assert.equal(signedIn.find((link) => link.label === "Traffic")?.href, "/track#traffic")
     assert.equal(labels.includes("Download"), false)
     assert.equal(labels.includes("Buy"), false)
+    assert.equal(labels.includes("Maps"), false)
   })
 
   it("shows Admin only for admin users", () => {

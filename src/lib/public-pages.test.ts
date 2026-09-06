@@ -22,9 +22,23 @@ const PUBLIC_FILES = [
   "components/AccountPage.tsx",
   "components/CrawlDashboard.tsx",
   "components/UsageCard.tsx",
+  "components/OwnerDeskTools.tsx",
   "lib/legal.ts",
   "lib/nav.ts",
 ]
+
+const PUBLIC_MARKETING_FILES = [
+  "components/HomePage.tsx",
+  "components/DirectoryPage.tsx",
+  "components/SiteFooter.tsx",
+  "components/AuthPage.tsx",
+  "components/ListingDetailPage.tsx",
+  "components/LegalPage.tsx",
+  "lib/legal.ts",
+]
+
+const RANK_TRAFFIC_MARKETING =
+  /rank tracker|traffic generator|start traffic|grid tracker|\/track|#traffic/i
 
 describe("public website copy", () => {
   it("has footer legal links without vendor names", () => {
@@ -69,6 +83,30 @@ describe("public website copy", () => {
     assert.equal(/Harbor & Oak/.test(directory), false)
     const pricing = readFileSync(path.join(root, "lib/pricing.ts"), "utf8")
     assert.match(pricing, /\$150 per month/)
+  })
+
+  it("keeps Track, Traffic, and rank-generator copy off public marketing pages", () => {
+    for (const rel of PUBLIC_MARKETING_FILES) {
+      const text = readFileSync(path.join(root, rel), "utf8")
+      assert.equal(RANK_TRAFFIC_MARKETING.test(text), false, rel)
+    }
+  })
+
+  it("exposes Rank tracker and Traffic on signed-in owner pages", () => {
+    const account = readFileSync(path.join(root, "components/AccountPage.tsx"), "utf8")
+    const dashboard = readFileSync(path.join(root, "components/CrawlDashboard.tsx"), "utf8")
+    const desk = readFileSync(path.join(root, "components/OwnerDeskTools.tsx"), "utf8")
+    const nav = readFileSync(path.join(root, "lib/nav.ts"), "utf8")
+    for (const [rel, text] of [
+      ["AccountPage", account],
+      ["CrawlDashboard", dashboard],
+      ["OwnerDeskTools", desk],
+      ["nav", nav],
+    ] as const) {
+      assert.match(text, /Rank tracker/, rel)
+      assert.match(text, /Traffic/, rel)
+      assert.match(text, /\/track/, rel)
+    }
   })
 
   it("does not mention download, Windows, or license keys on the public site", () => {

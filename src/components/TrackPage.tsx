@@ -1156,7 +1156,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
         </section>
 
         {canScan && confirmed && (
-          <section className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
+          <section id="traffic" className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Confirmed listing</p>

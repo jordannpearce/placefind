@@ -154,7 +154,12 @@ export function navLinks(access: NavAccess): NavLink[] {
   ]
   if (!user) links.push({ href: "/#how-it-works", label: "How it works" })
   if (user) {
-    links.push({ href: "/listings/new", label: "Create listing" }, { href: "/dashboard", label: "Crawl" })
+    links.push(
+      { href: "/listings/new", label: "Create listing" },
+      { href: "/dashboard", label: "Dashboard" },
+      { href: "/track", label: "Rank tracker" },
+      { href: "/track#traffic", label: "Traffic" },
+    )
     links.push({ href: "/account", label: "Account" })
   } else {
     links.push({ href: "/join", label: "Join" }, { href: "/login", label: "Sign in" })
@@ -166,12 +171,12 @@ export function navLinks(access: NavAccess): NavLink[] {
 export function pageTitle(path: AppPath): string {
   if (path === "/") return "PlaceFind — Local business directory"
   if (path === "/directory") return "Directory · PlaceFind"
-  if (path === "/dashboard") return "Crawl Website · PlaceFind"
+  if (path === "/dashboard") return "Dashboard · PlaceFind"
   if (path === "/listings") return "Listing · PlaceFind"
   if (path === "/try" || path === "/demo") return "Test scan · PlaceFind"
   if (path === "/join") return "Join · PlaceFind"
   if (path === "/login") return "Sign in · PlaceFind"
-  if (path === "/track") return "Track · PlaceFind"
+  if (path === "/track") return "Rank tracker · PlaceFind"
   if (path === "/terms") return "Terms of use · PlaceFind"
   if (path === "/privacy" || path === "/policy") return "Privacy policy · PlaceFind"
   if (path === "/email-policy") return "Email policy · PlaceFind"

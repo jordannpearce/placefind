@@ -19,15 +19,17 @@ export function AppNav({ path, desktop, store, admin, user, onGo }: Props) {
     <nav className="flex flex-wrap items-center gap-1">
       {links.map((link) => {
         const pathname = window.location.pathname
+        const dest = link.href.split("#")[0] || link.href
         const active =
           link.href === pathname ||
-          link.href === path ||
+          dest === path ||
           (link.href.startsWith("/#") && path === "/") ||
-          (link.href === "/listings/new" && pathname.startsWith("/listings")) ||
-          (link.href === "/dashboard" && pathname.startsWith("/dashboard"))
+          (dest === "/listings/new" && pathname.startsWith("/listings")) ||
+          (dest === "/dashboard" && pathname.startsWith("/dashboard")) ||
+          (dest === "/track" && pathname.startsWith("/track"))
         return (
           <a
-            key={link.href}
+            key={`${link.href}:${link.label}`}
             href={link.href}
             onClick={(event) => {
               event.preventDefault()

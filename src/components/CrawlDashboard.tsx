@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { loadAccount, loadCrawl, loadCrawls, requestWebsiteCrawl } from "../lib/api.ts"
 import { listingLocation, listingPath } from "../lib/listings.ts"
 import type { AccountUsage, AuthUser, CrawlJob, DirectoryListing } from "../lib/types.ts"
+import { OwnerDeskTools } from "./OwnerDeskTools.tsx"
 import { UsageCard } from "./UsageCard.tsx"
 
 type Props = {
@@ -96,16 +97,22 @@ export function CrawlDashboard({ user, onGo }: Props) {
   return (
     <div className="mx-auto grid w-full max-w-4xl gap-6">
       <section className="rounded-2xl border border-line bg-panel p-8">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Dashboard · Crawl</p>
-        <h2 className="mt-2 font-display text-3xl text-paper">Crawl Website</h2>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Dashboard</p>
+        <h2 className="mt-2 font-display text-3xl text-paper">Your business desk</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
-          This desk is separate from the public directory. Ask PlaceFind to read every page on the site, plus every URL
-          in the sitemap when one exists. We look for license info and key company facts, then write an article onto
-          the public profile. Crawl Website does not change the listing form — name, address, phone, website, hours,
-          category, keywords, and Maps details stay as you entered them.
+          This desk is separate from the public directory. Open Rank tracker or Traffic for a signed-in scan, or crawl
+          the listing website to write a public profile article. Crawl Website does not change the listing form — name,
+          address, phone, website, hours, category, keywords, and Maps details stay as you entered them.
         </p>
         <p className="mt-2 text-sm text-muted">Signed in as {user.email}.</p>
+        <div className="mt-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Owner tools</p>
+          <div className="mt-3">
+            <OwnerDeskTools onGo={onGo} />
+          </div>
+        </div>
         {error && <p className="mt-4 rounded-xl border border-clay/40 bg-clay/10 px-4 py-3 text-sm text-clay">{error}</p>}
+        <h3 className="mt-8 font-display text-2xl text-paper">Crawl Website</h3>
         {loading ? (
           <p className="mt-6 text-sm text-muted">Loading your listings…</p>
         ) : listings.length === 0 ? (
