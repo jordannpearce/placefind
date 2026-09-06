@@ -103,6 +103,19 @@ describe("navLinks", () => {
     assert.equal(labels.includes("Maps"), false)
   })
 
+  it("hides listing and owner tools from a free neighbor account", () => {
+    const member: AuthUser = { ...user, accountKind: "member" }
+    const access = { desktop: false, store: true, admin: false, user: member } satisfies NavAccess
+    const labels = navLinks(access).map((link) => link.label)
+    assert.deepEqual(labels, ["Home", "Directory", "Account"])
+    assert.equal(labels.includes("Create listing"), false)
+    assert.equal(labels.includes("Dashboard"), false)
+    assert.equal(labels.includes("Rank tracker"), false)
+    assert.equal(labels.includes("Traffic"), false)
+    assert.equal(allowedPath("/dashboard", access), "/account")
+    assert.equal(allowedPath("/track", access), "/account")
+  })
+
   it("shows Admin only for admin users", () => {
     const customer = navLinks({ desktop: true, store: false, admin: false, user }).map((link) => link.label)
     assert.equal(customer.includes("Admin"), false)

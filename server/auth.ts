@@ -1,10 +1,12 @@
 import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto"
 import path from "node:path"
+import { parseAccountKind, type AccountKind } from "../src/lib/account.ts"
 import { isPackagedBuyer } from "./runtime.ts"
 import { dataDir, readCollection, writeCollection } from "./store.ts"
 
 export type UserRole = "customer" | "admin"
 export type UserStatus = "active" | "suspended"
+export type { AccountKind }
 
 export type User = {
   id: string
@@ -12,6 +14,7 @@ export type User = {
   email: string
   passwordHash: string
   role: UserRole
+  accountKind: AccountKind
   status: UserStatus
   createdAt: string
 }
@@ -21,6 +24,7 @@ export type PublicUser = {
   name: string
   email: string
   role: UserRole
+  accountKind: AccountKind
   status: UserStatus
   createdAt: string
 }
@@ -109,24 +113,32 @@ export function userStatus(user: Pick<User, "status"> | { status?: string } | nu
   return user?.status === "suspended" ? "suspended" : "active"
 }
 
+function normalizeAccountKind(row: Pick<User, "role"> & { accountKind?: string }): AccountKind {
+  if (row.role === "admin") return "business"
+  return row.accountKind === "member" ? "member" : "business"
+}
+
 export function publicUser(user: User): PublicUser {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     role: user.role,
+    accountKind: normalizeAccountKind(user),
     status: userStatus(user),
     createdAt: user.createdAt,
   }
 }
 
 export function normalizeUser(row: Partial<User> & Pick<User, "id" | "email">): User {
+  const role: UserRole = row.role === "admin" ? "admin" : "customer"
   return {
     id: String(row.id),
     name: String(row.name ?? "").trim() || row.email,
     email: normalizeEmail(String(row.email ?? "")),
     passwordHash: String(row.passwordHash ?? ""),
-    role: row.role === "admin" ? "admin" : "customer",
+    role,
+    accountKind: normalizeAccountKind({ role, accountKind: row.accountKind }),
     status: userStatus(row),
     createdAt: String(row.createdAt ?? new Date().toISOString()),
   }
@@ -170,13 +182,20 @@ function adminEmails() {
     .filter(Boolean)
 }
 
-export function signup(input: { name: string; email: string; password: string }): { user?: PublicUser; error?: string } {
+export function signup(input: {
+  name: string
+  email: string
+  password: string
+  kind?: string
+}): { user?: PublicUser; error?: string } {
   const name = input.name.trim()
   const email = normalizeEmail(input.email)
   const password = input.password
   if (name.length < 2) return { error: "Enter your name." }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email." }
   if (password.length < 8) return { error: "Use a password with at least 8 characters." }
+  const requestedKind = input.kind == null || input.kind === "" ? "business" : parseAccountKind(input.kind)
+  if (!requestedKind) return { error: "Account type must be business or member." }
   const liveSample = rejectLiveSampleEmail(email)
   if (liveSample) return liveSample
   const existing = findUserByEmail(email)
@@ -190,6 +209,7 @@ export function signup(input: { name: string; email: string; password: string })
     email,
     passwordHash: hashPassword(password),
     role,
+    accountKind: role === "admin" ? "business" : requestedKind,
     status: "active",
     createdAt: new Date().toISOString(),
   }
@@ -240,6 +260,7 @@ export function createManagedUser(input: {
   email: string
   password: string
   role?: string
+  kind?: string
 }): { user?: PublicUser; error?: string } {
   const parsed = validateProfile({ ...input, requirePassword: true })
   if ("error" in parsed && parsed.error) return { error: parsed.error }
@@ -248,6 +269,8 @@ export function createManagedUser(input: {
   if (liveSample) return liveSample
   const role = parseRole(input.role ?? "customer")
   if (!role) return { error: "Role must be customer or admin." }
+  const requestedKind = input.kind == null || input.kind === "" ? "business" : parseAccountKind(input.kind)
+  if (!requestedKind) return { error: "Account type must be business or member." }
   if (findUserByEmail(email)) return { error: "An account with that email already exists." }
   const user: User = {
     id: randomBytes(8).toString("hex"),
@@ -255,6 +278,7 @@ export function createManagedUser(input: {
     email,
     passwordHash: hashPassword(input.password),
     role,
+    accountKind: role === "admin" ? "business" : requestedKind,
     status: "active",
     createdAt: new Date().toISOString(),
   }
@@ -264,7 +288,7 @@ export function createManagedUser(input: {
 
 export function updateManagedUser(
   id: string,
-  input: { name?: string; email?: string; password?: string; role?: string; status?: string },
+  input: { name?: string; email?: string; password?: string; role?: string; status?: string; kind?: string },
   actorId?: string,
 ): { user?: PublicUser; error?: string } {
   const users = readUsers()
@@ -304,11 +328,19 @@ export function updateManagedUser(
     }
     status = input.status
   }
+  let accountKind = current.accountKind
+  if (input.kind != null) {
+    const nextKind = parseAccountKind(input.kind)
+    if (!nextKind) return { error: "Account type must be business or member." }
+    accountKind = nextKind
+  }
+  if (role === "admin") accountKind = "business"
   const next: User = {
     ...current,
     name,
     email,
     role,
+    accountKind,
     status,
     passwordHash: input.password ? hashPassword(input.password) : current.passwordHash,
   }
@@ -355,6 +387,7 @@ export function seedAdminAccount(input: { email: string; password: string; name?
       name: name === "Admin" ? existing.name || name : name,
       passwordHash: hashPassword(password),
       role: "admin",
+      accountKind: "business",
       status: "active",
     }
     writeUsers(users.map((user) => (user.id === existing.id ? next : user)))
@@ -366,11 +399,21 @@ export function seedAdminAccount(input: { email: string; password: string; name?
     email,
     passwordHash: hashPassword(password),
     role: "admin",
+    accountKind: "business",
     status: "active",
     createdAt: new Date().toISOString(),
   }
   writeUsers([user, ...readUsers()])
   return { user: publicUser(user), created: true }
+}
+
+export function becomeBusiness(id: string): { user?: PublicUser; error?: string } {
+  const users = readUsers()
+  const current = users.find((user) => user.id === id)
+  if (!current) return { error: "That user was not found." }
+  const next: User = { ...current, accountKind: "business" }
+  writeUsers(users.map((user) => (user.id === id ? next : user)))
+  return { user: publicUser(next) }
 }
 
 export function createSession(userId: string) {

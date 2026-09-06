@@ -1,5 +1,6 @@
 import { LoaderCircle, MapPinned, Search } from "lucide-react"
 import { useEffect, useState } from "react"
+import { listBusinessHref } from "../lib/account.ts"
 import { searchDirectory } from "../lib/api.ts"
 import { listingLocation, listingPath } from "../lib/listings.ts"
 import type { AuthUser, DirectoryListing } from "../lib/types.ts"
@@ -93,7 +94,7 @@ export function DirectoryPage({ user, onGo }: Props) {
           </form>
           <button
             type="button"
-            onClick={() => onGo(user ? "/listings/new" : "/join")}
+            onClick={() => onGo(listBusinessHref(user))}
             className="mt-4 text-sm text-brass hover:underline"
           >
             {user ? "Create your listing" : "List your business · $150 per month"}
@@ -125,7 +126,7 @@ export function DirectoryPage({ user, onGo }: Props) {
                   </p>
                   <button
                     type="button"
-                    onClick={() => onGo(user ? "/listings/new" : "/join")}
+                    onClick={() => onGo(listBusinessHref(user))}
                     className="mt-5 text-sm text-brass hover:underline"
                   >
                     {user ? "Create a listing" : "List your business"}

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
 import express from "express"
-import { userFromCookie } from "./auth.ts"
+import { createSession, signup, userFromCookie } from "./auth.ts"
 import { createListing } from "./listings.ts"
 import { registerListingLeadRoutes } from "./listing-leads.ts"
 import { ListingError } from "./listings.ts"
@@ -100,8 +100,16 @@ describe("quote request leads", () => {
     )
   })
 
-  it("POST /api/listings/:id/quotes accepts a visitor lead", async () => {
+  it("POST /api/listings/:id/quotes requires a free signed-in account", async () => {
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-quotes-http-")))
+    signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const created = signup({
+      name: "Maya Chen",
+      email: "maya@example.com",
+      password: "password12",
+      kind: "member",
+    })
+    const token = createSession(created.user!.id)
     const listing = createListing(
       {
         name: "Lamppost Hardware",
@@ -113,16 +121,27 @@ describe("quote request leads", () => {
     )
 
     await withLeadServer(async (port) => {
-      const bad = await fetch(`http://127.0.0.1:${port}/api/listings/${listing.id}/quotes`, {
+      const anonymous = await fetch(`http://127.0.0.1:${port}/api/listings/${listing.id}/quotes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Maya Chen",
+          email: "maya@example.com",
+          need: "Need a spare house key cut this afternoon.",
+        }),
+      })
+      assert.equal(anonymous.status, 401)
+
+      const bad = await fetch(`http://127.0.0.1:${port}/api/listings/${listing.id}/quotes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: `pf_session=${token}` },
         body: JSON.stringify({ name: "Maya", email: "not-valid", need: "Need a spare house key cut today." }),
       })
       assert.equal(bad.status, 400)
 
       const ok = await fetch(`http://127.0.0.1:${port}/api/listings/${listing.id}/quotes`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Cookie: `pf_session=${token}` },
         body: JSON.stringify({
           name: "Maya Chen",
           email: "maya@example.com",

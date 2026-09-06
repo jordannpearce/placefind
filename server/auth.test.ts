@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
 import {
+  becomeBusiness,
   canLocalBootstrap,
   canManage,
   createManagedUser,
@@ -441,6 +442,37 @@ describe("admin account management", () => {
       if (previous == null) delete process.env.PLACEFIND_DATA_DIR
       else process.env.PLACEFIND_DATA_DIR = previous
     }
+  })
+})
+
+describe("account kinds", () => {
+  after(() => {
+    delete process.env.PLACEFIND_DATA_DIR
+    reloadStoreFromDisk()
+  })
+
+  it("signs up a free neighbor separately from a business listing account", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-kinds-")))
+    signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const business = signup({ name: "Pat Owner", email: "pat@example.com", password: "password12" })
+    const member = signup({
+      name: "Maya Chen",
+      email: "maya@example.com",
+      password: "password12",
+      kind: "member",
+    })
+    assert.equal(business.user?.accountKind, "business")
+    assert.equal(member.user?.accountKind, "member")
+    const upgraded = becomeBusiness(member.user!.id)
+    assert.equal(upgraded.user?.accountKind, "business")
+    const neighbor = createManagedUser({
+      name: "Owen Blake",
+      email: "owen@example.com",
+      password: "password12",
+      role: "customer",
+      kind: "member",
+    })
+    assert.equal(neighbor.user?.accountKind, "member")
   })
 })
 

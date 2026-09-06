@@ -10,11 +10,13 @@ import { DirectoryPage } from "./components/DirectoryPage.tsx"
 import { HomePage } from "./components/HomePage.tsx"
 import { LegalPage } from "./components/LegalPage.tsx"
 import { ListingDetailPage } from "./components/ListingDetailPage.tsx"
+import { BusinessUpgradeCard } from "./components/BusinessUpgradeCard.tsx"
 import { ListingFormPage } from "./components/ListingFormPage.tsx"
 import { ResultPanel } from "./components/ResultPanel.tsx"
 import { SearchForm } from "./components/SearchForm.tsx"
 import { SiteFooter } from "./components/SiteFooter.tsx"
 import { TrackPage } from "./components/TrackPage.tsx"
+import { canPublishListing, joinHref, joinIntentFromSearch, loginHref, safeAuthNext } from "./lib/account.ts"
 import { isLegalPath } from "./lib/legal.ts"
 import { loadRuntime, searchBusiness, stopImpersonation } from "./lib/api.ts"
 import {
@@ -126,12 +128,16 @@ export default function App() {
   }, [])
 
   function go(next: string) {
-    const [rawPath, hash] = next.split("#")
-    const raw = rawPath || "/"
+    const hashIndex = next.indexOf("#")
+    const beforeHash = hashIndex === -1 ? next : next.slice(0, hashIndex)
+    const hash = hashIndex === -1 ? "" : next.slice(hashIndex + 1)
+    const queryIndex = beforeHash.indexOf("?")
+    const raw = (queryIndex === -1 ? beforeHash : beforeHash.slice(0, queryIndex)) || "/"
+    const search = queryIndex === -1 ? "" : beforeHash.slice(queryIndex)
     const requested = requestedAppPath(raw)
     const dest = allowedPath(requested, access)
     const urlPath = dest === "/listings" && raw.startsWith("/listings") ? raw : dest
-    const url = hash ? `${urlPath}#${hash}` : urlPath
+    const url = `${urlPath}${dest === requested ? search : ""}${hash ? `#${hash}` : ""}`
     window.history.pushState({}, "", url)
     setPath(dest)
     syncListingRoute()
@@ -139,7 +145,7 @@ export default function App() {
     else window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  async function refreshSession(nextUser: AuthUser, dest?: AppPath) {
+  async function refreshSession(nextUser: AuthUser, dest?: string) {
     setUser(nextUser)
     if (nextUser.role === "admin") setAdmin(true)
     try {
@@ -159,18 +165,20 @@ export default function App() {
           user: runtime.user ?? nextUser,
           impersonating: runtime.impersonating ?? null,
         })
+      const nextPath = requestedAppPath(next.split("?")[0] || next)
       window.history.pushState({}, "", next)
-      setPath(next)
+      setPath(nextPath)
       syncListingRoute()
     } catch {
       const next = dest ?? (desktop ? "/" : "/account")
       window.history.pushState({}, "", next)
-      setPath(next)
+      setPath(requestedAppPath(next.split("?")[0] || next))
       syncListingRoute()
     }
   }
 
   function onAuthed(next: AuthUser) {
+    const nextPath = safeAuthNext(new URLSearchParams(window.location.search).get("next"))
     const stay =
       path === "/track" ||
       path === "/try" ||
@@ -178,7 +186,7 @@ export default function App() {
       path === "/listings" ||
       path === "/directory" ||
       path === "/dashboard"
-    void refreshSession(next, stay ? path : desktop ? "/" : "/account")
+    void refreshSession(next, nextPath ?? (stay ? path : desktop ? "/" : "/account"))
   }
 
   function onAdminAuthed(next: AuthUser) {
@@ -265,6 +273,7 @@ export default function App() {
         {path === "/account" && user && (
           <AccountPage
             user={user}
+            onUser={setUser}
             onLogout={() => {
               setUser(null)
               setAdmin(false)
@@ -282,7 +291,12 @@ export default function App() {
         {showHome && <HomePage user={user} onGo={go} />}
         {path === "/directory" && <DirectoryPage user={user} onGo={go} />}
         {path === "/dashboard" && user && <CrawlDashboard user={user} onGo={go} />}
-        {path === "/listings" && listingCreate && user && <ListingFormPage user={user} onGo={go} />}
+        {path === "/listings" && listingCreate && user && canPublishListing(user) && (
+          <ListingFormPage user={user} onGo={go} />
+        )}
+        {path === "/listings" && listingCreate && user && !canPublishListing(user) && (
+          <BusinessUpgradeCard user={user} onUpgraded={setUser} onGo={go} />
+        )}
         {path === "/listings" && listingId && listingEdit && user && (
           <ListingFormPage listingId={listingId} user={user} onGo={go} />
         )}
@@ -299,6 +313,13 @@ export default function App() {
           <AuthPage
             mode={path === "/join" || needsListingLogin ? "join" : "login"}
             publicUrl={publicUrl}
+            joinIntent={
+              needsListingLogin
+                ? "business"
+                : path === "/join"
+                  ? joinIntentFromSearch(window.location.search)
+                  : "business"
+            }
             title={
               needsTrackLogin
                 ? "Sign in to track ranks"
@@ -306,24 +327,36 @@ export default function App() {
                   ? "Sign in to run a test scan"
                   : needsDashboardLogin
                     ? "Sign in to crawl a website"
-                    : needsListingLogin || path === "/join"
-                      ? "Create a PlaceFind account"
-                      : undefined
+                    : needsListingLogin
+                      ? "Create a business account"
+                      : path === "/join" && joinIntentFromSearch(window.location.search) === "member"
+                        ? "Create a free account"
+                        : path === "/join"
+                          ? "Create a PlaceFind account"
+                          : undefined
             }
             intro={
               needsTrackLogin
-                ? "Grid tracking is for signed-in customers."
+                ? "Grid tracking is for signed-in business owners."
                 : needsTryLogin
-                  ? "The live test scan is for signed-in customers."
+                  ? "The live test scan is for signed-in business owners."
                   : needsDashboardLogin
-                    ? "Website crawls are a signed-in dashboard tool. Create an account to request Crawl Website."
-                    : needsListingLogin || path === "/join"
-                      ? "Create an account to publish a PlaceFind listing for $150 per month and build a public profile."
-                      : undefined
+                    ? "Website crawls are a signed-in dashboard tool. Create a business account to request Crawl Website."
+                    : needsListingLogin
+                      ? "Create a business account to publish a PlaceFind listing for $150 per month and build a public profile."
+                      : path === "/join" && joinIntentFromSearch(window.location.search) === "member"
+                        ? "Leave reviews and request quotes. This account is free. PlaceFind does not charge $150 for reviews or quotes."
+                        : path === "/join"
+                          ? "Create an account to publish a PlaceFind listing for $150 per month and build a public profile."
+                          : undefined
             }
             onAuthed={onAuthed}
-            onGoLogin={() => go("/login")}
-            onGoJoin={() => go("/join")}
+            onGoLogin={() => go(loginHref(new URLSearchParams(window.location.search).get("next")))}
+            onGoJoin={() => {
+              const params = new URLSearchParams(window.location.search)
+              const intent = path === "/join" ? joinIntentFromSearch(window.location.search) : "business"
+              go(joinHref(intent, params.get("next")))
+            }}
           />
         )}
         {showTrack && <TrackPage keys={emptyKeys()} hosted={hosted} seller={seller} />}

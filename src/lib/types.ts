@@ -131,11 +131,14 @@ export type IssuedLicense = {
   expiry: string | null
 }
 
+export type AccountKind = "business" | "member"
+
 export type AuthUser = {
   id: string
   name: string
   email: string
   role: "customer" | "admin"
+  accountKind?: AccountKind
   status: "active" | "suspended"
   createdAt: string
 }

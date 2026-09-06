@@ -1,3 +1,4 @@
+import { canUseOwnerTools } from "./account.ts"
 import { isLegalPath } from "./legal.ts"
 import type { AuthUser } from "./types.ts"
 
@@ -120,13 +121,17 @@ export function allowedPath(next: AppPath, access: NavAccess): AppPath {
   if (next === "/sell") return admin ? "/sell" : impersonating ? "/account" : "/admin"
   if (next === "/join") return user ? "/account" : "/join"
   if (next === "/directory" || next === "/listings") return next
-  if (next === "/dashboard") return user ? "/dashboard" : "/login"
+  if (next === "/dashboard") return canUseOwnerTools(user) ? "/dashboard" : user ? "/account" : "/login"
   if (next === "/try" || next === "/demo") {
     if (desktop && !user) return "/login"
     return next
   }
   if (desktop && !user) return "/login"
-  if (next === "/track") return desktop && !user ? "/login" : "/track"
+  if (next === "/track") {
+    if (desktop && !user) return "/login"
+    if (user && !canUseOwnerTools(user)) return "/account"
+    return "/track"
+  }
   if (next === "/account") return user ? "/account" : "/login"
   if (next === "/login") return user ? (desktop ? "/" : "/account") : "/login"
   if (next === "/download" || next === "/buy") return desktop && !user ? "/login" : "/"
@@ -154,12 +159,14 @@ export function navLinks(access: NavAccess): NavLink[] {
   ]
   if (!user) links.push({ href: "/#how-it-works", label: "How it works" })
   if (user) {
-    links.push(
-      { href: "/listings/new", label: "Create listing" },
-      { href: "/dashboard", label: "Dashboard" },
-      { href: "/track", label: "Rank tracker" },
-      { href: "/track#traffic", label: "Traffic" },
-    )
+    if (canUseOwnerTools(user)) {
+      links.push(
+        { href: "/listings/new", label: "Create listing" },
+        { href: "/dashboard", label: "Dashboard" },
+        { href: "/track", label: "Rank tracker" },
+        { href: "/track#traffic", label: "Traffic" },
+      )
+    }
     links.push({ href: "/account", label: "Account" })
   } else {
     links.push({ href: "/join", label: "Join" }, { href: "/login", label: "Sign in" })

@@ -18,6 +18,7 @@ const PUBLIC_FILES = [
   "components/DirectoryPage.tsx",
   "components/ListingDetailPage.tsx",
   "components/ListingFormPage.tsx",
+  "components/BusinessUpgradeCard.tsx",
   "components/AuthPage.tsx",
   "components/AccountPage.tsx",
   "components/CrawlDashboard.tsx",
@@ -79,6 +80,8 @@ describe("public website copy", () => {
     assert.match(home, /business directory/i)
     assert.match(home, /No listings yet/)
     assert.match(home, /does not ship with sample shops/)
+    assert.match(home, /free account/)
+    assert.match(home, /not billed/)
     assert.equal(/sample listings you can open today/i.test(home), false)
     const directory = readFileSync(path.join(root, "components/DirectoryPage.tsx"), "utf8")
     assert.match(directory, /No listings yet/)

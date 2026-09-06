@@ -36,6 +36,14 @@ describe("welcomeEmail", () => {
     assert.equal(/download|windows|license key|setup\.exe/i.test(message.text + message.html), false)
     assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.text), false)
     assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.html), false)
+    assert.match(message.text, /\$150 per month/)
+  })
+
+  it("tells a neighbor account the $150 fee is not theirs", () => {
+    const message = welcomeEmail({ name: "Maya", product: "PlaceFind", price: "150", kind: "member" })
+    assert.match(message.text, /account is free/)
+    assert.match(message.text, /does not charge this account \$150/)
+    assert.equal(/download|windows|license key/i.test(message.text), false)
   })
 })
 

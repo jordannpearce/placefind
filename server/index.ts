@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  becomeBusiness,
   canManage,
   clearSession,
   createManagedUser,
@@ -79,6 +80,7 @@ import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
 import { requestIp, runWebsiteSearch, VisitorSearchUsedError } from "./search-limit.ts"
 import { readSearchQuery } from "./search-query.ts"
+import { canPublishListing, MEMBER_LISTING_MESSAGE } from "../src/lib/account.ts"
 import { listingPath } from "../src/lib/listings.ts"
 import {
   confirmListingMatch,
@@ -298,6 +300,10 @@ async function start() {
     const user = requireUser(req, res)
     if (!user) return
     try {
+      if (!canPublishListing(user)) {
+        res.status(403).json({ error: MEMBER_LISTING_MESSAGE })
+        return
+      }
       const listing = createListing(req.body ?? {}, user.id)
       res.status(201).json({ listing: publicListing(listing, true) })
     } catch (error) {
@@ -743,15 +749,25 @@ async function start() {
       res.status(403).json({ error: "Create your account on the PlaceFind website." })
       return
     }
-    const body = (req.body ?? {}) as { name?: string; email?: string; password?: string }
-    const result = signup({ name: body.name ?? "", email: body.email ?? "", password: body.password ?? "" })
+    const body = (req.body ?? {}) as { name?: string; email?: string; password?: string; kind?: string }
+    const result = signup({
+      name: body.name ?? "",
+      email: body.email ?? "",
+      password: body.password ?? "",
+      kind: body.kind,
+    })
     if (result.error || !result.user) {
       res.status(400).json({ error: result.error || "Could not create the account." })
       return
     }
     const token = createSession(result.user.id)
     const product = readProduct()
-    const welcome = welcomeEmail({ name: result.user.name, product: product.name, price: product.price })
+    const welcome = welcomeEmail({
+      name: result.user.name,
+      product: product.name,
+      price: product.price,
+      kind: result.user.accountKind,
+    })
     await sendMail({ ...welcome, to: result.user.email })
     res.setHeader("Set-Cookie", [sessionCookie(token), impersonationCookie("", true)])
     res.json({ user: result.user })
@@ -854,6 +870,22 @@ async function start() {
       product: readProduct(),
       usage: accountUsageFor(user.id, user.role),
     })
+  })
+
+  app.post("/api/account/kind", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const body = (req.body ?? {}) as { kind?: string }
+    if (body.kind !== "business") {
+      res.status(400).json({ error: "Sign in with a business account to list a shop, or upgrade this one." })
+      return
+    }
+    const result = becomeBusiness(user.id)
+    if (result.error || !result.user) {
+      res.status(400).json({ error: result.error || "Could not update the account." })
+      return
+    }
+    res.json({ user: result.user })
   })
 
   app.post("/api/ai/prompts", (req, res) => {
@@ -985,12 +1017,13 @@ async function start() {
 
   app.post("/api/admin/users", (req, res) => {
     if (!manage(req, res)) return
-    const body = (req.body ?? {}) as { name?: string; email?: string; password?: string; role?: string }
+    const body = (req.body ?? {}) as { name?: string; email?: string; password?: string; role?: string; kind?: string }
     const result = createManagedUser({
       name: body.name ?? "",
       email: body.email ?? "",
       password: body.password ?? "",
       role: body.role,
+      kind: body.kind,
     })
     if (result.error || !result.user) {
       res.status(400).json({ error: result.error || "Could not create the user." })
@@ -1008,6 +1041,7 @@ async function start() {
       password?: string
       role?: string
       status?: string
+      kind?: string
     }
     const result = updateManagedUser(String(req.params.id ?? ""), body, admin?.id)
     if (result.error || !result.user) {
