@@ -15,9 +15,10 @@ type Props = {
   loading: boolean
   history: HistoryItem[]
   onHistory: (item: HistoryItem) => void
+  submitLabel?: string
 }
 
-export function SearchForm({ query, onChange, onSearch, loading, history, onHistory }: Props) {
+export function SearchForm({ query, onChange, onSearch, loading, history, onHistory, submitLabel }: Props) {
   return (
     <form
       className="flex flex-col gap-4"
@@ -71,7 +72,7 @@ export function SearchForm({ query, onChange, onSearch, loading, history, onHist
         className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brass font-semibold text-ink transition hover:bg-[#ecc77a] disabled:cursor-wait disabled:opacity-70"
       >
         {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-        {loading ? "Searching Maps…" : "Find listing"}
+        {loading ? "Searching Maps…" : submitLabel || "Find listing"}
       </button>
 
       <div>

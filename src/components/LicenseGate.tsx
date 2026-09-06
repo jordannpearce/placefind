@@ -21,7 +21,7 @@ export function LicenseGate({ license, onActivated }: Props) {
       </p>
       <h2 className="mt-2 font-display text-3xl text-paper">Unlock PlaceFind</h2>
       <p className="mt-3 text-sm leading-6 text-muted">
-        Enter the license key you received with this copy. Search stays locked until the key is valid.
+        Enter the license key you received with this copy. Lookup and rank tracking stay locked until the key is valid.
       </p>
       <form
         className="mt-6 grid gap-4"

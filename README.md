@@ -1,12 +1,18 @@
 # PlaceFind
 
-Windows desktop software that looks up a Google Maps listing from a business name, city, and state, and tracks where that listing ranks for keywords on Google Maps.
+Windows desktop software that looks up a Google Maps listing from a business name, city, and state, and can track where that listing ranks.
 
-PlaceFind searches Google Maps in that city and opens the listing page for extra details. You can bake your keys into the Windows installer so buyers search without pasting keys. Your API accounts are billed for those searches.
+## For visitors
 
-Without keys, PlaceFind still runs in sample mode.
+Open the site and run a **test scan**. Enter a business name, city, and state to see the same listing result PlaceFind shows on Windows: name, address, phone, rating, and a Maps link.
 
-## Run it
+- Test scan: [http://127.0.0.1:43141/](http://127.0.0.1:43141/)
+- Buy: [http://127.0.0.1:43141/buy](http://127.0.0.1:43141/buy)
+- Download: [http://127.0.0.1:43141/download](http://127.0.0.1:43141/download)
+
+The public site does not ask visitors for setup details. Buy a license, download the Windows setup, and unlock the desktop app with the key from your account page. Admin and seller tools are not in the public navigation.
+
+## Run it locally
 
 ```bash
 npm install
@@ -20,6 +26,30 @@ On Windows, after `npm install`:
 ```bash
 npm run desktop
 ```
+
+## Admin login
+
+Admin is hidden from regular visitors. `/admin` shows a sign-in form only — no customer lists, keys, or seller chrome — until an admin session exists.
+
+- The first account created on this machine becomes admin.
+- Any later signup whose email matches `ADMIN_EMAIL` (comma-separated in `.env`) also becomes admin. Do not put passwords in source.
+- After an admin signs in, **Admin** and **Sell** appear in the nav.
+- `canManage` is the admin role only. Local/dev mode does not make every visitor an admin.
+
+Create or sign in at [http://127.0.0.1:43141/admin](http://127.0.0.1:43141/admin).
+
+App data (users, sessions, orders, issued licenses, mail outbox, rank campaigns) lives in Postgres when `DATABASE_URL` is set. Locally, if Postgres is not available, PlaceFind keeps using `.data/*.json` so `npm run dev` still works. Secret files (`hosted-keys.json`, license-admin config, mail API key) stay out of git.
+
+## Railway and Postgres
+
+Production start is `npm run start` (`NODE_ENV=production` + the built Express server). Do not use `npm run dev` on Railway.
+
+1. Create a GitHub repo you own and push this branch.
+2. Create a Railway project, add a **Postgres** plugin, and deploy this web service.
+3. Railway injects `DATABASE_URL`. Set `NODE_ENV=production` and `ADMIN_EMAIL` to your admin inbox.
+4. Copy seller tokens from local `.env` into Railway only if you need them; they are not required for the public site to boot.
+
+`railway.toml` and `Dockerfile` are in the repo. Health check: `/api/health`.
 
 ## Sell it and create a Windows setup
 
@@ -40,7 +70,7 @@ Open [http://127.0.0.1:43141/buy](http://127.0.0.1:43141/buy) for customer signu
 Paste a [Resend](https://resend.com) API key on **Admin** to send:
 
 - a welcome email after signup
-- a license email with the Keygen key and download steps after a purchase or a manual issue
+- a license email with the license key and download steps after a purchase or a manual issue
 
 Until Resend is connected, those messages stay in the Admin outbox on this computer. Use `onboarding@resend.dev` as the from address while you test. Card charges are recorded locally in this preview; Stripe can be added later.
 
@@ -62,7 +92,7 @@ The setup file is unsigned unless you add your own Windows code-signing certific
 
 ## Add your keys
 
-Open **Settings** in the app:
+On the seller machine, open **Sell** (or **Settings** on a copy that is not the public store):
 
 1. Paste your Scrappey API key from [scrappey.com](https://scrappey.com).
 2. Paste your DataForSEO dashboard login and **API password**.
@@ -93,11 +123,11 @@ KEYGEN_TOKEN=
 3. Click **Scan keywords** (or **Scan** on one keyword). Search Google Maps in that city and record the rank of the listing that matches your business name.
 4. The results table shows keyword, rank (or not found), listing title, rating, address, Maps URL, and when it was scanned. The latest scan stays on the campaign, with recent runs underneath.
 
-Rank scans use the same Maps search as Lookup. If Maps search is not set up, the scan returns an error instead of inventing ranks. Buyer copies still need a valid license to run a scan, the same way Lookup is gated.
+Rank scans use the same Maps search as the test scan. If Maps search is not set up, the scan returns an error instead of inventing ranks.
 
-Keygen and Resend on **Admin** / **Sell** are separate: they issue and email Windows licenses. They are not required to create a campaign, but a buyer copy still needs a valid license key before a scan will run.
+Keygen and Resend on **Admin** / **Sell** are separate: they issue and email Windows licenses. They are not required to create a campaign.
 
-## Sample searches (no keys)
+## Sample searches
 
 - Franklin Barbecue — Austin, TX
 - Joe's Pizza — New York, NY

@@ -5,9 +5,10 @@ import type { AuthUser, IssuedLicense, OrderInfo, ProductInfo } from "../lib/typ
 type Props = {
   user: AuthUser | null
   onAuthed: (user: AuthUser) => void
+  onTryScan?: () => void
 }
 
-export function BuyPage({ user, onAuthed }: Props) {
+export function BuyPage({ user, onAuthed, onTryScan }: Props) {
   const [product, setProduct] = useState<ProductInfo | null>(null)
   const [name, setName] = useState(user?.name ?? "")
   const [email, setEmail] = useState(user?.email ?? "")
@@ -38,7 +39,18 @@ export function BuyPage({ user, onAuthed }: Props) {
         <h2 className="mt-2 font-display text-4xl text-paper">{product?.name ?? "PlaceFind"}</h2>
         <p className="mt-3 text-sm leading-6 text-muted">{product?.pitch}</p>
         <p className="mt-4 font-display text-3xl text-brass">${product?.price ?? "49"}</p>
-        <p className="mt-1 text-xs text-muted">One Windows license key. After payment you get the key by email and on your account page.</p>
+        <p className="mt-1 text-xs text-muted">
+          One Windows license. After payment you get the key by email and on your account page.
+        </p>
+        {onTryScan && (
+          <button
+            type="button"
+            onClick={onTryScan}
+            className="mt-5 inline-flex h-11 items-center rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
+          >
+            Run a test scan
+          </button>
+        )}
 
         {order ? (
           <div className="mt-6 rounded-xl border border-line bg-ink px-4 py-4">
@@ -51,7 +63,7 @@ export function BuyPage({ user, onAuthed }: Props) {
               </>
             ) : (
               <p className="mt-2 text-sm text-muted">
-                {warning || "Your payment is in. An admin will issue the Keygen key and email it to you."}
+                {warning || "Your payment is in. Your license key will appear here and on your account page once it is issued."}
               </p>
             )}
           </div>
@@ -123,8 +135,7 @@ export function BuyPage({ user, onAuthed }: Props) {
               {busy ? "Placing order…" : `Pay $${product?.price ?? "49"} and get a key`}
             </button>
             <p className="text-xs text-muted">
-              This preview records the purchase on this computer. Connect Keygen to create a real key, and Resend to email it.
-              Card charges can be added later with Stripe.
+              After you pay, your license key appears here and on your account page. We also email it when email is set up.
             </p>
           </form>
         )}

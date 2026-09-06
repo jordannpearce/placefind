@@ -49,7 +49,7 @@ export function AccountPage({ user, onLogout, onBuy }: Props) {
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">License keys</p>
         {error && <p className="mt-3 text-sm text-clay">{error}</p>}
         {orders.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">No licenses yet. Buy {product?.name ?? "PlaceFind"} to get a Keygen key.</p>
+          <p className="mt-3 text-sm text-muted">No licenses yet. Buy {product?.name ?? "PlaceFind"} to get a license key.</p>
         ) : (
           <ul className="mt-4 grid gap-3">
             {orders.map((order) => (
@@ -60,7 +60,7 @@ export function AccountPage({ user, onLogout, onBuy }: Props) {
                 {order.licenseKey ? (
                   <p className="mt-1 break-all font-mono text-sm text-brass">{order.licenseKey}</p>
                 ) : (
-                  <p className="mt-1 text-sm text-muted">The admin still needs to issue this key in Keygen.</p>
+                  <p className="mt-1 text-sm text-muted">Your license key will appear here once it is issued.</p>
                 )}
                 <p className="mt-1 text-xs text-muted">{new Date(order.createdAt).toLocaleString()}</p>
               </li>

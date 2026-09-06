@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { maskSecret } from "./keygen.ts"
+import { readCollection, writeCollection } from "./store.ts"
 
 export type MailConfig = {
   resendApiKey: string
@@ -24,7 +25,6 @@ export type OutboundMail = MailMessage & {
 
 const DATA_DIR = path.resolve(process.cwd(), ".data")
 const CONFIG_FILE = path.join(DATA_DIR, "mail.json")
-const OUTBOX_FILE = path.join(DATA_DIR, "mail-outbox.json")
 
 function readJson<T>(file: string, fallback: T): T {
   try {
@@ -67,18 +67,12 @@ export function mailStatus() {
 }
 
 export function readOutbox(): OutboundMail[] {
-  try {
-    if (!existsSync(OUTBOX_FILE)) return []
-    const rows = JSON.parse(readFileSync(OUTBOX_FILE, "utf8")) as OutboundMail[]
-    return Array.isArray(rows) ? rows : []
-  } catch {
-    return []
-  }
+  const rows = readCollection<OutboundMail>("mail_outbox")
+  return Array.isArray(rows) ? rows : []
 }
 
 function writeOutbox(rows: OutboundMail[]) {
-  mkdirSync(DATA_DIR, { recursive: true })
-  writeFileSync(OUTBOX_FILE, JSON.stringify(rows.slice(0, 50), null, 2))
+  writeCollection("mail_outbox", rows.slice(0, 50))
 }
 
 export function welcomeEmail(input: { name: string; product: string; price: string }): MailMessage {
@@ -86,8 +80,8 @@ export function welcomeEmail(input: { name: string; product: string; price: stri
   return {
     to: "",
     subject: `Welcome to ${input.product}`,
-    text: `Hi ${first},\n\nYour ${input.product} account is ready. Buy a license from your account page to get a Keygen key and the Windows setup.\n\nPlaceFind costs $${input.price} for one Windows license.\n`,
-    html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} account is ready. Buy a license to get a Keygen key and the Windows setup.</p><p>PlaceFind costs $${escapeHtml(input.price)} for one Windows license.</p>`,
+    text: `Hi ${first},\n\nYour ${input.product} account is ready. Buy a license from your account page to get a license key and the Windows setup.\n\nPlaceFind costs $${input.price} for one Windows license.\n`,
+    html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} account is ready. Buy a license to get a license key and the Windows setup.</p><p>PlaceFind costs $${escapeHtml(input.price)} for one Windows license.</p>`,
   }
 }
 

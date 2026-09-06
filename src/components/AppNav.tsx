@@ -10,10 +10,17 @@ type Props = {
 }
 
 export function AppNav({ path, store, admin, user, onGo }: Props) {
-  const links: { href: AppPath; label: string }[] = [{ href: "/", label: "Lookup" }]
+  const links: { href: AppPath; label: string }[] = [
+    { href: "/", label: store ? "Test scan" : "Lookup" },
+    { href: "/track", label: "Track" },
+  ]
   if (store) {
     links.push({ href: "/buy", label: "Buy" }, { href: "/download", label: "Download" })
-    links.push(user ? { href: "/account", label: "Account" } : { href: "/login", label: "Sign in" })
+    if (user) {
+      links.push({ href: "/account", label: "Account" })
+    } else {
+      links.push({ href: "/join", label: "Join" }, { href: "/login", label: "Sign in" })
+    }
   }
   if (admin) {
     links.push({ href: "/sell", label: "Sell" }, { href: "/admin", label: "Admin" })
@@ -22,7 +29,7 @@ export function AppNav({ path, store, admin, user, onGo }: Props) {
   return (
     <nav className="flex flex-wrap items-center gap-1">
       {links.map((link) => {
-        const active = path === link.href || (link.href === "/login" && path === "/join")
+        const active = path === link.href
         return (
           <a
             key={link.href}

@@ -147,9 +147,14 @@ function toListing(item: MapsItem, query: SearchQuery): BusinessListing | null {
   return listing
 }
 
-export async function searchDataForSeo(query: SearchQuery, login: string, password: string): Promise<{ hits: BusinessListing[]; error: string | null }> {
+export async function searchDataForSeo(
+  query: SearchQuery,
+  login: string,
+  password: string,
+  mapsKeyword?: string,
+): Promise<{ hits: BusinessListing[]; error: string | null }> {
   const location = [query.city, toStateName(query.state), "United States"].filter(Boolean).join(",")
-  const keyword = [query.name, query.city, toStateName(query.state)].filter(Boolean).join(" ")
+  const keyword = mapsKeyword?.trim() || [query.name, query.city, toStateName(query.state)].filter(Boolean).join(" ")
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 25_000)
   try {

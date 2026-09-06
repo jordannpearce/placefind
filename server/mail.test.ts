@@ -22,5 +22,7 @@ describe("welcomeEmail", () => {
     const message = welcomeEmail({ name: "Jordan", product: "PlaceFind", price: "49" })
     assert.equal(message.subject, "Welcome to PlaceFind")
     assert.equal(message.text.includes("$49"), true)
+    assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.text), false)
+    assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.html), false)
   })
 })

@@ -159,8 +159,49 @@ export type RuntimeInfo = {
   seller: boolean
   store: boolean
   admin: boolean
+  bootstrap: boolean
   user: AuthUser | null
   hosted: HostedKeyStatus
   license: LicenseStatus
   keygen: KeygenStatus
+}
+
+export type KeywordRank = {
+  keyword: string
+  rank: number | null
+  listingTitle: string | null
+  rating: number | null
+  address: string | null
+  mapsUrl: string | null
+  scannedAt: string
+  error?: string
+}
+
+export type ScanRun = {
+  id: string
+  scannedAt: string
+  keywordCount: number
+  foundCount: number
+  results: KeywordRank[]
+}
+
+export type Campaign = {
+  id: string
+  name: string
+  businessName: string
+  city: string
+  state: string
+  keywords: string[]
+  createdAt: string
+  updatedAt: string
+  lastScan: ScanRun | null
+  recentScans: ScanRun[]
+}
+
+export type CampaignInput = {
+  name?: string
+  businessName?: string
+  city?: string
+  state?: string
+  keywords?: string[]
 }

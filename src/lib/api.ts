@@ -1,6 +1,8 @@
 import type {
   ApiKeys,
   AuthUser,
+  Campaign,
+  CampaignInput,
   HostedKeyStatus,
   InstallerStatus,
   IssuedLicense,
@@ -11,6 +13,7 @@ import type {
   OrderInfo,
   ProductInfo,
   RuntimeInfo,
+  ScanRun,
   SearchQuery,
   SearchResponse,
 } from "./types.ts"
@@ -254,4 +257,40 @@ export async function testMail(input: { resendApiKey?: string; fromEmail?: strin
   message: string
 }> {
   return request("/api/admin/mail/test", { method: "POST", body: JSON.stringify(input) })
+}
+
+export async function loadCampaigns(): Promise<{ campaigns: Campaign[]; maxKeywords: number }> {
+  return request("/api/campaigns")
+}
+
+export async function createCampaign(input: CampaignInput): Promise<Campaign> {
+  const payload = await request<{ campaign: Campaign }>("/api/campaigns", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+  return payload.campaign
+}
+
+export async function updateCampaign(id: string, input: CampaignInput): Promise<Campaign> {
+  const payload = await request<{ campaign: Campaign }>(`/api/campaigns/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  })
+  return payload.campaign
+}
+
+export async function deleteCampaign(id: string): Promise<void> {
+  await request(`/api/campaigns/${id}`, { method: "DELETE" })
+}
+
+export async function scanCampaign(
+  id: string,
+  keys: ApiKeys,
+  hideClientKeys = false,
+  keywords?: string[],
+): Promise<{ campaign: Campaign; scan: ScanRun }> {
+  return request(`/api/campaigns/${id}/scan`, {
+    method: "POST",
+    body: JSON.stringify(hideClientKeys ? { keywords } : { keywords, ...keys }),
+  })
 }

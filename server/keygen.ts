@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { isSellerMode } from "./runtime.ts"
+import { readCollection, writeCollection } from "./store.ts"
 
 export type KeygenConfig = {
   accountId: string
@@ -46,7 +47,6 @@ export type ValidateResult = {
 const DATA_DIR = path.resolve(process.cwd(), ".data")
 const CONFIG_FILE = path.join(DATA_DIR, "keygen.json")
 const PUBLIC_FILE = path.join(DATA_DIR, "keygen-public.json")
-const ISSUED_FILE = path.join(DATA_DIR, "issued-licenses.json")
 const ACTIVATED_FILE = path.join(DATA_DIR, "activated-license.json")
 
 type ActivatedRecord = {
@@ -294,9 +294,7 @@ export async function createLicense(input: { name?: string; email?: string }): P
       createdAt: new Date().toISOString(),
       expiry: payload.data.attributes.expiry ?? null,
     }
-    const previous = readIssuedLicenses()
-    mkdirSync(DATA_DIR, { recursive: true })
-    writeFileSync(ISSUED_FILE, JSON.stringify([issued, ...previous].slice(0, 40), null, 2))
+    writeCollection("issued_licenses", [issued, ...readIssuedLicenses()].slice(0, 40))
     return { license: issued }
   } catch {
     return { error: "Could not reach Keygen." }
@@ -304,13 +302,8 @@ export async function createLicense(input: { name?: string; email?: string }): P
 }
 
 export function readIssuedLicenses(): IssuedLicense[] {
-  try {
-    if (!existsSync(ISSUED_FILE)) return []
-    const rows = JSON.parse(readFileSync(ISSUED_FILE, "utf8")) as IssuedLicense[]
-    return Array.isArray(rows) ? rows : []
-  } catch {
-    return []
-  }
+  const rows = readCollection<IssuedLicense>("issued_licenses")
+  return Array.isArray(rows) ? rows : []
 }
 
 const USER_ACTIVATED = path.join(os.homedir(), ".placefind", "activated-license.json")

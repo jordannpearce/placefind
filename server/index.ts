@@ -7,6 +7,7 @@ import {
   canManage,
   clearSession,
   createSession,
+  hasAdminUser,
   login,
   publicUser,
   readUsers,
@@ -31,6 +32,17 @@ import {
 import { mailStatus, readOutbox, sendMail, testResendConnection, welcomeEmail, writeMailConfig } from "./mail.ts"
 import { readProduct, writeProduct } from "./product.ts"
 import { isSellerMode } from "./runtime.ts"
+import {
+  CampaignError,
+  MAX_KEYWORDS,
+  createCampaign,
+  deleteCampaign,
+  getCampaign,
+  readCampaigns,
+  scanCampaign,
+  updateCampaign,
+} from "./campaigns.ts"
+import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
 import { testScrappey } from "./scrappey.ts"
 import { checkout, issueAndDeliver, listOrders, ordersForUser, publicOrder, shopSummary } from "./shop.ts"
@@ -64,6 +76,7 @@ function readQuery(body: Partial<SearchQuery>): { query: SearchQuery; error?: st
 }
 
 async function start() {
+  await initStore()
   const app = express()
   app.use(cors({ origin: true, credentials: true }))
   app.use(express.json({ limit: "1mb" }))
@@ -96,6 +109,7 @@ async function start() {
       seller: isSellerMode(),
       store: storeOpen(),
       admin: canManage(req.headers.cookie),
+      bootstrap: !hasAdminUser(),
       user,
       hosted: {
         included: hosted.included,
@@ -121,7 +135,7 @@ async function start() {
       return
     }
     const license = await licenseStatus()
-    if (license.required && !license.valid) {
+    if (license.required && !license.valid && !storeOpen()) {
       res.status(402).json({
         error: license.detail || "Enter a valid PlaceFind license key to search.",
         license,
@@ -134,6 +148,79 @@ async function start() {
       res.json(result)
     } catch {
       res.status(500).json({ error: "Search failed unexpectedly." })
+    }
+  })
+
+  app.get("/api/campaigns", (_req, res) => {
+    res.json({ campaigns: readCampaigns(), maxKeywords: MAX_KEYWORDS })
+  })
+
+  app.post("/api/campaigns", (req, res) => {
+    try {
+      res.status(201).json({ campaign: createCampaign(req.body ?? {}), maxKeywords: MAX_KEYWORDS })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not create the campaign." })
+    }
+  })
+
+  app.get("/api/campaigns/:id", (req, res) => {
+    const campaign = getCampaign(String(req.params.id ?? ""))
+    if (!campaign) {
+      res.status(404).json({ error: "That campaign was not found." })
+      return
+    }
+    res.json({ campaign, maxKeywords: MAX_KEYWORDS })
+  })
+
+  app.patch("/api/campaigns/:id", (req, res) => {
+    try {
+      res.json({ campaign: updateCampaign(String(req.params.id ?? ""), req.body ?? {}), maxKeywords: MAX_KEYWORDS })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not update the campaign." })
+    }
+  })
+
+  app.delete("/api/campaigns/:id", (req, res) => {
+    try {
+      deleteCampaign(String(req.params.id ?? ""))
+      res.json({ ok: true })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not delete the campaign." })
+    }
+  })
+
+  app.post("/api/campaigns/:id/scan", async (req, res) => {
+    const license = await licenseStatus()
+    if (license.required && !license.valid) {
+      res.status(402).json({
+        error: license.detail || "Enter a valid PlaceFind license key to scan ranks.",
+        license,
+      })
+      return
+    }
+    const body = (req.body ?? {}) as ApiKeys & { keywords?: string[] }
+    const keys = isSellerMode() ? body : {}
+    try {
+      const result = await scanCampaign(String(req.params.id ?? ""), keys, body.keywords)
+      res.json({ ...result, maxKeywords: MAX_KEYWORDS })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Rank scan failed unexpectedly." })
     }
   })
 
@@ -319,7 +406,12 @@ async function start() {
   })
 
   app.get("/api/auth/me", (req, res) => {
-    res.json({ user: actor(req), admin: canManage(req.headers.cookie), store: storeOpen() })
+    res.json({
+      user: actor(req),
+      admin: canManage(req.headers.cookie),
+      store: storeOpen(),
+      bootstrap: !hasAdminUser(),
+    })
   })
 
   app.post("/api/shop/checkout", async (req, res) => {
@@ -333,7 +425,7 @@ async function start() {
     res.json({
       order: publicOrder(result.order),
       license: result.license ?? null,
-      warning: result.error,
+      warning: publicCheckoutWarning(result.error),
     })
   })
 

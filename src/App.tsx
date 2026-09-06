@@ -1,6 +1,7 @@
 import { Download, Settings } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { AccountPage } from "./components/AccountPage.tsx"
+import { AdminLogin } from "./components/AdminLogin.tsx"
 import { AdminPage } from "./components/AdminPage.tsx"
 import { AppNav } from "./components/AppNav.tsx"
 import { AuthPage } from "./components/AuthPage.tsx"
@@ -9,6 +10,7 @@ import { DownloadPage } from "./components/DownloadPage.tsx"
 import { LicenseGate } from "./components/LicenseGate.tsx"
 import { ResultPanel } from "./components/ResultPanel.tsx"
 import { SearchForm } from "./components/SearchForm.tsx"
+import { TrackPage } from "./components/TrackPage.tsx"
 import { SellPage } from "./components/SellPage.tsx"
 import { SettingsPanel } from "./components/SettingsPanel.tsx"
 import { loadRuntime, searchBusiness } from "./lib/api.ts"
@@ -20,8 +22,9 @@ const emptyQuery = (): SearchQuery => ({ name: "", city: "", state: "" })
 
 function allowedPath(next: AppPath, access: { store: boolean; admin: boolean; user: AuthUser | null }): AppPath {
   if (next === "/") return "/"
-  if (next === "/sell" && access.admin) return "/sell"
-  if (next === "/admin" && access.admin) return "/admin"
+  if (next === "/track") return "/track"
+  if (next === "/admin") return "/admin"
+  if (next === "/sell") return access.admin ? "/sell" : "/admin"
   if (next === "/download" && (access.admin || access.store)) return "/download"
   if (next === "/buy" && access.store) return "/buy"
   if ((next === "/login" || next === "/join") && access.store) return access.user ? "/account" : next
@@ -39,9 +42,10 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [hosted, setHosted] = useState<HostedKeyStatus | null>(null)
-  const [seller, setSeller] = useState(true)
+  const [seller, setSeller] = useState(false)
   const [store, setStore] = useState(true)
-  const [admin, setAdmin] = useState(true)
+  const [admin, setAdmin] = useState(false)
+  const [bootstrap, setBootstrap] = useState(false)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [license, setLicense] = useState<LicenseStatus | null>(null)
 
@@ -58,6 +62,7 @@ export default function App() {
         setSeller(runtime.seller)
         setStore(runtime.store)
         setAdmin(runtime.admin)
+        setBootstrap(Boolean(runtime.bootstrap))
         setUser(runtime.user)
         setLicense(runtime.license)
         const dest = allowedPath(currentPath(), {
@@ -86,15 +91,22 @@ export default function App() {
     setPath("/account")
   }
 
+  function onAdminAuthed(next: AuthUser) {
+    setUser(next)
+    setAdmin(next.role === "admin")
+    setBootstrap(false)
+    window.history.replaceState({}, "", "/admin")
+    setPath("/admin")
+  }
+
   const modeLabel = useMemo(() => {
     const dfs = Boolean((keys.dataforseoLogin && keys.dataforseoPassword) || hosted?.dataforseo)
     const scrappey = Boolean(keys.scrappeyKey || hosted?.scrappey)
-    const licensed = license?.configured ? (license.valid ? "Licensed · " : "License needed · ") : ""
-    if (dfs && scrappey) return `${licensed}${hosted?.included ? "Maps search is ready" : "Live Maps + listing page"}`
-    if (dfs) return `${licensed}Live Maps search`
-    if (scrappey) return `${licensed}Live listing page`
-    return `${licensed}Sample mode`
-  }, [keys, hosted, license])
+    const licensed = !store && license?.configured ? (license.valid ? "Licensed · " : "License needed · ") : ""
+    if (dfs && scrappey) return `${licensed}${hosted?.included || store ? "Maps search is ready" : "Live Maps search"}`
+    if (dfs || scrappey) return `${licensed}Live Maps search`
+    return `${licensed}Sample preview`
+  }, [keys, hosted, license, store])
 
   async function runSearch(next = query) {
     setLoading(true)
@@ -129,7 +141,8 @@ export default function App() {
     void runSearch(next)
   }
 
-  const lookupBlocked = Boolean(license?.required && !license.valid)
+  const lookupBlocked = Boolean(license?.required && !license.valid && !store)
+  const showSettings = admin || !store
 
   return (
     <div className="min-h-screen bg-ink">
@@ -152,7 +165,7 @@ export default function App() {
                 Export
               </button>
             )}
-            {path === "/" && !lookupBlocked && (
+            {showSettings && (path === "/" || path === "/track") && !lookupBlocked && (
               <button
                 type="button"
                 onClick={() => setSettingsOpen(true)}
@@ -166,14 +179,16 @@ export default function App() {
         </header>
 
         {admin && path === "/sell" && <SellPage />}
-        {admin && path === "/admin" && <AdminPage />}
-        {(admin || store) && path === "/download" && <DownloadPage />}
-        {store && path === "/buy" && <BuyPage user={user} onAuthed={onAuthed} />}
+        {path === "/admin" && admin && <AdminPage />}
+        {path === "/admin" && !admin && <AdminLogin bootstrap={bootstrap} onAuthed={onAdminAuthed} />}
+        {(admin || store) && path === "/download" && <DownloadPage onTryScan={() => go("/")} />}
+        {store && path === "/buy" && <BuyPage user={user} onAuthed={onAuthed} onTryScan={() => go("/")} />}
         {store && path === "/account" && user && (
           <AccountPage
             user={user}
             onLogout={() => {
               setUser(null)
+              setAdmin(false)
               window.history.pushState({}, "", "/login")
               setPath("/login")
             }}
@@ -188,11 +203,18 @@ export default function App() {
             onGoLogin={() => go("/login")}
           />
         )}
-        {path === "/" && lookupBlocked && license && <LicenseGate license={license} onActivated={setLicense} />}
+        {(path === "/" || path === "/track") && lookupBlocked && license && (
+          <LicenseGate license={license} onActivated={setLicense} />
+        )}
+        {path === "/track" && !lookupBlocked && <TrackPage keys={keys} hosted={hosted} seller={seller} />}
         {path === "/" && !lookupBlocked && (
           <div className="grid flex-1 gap-6 lg:grid-cols-[20rem_1fr]">
             <aside className="rounded-2xl border border-line bg-panel p-5">
-              <p className="mb-4 text-sm text-muted">Search a business on Google Maps by name and city.</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Try PlaceFind</p>
+              <h2 className="mt-1 font-display text-2xl text-paper">Test scan</h2>
+              <p className="mb-4 mt-2 text-sm leading-6 text-muted">
+                This preview shows what the Windows app does. Enter a business name, city, and state.
+              </p>
               <SearchForm
                 query={query}
                 onChange={setQuery}
@@ -200,6 +222,7 @@ export default function App() {
                 loading={loading}
                 history={history}
                 onHistory={useHistory}
+                submitLabel="Run test scan"
               />
               <p className="mt-5 border-t border-line pt-4 text-xs text-muted">{modeLabel}</p>
             </aside>

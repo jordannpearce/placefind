@@ -13,12 +13,14 @@
     "test": "tsx --test server/*.test.ts",
     "lint": "oxlint",
     "preview": "tsx server/index.ts",
+    "start": "NODE_ENV=production node dist-server/index.js",
     "dist:win": "npm run build && electron-builder --win dir --x64 && tsx scripts/make-windows-setup.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "lucide-react": "^0.544.0",
+    "pg": "^8.23.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
@@ -27,6 +29,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/node": "^24.13.3",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
@@ -74,11 +77,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },

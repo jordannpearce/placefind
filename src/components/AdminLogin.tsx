@@ -3,28 +3,25 @@ import { login, signup } from "../lib/api.ts"
 import type { AuthUser } from "../lib/types.ts"
 
 type Props = {
-  mode: "login" | "join"
+  bootstrap: boolean
   onAuthed: (user: AuthUser) => void
-  onGoJoin: () => void
-  onGoLogin: () => void
 }
 
-export function AuthPage({ mode, onAuthed, onGoJoin, onGoLogin }: Props) {
+export function AdminLogin({ bootstrap, onAuthed }: Props) {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const join = mode === "join"
 
   return (
     <section className="mx-auto w-full max-w-md rounded-2xl border border-line bg-panel p-8">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">{join ? "Create account" : "Sign in"}</p>
-      <h2 className="mt-2 font-display text-3xl text-paper">{join ? "Get a PlaceFind account" : "Welcome back"}</h2>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Admin</p>
+      <h2 className="mt-2 font-display text-3xl text-paper">{bootstrap ? "Create the first admin" : "Admin sign in"}</h2>
       <p className="mt-3 text-sm leading-6 text-muted">
-        {join
-          ? "Create an account to buy PlaceFind. We will email you a welcome message."
-          : "Sign in to see your license keys and download the Windows setup."}
+        {bootstrap
+          ? "No accounts exist yet. Create the first admin to manage licenses and the Windows setup."
+          : "Sign in with an admin account. This page does not list customers or keys until you are signed in."}
       </p>
       <form
         className="mt-6 grid gap-3"
@@ -33,7 +30,14 @@ export function AuthPage({ mode, onAuthed, onGoJoin, onGoLogin }: Props) {
           setBusy(true)
           setError(null)
           try {
-            onAuthed(join ? await signup({ name, email, password }) : await login({ email, password }))
+            const user = bootstrap
+              ? await signup({ name, email, password })
+              : await login({ email, password })
+            if (user.role !== "admin") {
+              setError("This account is not an admin.")
+              return
+            }
+            onAuthed(user)
           } catch (err) {
             setError(err instanceof Error ? err.message : "Could not continue.")
           } finally {
@@ -41,7 +45,7 @@ export function AuthPage({ mode, onAuthed, onGoJoin, onGoLogin }: Props) {
           }
         }}
       >
-        {join && (
+        {bootstrap && (
           <label className="grid gap-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Name</span>
             <input
@@ -75,15 +79,9 @@ export function AuthPage({ mode, onAuthed, onGoJoin, onGoLogin }: Props) {
           disabled={busy}
           className="h-11 rounded-lg bg-brass font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
         >
-          {busy ? "Working…" : join ? "Create account" : "Sign in"}
+          {busy ? "Working…" : bootstrap ? "Create admin" : "Sign in"}
         </button>
       </form>
-      <p className="mt-4 text-sm text-muted">
-        {join ? "Already have an account?" : "Need an account?"}{" "}
-        <button type="button" className="text-brass hover:underline" onClick={join ? onGoLogin : onGoJoin}>
-          {join ? "Sign in" : "Create one"}
-        </button>
-      </p>
     </section>
   )
 }

@@ -1,7 +1,6 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import path from "node:path"
-import { isPackagedBuyer, isSellerMode } from "./runtime.ts"
+import { isPackagedBuyer } from "./runtime.ts"
+import { readCollection, writeCollection } from "./store.ts"
 
 export type UserRole = "customer" | "admin"
 
@@ -28,24 +27,7 @@ type Session = {
   createdAt: string
 }
 
-const DATA_DIR = path.resolve(process.cwd(), ".data")
-const USERS_FILE = path.join(DATA_DIR, "users.json")
-const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json")
 export const SESSION_COOKIE = "pf_session"
-
-function readJson<T>(file: string, fallback: T): T {
-  try {
-    if (!existsSync(file)) return fallback
-    return JSON.parse(readFileSync(file, "utf8")) as T
-  } catch {
-    return fallback
-  }
-}
-
-function writeJson(file: string, value: unknown) {
-  mkdirSync(DATA_DIR, { recursive: true })
-  writeFileSync(file, JSON.stringify(value, null, 2))
-}
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
@@ -71,21 +53,21 @@ export function publicUser(user: User): PublicUser {
 }
 
 export function readUsers(): User[] {
-  const rows = readJson<User[]>(USERS_FILE, [])
+  const rows = readCollection<User>("users")
   return Array.isArray(rows) ? rows : []
 }
 
 function writeUsers(users: User[]) {
-  writeJson(USERS_FILE, users)
+  writeCollection("users", users)
 }
 
 function readSessions(): Session[] {
-  const rows = readJson<Session[]>(SESSIONS_FILE, [])
+  const rows = readCollection<Session>("sessions")
   return Array.isArray(rows) ? rows : []
 }
 
 function writeSessions(sessions: Session[]) {
-  writeJson(SESSIONS_FILE, sessions)
+  writeCollection("sessions", sessions.slice(0, 200))
 }
 
 export function findUserByEmail(email: string) {
@@ -181,11 +163,19 @@ export function sessionCookie(token: string, clear = false) {
   return parts.join("; ")
 }
 
+export function canLocalBootstrap() {
+  if (isPackagedBuyer()) return false
+  if (process.env.NODE_ENV === "production") return false
+  return readUsers().length === 0
+}
+
 export function canManage(header?: string) {
   if (isPackagedBuyer()) return false
   const user = userFromCookie(header)
   if (user?.role === "admin") return true
-  return isSellerMode()
+  // Seller/dev mode is never admin. The only bootstrap is the first account
+  // (or ADMIN_EMAIL) becoming an admin — not an open admin session.
+  return false
 }
 
 export function storeOpen() {

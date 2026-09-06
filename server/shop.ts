@@ -1,11 +1,10 @@
 import { randomBytes } from "node:crypto"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import path from "node:path"
 import type { PublicUser } from "./auth.ts"
 import { findUserByEmail } from "./auth.ts"
 import { createLicense, keygenPublicStatus, type IssuedLicense } from "./keygen.ts"
 import { licenseEmail, pendingLicenseEmail, sendMail } from "./mail.ts"
 import { readProduct } from "./product.ts"
+import { readCollection, writeCollection } from "./store.ts"
 
 export type OrderStatus = "paid" | "pending_license"
 
@@ -22,22 +21,13 @@ export type Order = {
   emailedAt: string | null
 }
 
-const DATA_DIR = path.resolve(process.cwd(), ".data")
-const ORDERS_FILE = path.join(DATA_DIR, "orders.json")
-
 function readOrders(): Order[] {
-  try {
-    if (!existsSync(ORDERS_FILE)) return []
-    const rows = JSON.parse(readFileSync(ORDERS_FILE, "utf8")) as Order[]
-    return Array.isArray(rows) ? rows : []
-  } catch {
-    return []
-  }
+  const rows = readCollection<Order>("orders")
+  return Array.isArray(rows) ? rows : []
 }
 
 function writeOrders(orders: Order[]) {
-  mkdirSync(DATA_DIR, { recursive: true })
-  writeFileSync(ORDERS_FILE, JSON.stringify(orders.slice(0, 200), null, 2))
+  writeCollection("orders", orders.slice(0, 200))
 }
 
 export function listOrders() {
