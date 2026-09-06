@@ -1,12 +1,12 @@
 import { randomBytes } from "node:crypto"
 import { scanMapsGrid, searchDataForSeo } from "./dataforseo.ts"
+import { geocodeCityState } from "./geocode.ts"
 import { formatLocationCoordinate, type GridPoint as MapsGridPoint } from "./grid.ts"
 import { mergeHostedKeys } from "./hosted-keys.ts"
 import { mapsPlaceUrl } from "./match.ts"
 import { publicSearchMessage } from "./public-copy.ts"
 import { rankFromMapsItems, rankOfBusiness } from "./rank.ts"
 import { isSellerMode } from "./runtime.ts"
-import { toStateName } from "./states.ts"
 import { readCollection, writeCollection } from "./store.ts"
 import type { ApiKeys } from "./types.ts"
 
@@ -382,23 +382,7 @@ export function mapsKeysMissingMessage() {
 }
 
 export async function geocodeCity(city: string, state: string): Promise<GeoPoint | null> {
-  const query = [city, toStateName(state), "United States"].filter(Boolean).join(", ")
-  try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`,
-      {
-        headers: { Accept: "application/json", "User-Agent": "PlaceFind/1.0 (maps rank tracker)" },
-      },
-    )
-    if (!response.ok) return null
-    const rows = (await response.json()) as Array<{ lat?: string; lon?: string }>
-    const lat = Number(rows[0]?.lat)
-    const lng = Number(rows[0]?.lon)
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
-    return { lat, lng }
-  } catch {
-    return null
-  }
+  return geocodeCityState(city, state)
 }
 
 export async function resolveCampaignCenter(
