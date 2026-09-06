@@ -13,7 +13,7 @@ type Props = {
   onError: (message: string | null) => void
 }
 
-export function KeygenPanel({ keygen, issued, installerRunning, onKeygen, onIssued, onInstaller, onError }: Props) {
+export function KeygenPanel({ keygen, issued = [], installerRunning, onKeygen, onIssued, onInstaller, onError }: Props) {
   const [accountId, setAccountId] = useState("")
   const [productId, setProductId] = useState("")
   const [policyId, setPolicyId] = useState("")

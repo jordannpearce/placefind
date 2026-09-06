@@ -32,7 +32,7 @@ export function SellPage() {
     setInstaller(store.installer)
     setHosted(store.hosted)
     setKeygen(store.keygen)
-    setIssued(store.issued)
+    setIssued(store.issued ?? [])
     setPrice(store.product.price)
     setPitch(store.product.pitch)
   }
