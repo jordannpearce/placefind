@@ -27,7 +27,7 @@ import {
   updateManagedUser,
   userFromCookie,
 } from "./auth.ts"
-import { deleteManagedAccount } from "./account-purge.ts"
+import { deleteManagedAccount, purgeLeftoverSampleUsers } from "./account-purge.ts"
 import { testDataForSeo } from "./dataforseo.ts"
 import { hostedKeyStatus, hydrateHostedKeys, readHostedKeys, writeHostedKeys } from "./hosted-keys.ts"
 import { getInstallerStatus, installerPath, startInstallerBuild, startSetupRepack } from "./installer.ts"
@@ -126,6 +126,12 @@ function readQuery(body: Partial<SearchQuery>): { query: SearchQuery; error?: st
 
 async function start() {
   await initStore()
+  const removedSampleUsers = purgeLeftoverSampleUsers()
+  if (removedSampleUsers.length) {
+    console.log(
+      `Removed ${removedSampleUsers.length} leftover sample user(s): ${removedSampleUsers.map((user) => user.email).join(", ")}`,
+    )
+  }
   await initGeoPoints()
   await hydrateHostedKeys()
   recoverStaleTrafficJobs()

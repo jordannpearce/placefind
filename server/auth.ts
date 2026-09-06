@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto"
+import path from "node:path"
 import { isPackagedBuyer } from "./runtime.ts"
-import { readCollection, writeCollection } from "./store.ts"
+import { dataDir, readCollection, writeCollection } from "./store.ts"
 
 export type UserRole = "customer" | "admin"
 export type UserStatus = "active" | "suspended"
@@ -63,6 +64,30 @@ export function hashResetToken(token: string) {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
+}
+
+const RESERVED_SAMPLE_HOSTS = new Set(["example.com", "example.net", "example.org", "example.edu", "example.test", "example", "test", "invalid", "localhost"])
+
+export function isReservedSampleEmail(email: string) {
+  const host = normalizeEmail(email).split("@")[1] ?? ""
+  if (!host) return false
+  if (RESERVED_SAMPLE_HOSTS.has(host)) return true
+  const parts = host.split(".")
+  for (let i = 0; i < parts.length; i += 1) {
+    if (RESERVED_SAMPLE_HOSTS.has(parts.slice(i).join("."))) return true
+  }
+  return false
+}
+
+export function isLiveAppStore() {
+  return path.resolve(dataDir()) === path.resolve(process.cwd(), ".data")
+}
+
+function rejectLiveSampleEmail(email: string): { error: string } | null {
+  if (isLiveAppStore() && isReservedSampleEmail(email)) {
+    return { error: "Use a real email address." }
+  }
+  return null
 }
 
 export function hashPassword(password: string) {
@@ -152,6 +177,8 @@ export function signup(input: { name: string; email: string; password: string })
   if (name.length < 2) return { error: "Enter your name." }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email." }
   if (password.length < 8) return { error: "Use a password with at least 8 characters." }
+  const liveSample = rejectLiveSampleEmail(email)
+  if (liveSample) return liveSample
   const existing = findUserByEmail(email)
   if (existing && userStatus(existing) === "suspended") return { error: "This account is suspended." }
   if (existing) return { error: "An account with that email already exists." }
@@ -217,6 +244,8 @@ export function createManagedUser(input: {
   const parsed = validateProfile({ ...input, requirePassword: true })
   if ("error" in parsed && parsed.error) return { error: parsed.error }
   const { name, email } = parsed as { name: string; email: string }
+  const liveSample = rejectLiveSampleEmail(email)
+  if (liveSample) return liveSample
   const role = parseRole(input.role ?? "customer")
   if (!role) return { error: "Role must be customer or admin." }
   if (findUserByEmail(email)) return { error: "An account with that email already exists." }
@@ -249,6 +278,8 @@ export function updateManagedUser(
   })
   if ("error" in parsed && parsed.error) return { error: parsed.error }
   const { name, email } = parsed as { name: string; email: string }
+  const liveSample = rejectLiveSampleEmail(email)
+  if (liveSample) return liveSample
   const other = findUserByEmail(email)
   if (other && other.id !== id) return { error: "An account with that email already exists." }
   let role = current.role
@@ -314,6 +345,8 @@ export function seedAdminAccount(input: { email: string; password: string; name?
   const name = (input.name ?? "Admin").trim() || "Admin"
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid admin email." }
   if (password.length < 8) return { error: "Use a password with at least 8 characters." }
+  const liveSample = rejectLiveSampleEmail(email)
+  if (liveSample) return liveSample
   const existing = findUserByEmail(email)
   if (existing) {
     const users = readUsers()

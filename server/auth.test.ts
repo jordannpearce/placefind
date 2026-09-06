@@ -9,6 +9,8 @@ import {
   createManagedUser,
   createSession,
   deleteManagedUser,
+  isLiveAppStore,
+  isReservedSampleEmail,
   FORGOT_PASSWORD_MESSAGE,
   hashPassword,
   hashResetToken,
@@ -397,5 +399,57 @@ describe("admin account management", () => {
     assert.equal(deleteManagedUser(admin.user!.id, admin.user!.id).error, "You cannot delete your own account.")
     assert.equal(setUserStatus(admin.user!.id, "suspended", admin.user!.id).error, "You cannot suspend your own account.")
     assert.equal(updateManagedUser(admin.user!.id, { role: "customer" }, admin.user!.id).error, "Keep at least one active admin.")
+  })
+
+  it("still allows reserved sample emails inside isolated test stores", () => {
+    isolate()
+    assert.equal(isLiveAppStore(), false)
+    const created = signup({ name: "Casey", email: "casey-dir@example.com", password: "password12" })
+    assert.equal(created.user?.email, "casey-dir@example.com")
+    const managed = createManagedUser({
+      name: "Jordan",
+      email: "jordan-dir@example.test",
+      password: "password12",
+      role: "customer",
+    })
+    assert.equal(managed.user?.email, "jordan-dir@example.test")
+  })
+
+  it("refuses reserved sample emails in the live app store without writing them", () => {
+    const previous = process.env.PLACEFIND_DATA_DIR
+    try {
+      process.env.PLACEFIND_DATA_DIR = path.resolve(process.cwd(), ".data")
+      reloadStoreFromDisk()
+      assert.equal(isLiveAppStore(), true)
+      const before = new Set(readCollection<User>("users").map((user) => user.email))
+      const signupEmail = `guard-signup-${Date.now()}@example.com`
+      const managedEmail = `guard-managed-${Date.now()}@example.test`
+      const created = signup({ name: "Walkthrough", email: signupEmail, password: "password12" })
+      assert.equal(created.error, "Use a real email address.")
+      const managed = createManagedUser({
+        name: "Accounts Desk",
+        email: managedEmail,
+        password: "password12",
+        role: "admin",
+      })
+      assert.equal(managed.error, "Use a real email address.")
+      const after = readCollection<User>("users").map((user) => user.email)
+      assert.equal(after.includes(signupEmail), false)
+      assert.equal(after.includes(managedEmail), false)
+      assert.deepEqual(new Set(after), before)
+    } finally {
+      if (previous == null) delete process.env.PLACEFIND_DATA_DIR
+      else process.env.PLACEFIND_DATA_DIR = previous
+    }
+  })
+})
+
+describe("reserved sample emails", () => {
+  it("flags RFC example and test domains used by leftover walkthrough accounts", () => {
+    assert.equal(isReservedSampleEmail("casey-dir@example.com"), true)
+    assert.equal(isReservedSampleEmail("accounts.desk@example.test"), true)
+    assert.equal(isReservedSampleEmail("buyer@example.com"), true)
+    assert.equal(isReservedSampleEmail("tmrapp1995@gmail.com"), false)
+    assert.equal(isReservedSampleEmail("hello@info.gridpins.com"), false)
   })
 })

@@ -3,8 +3,8 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
-import { deleteManagedAccount } from "./account-purge.ts"
-import { createManagedUser, signup } from "./auth.ts"
+import { deleteManagedAccount, purgeLeftoverSampleUsers } from "./account-purge.ts"
+import { createManagedUser, readUsers, signup } from "./auth.ts"
 import { createListing, getListing, listingsForUser } from "./listings.ts"
 import { createReview, reviewsForListing } from "./reviews.ts"
 import { consumeMonthlyUsage, readMonthlyUsage } from "./usage.ts"
@@ -37,5 +37,27 @@ describe("admin account purge", () => {
     assert.equal(listingsForUser(customer.user!.id).length, 0)
     assert.throws(() => getListing(listing.id), /not in the directory/)
     assert.equal(readMonthlyUsage(customer.user!.id).rankScans, 0)
+  })
+
+  it("removes leftover reserved-domain users from a store and keeps real accounts", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-sample-purge-")))
+    const keeper = signup({ name: "TM", email: "tmrapp1995@gmail.com", password: "password12" })
+    const sample = createManagedUser({
+      name: "Casey Owner",
+      email: "casey-dir@example.com",
+      password: "password12",
+      role: "customer",
+    })
+    const listing = createListing({ name: "Harbor Street Cafe", city: "Portland", state: "OR" }, sample.user!.id)
+    const removed = purgeLeftoverSampleUsers()
+    assert.deepEqual(
+      removed.map((user) => user.email),
+      ["casey-dir@example.com"],
+    )
+    assert.deepEqual(
+      readUsers().map((user) => user.email),
+      [keeper.user!.email],
+    )
+    assert.throws(() => getListing(listing.id), /not in the directory/)
   })
 })
