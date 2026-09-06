@@ -1,11 +1,12 @@
 import { randomBytes } from "node:crypto"
+import path from "node:path"
 import { formatStreetAddress, parseStreetAddress } from "../src/lib/address.ts"
 import { normalizeKeywords } from "../src/lib/keywords.ts"
 import { listingSlugFromParts, mapsCategory } from "../src/lib/listings.ts"
 import { LISTING_MONTHLY_PRICE } from "../src/lib/pricing.ts"
 import { mapsPlaceUrl } from "./match.ts"
 import { toStateAbbr } from "./states.ts"
-import { readCollection, writeCollection } from "./store.ts"
+import { dataDir, readCollection, writeCollection } from "./store.ts"
 import type { BusinessListing, SearchQuery, SearchResponse } from "./types.ts"
 
 export const SEED_OWNER_ID = "seed-directory"
@@ -430,8 +431,13 @@ export function publicListing(listing: DirectoryListing, includeOwner = false) {
   }
 }
 
+function isLiveAppStore() {
+  return path.resolve(dataDir()) === path.resolve(process.cwd(), ".data")
+}
+
 /** Test helper only. Do not call from server startup or live store reads. */
 export function seedDirectoryListings(force = false): DirectoryListing[] {
+  if (isLiveAppStore()) return readListings()
   const existing = readListings()
   if (existing.length > 0 && !force) {
     const seeded = new Map(

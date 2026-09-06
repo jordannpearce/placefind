@@ -38,6 +38,14 @@ describe("directory listings", () => {
     assert.equal(listPublicListings({ city: "Portland" }).length, 0)
   })
 
+  it("refuses to write seed listings into the live .data store", () => {
+    delete process.env.PLACEFIND_DATA_DIR
+    reloadStoreFromDisk()
+    const before = listPublicListings().map((row) => row.id).sort()
+    const after = seedDirectoryListings(true).map((row) => row.id).sort()
+    assert.deepEqual(after, before)
+  })
+
   it("seeds local businesses and filters by city, state, and keyword", () => {
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-listings-")))
     const seeded = seedDirectoryListings()

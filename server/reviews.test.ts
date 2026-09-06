@@ -49,6 +49,14 @@ describe("signed-in reviews", () => {
     assert.ok(seeded.some((row) => row.id === "seed-review-1"))
   })
 
+  it("refuses to write seed reviews into the live .data store", () => {
+    delete process.env.PLACEFIND_DATA_DIR
+    reloadStoreFromDisk()
+    const before = reviewsForListing("seed-1").map((row) => row.id).sort()
+    const after = seedDirectoryReviews(true).filter((row) => row.listingId === "seed-1").map((row) => row.id).sort()
+    assert.deepEqual(after, before)
+  })
+
   it("rejects an anonymous review and saves a signed-in review", async () => {
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-reviews-")))
     seedDirectoryListings()

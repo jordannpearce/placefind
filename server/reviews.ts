@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto"
+import path from "node:path"
 import { reviewSummary, validateReview, type ListingReview } from "../src/lib/reviews.ts"
 import { getListing, ListingError } from "./listings.ts"
-import { readCollection, writeCollection } from "./store.ts"
+import { dataDir, readCollection, writeCollection } from "./store.ts"
 
 const SEED_REVIEWS: Omit<ListingReview, "id">[] = [
   {
@@ -70,8 +71,13 @@ function writeReviews(rows: ListingReview[]) {
   writeCollection("reviews", rows)
 }
 
+function isLiveAppStore() {
+  return path.resolve(dataDir()) === path.resolve(process.cwd(), ".data")
+}
+
 /** Test helper only. Do not call from server startup or live store reads. */
 export function seedDirectoryReviews(force = false): ListingReview[] {
+  if (isLiveAppStore()) return readReviews()
   const existing = readReviews()
   if (existing.length > 0 && !force) return existing
   const seeded = SEED_REVIEWS.map((row, index) => ({ ...row, id: `seed-review-${index + 1}` }))
