@@ -86,6 +86,8 @@ import { startScheduler } from "./scheduler.ts"
 import { getCampaignTraffic, recoverStaleTrafficJobs, startCampaignTraffic, stopCampaignTraffic } from "./traffic.ts"
 import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
+import { requestIp, runWebsiteSearch } from "./search-limit.ts"
+import { readSearchQuery } from "./search-query.ts"
 import { initStore } from "./store.ts"
 import { testScrappey } from "./scrappey.ts"
 import { attachUserLicense, checkout, issueAndDeliver, listOrders, ordersForUser, publicOrder, shopSummary } from "./shop.ts"
@@ -109,13 +111,7 @@ const PORT = Number(process.env.PORT || 43141)
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 
 function readQuery(body: Partial<SearchQuery>): { query: SearchQuery; error?: string } {
-  const name = body.name?.trim() ?? ""
-  const city = body.city?.trim() ?? ""
-  const state = body.state?.trim() ?? ""
-  if (name.length < 2) return { query: { name, city, state }, error: "Enter a business name." }
-  if (city.length < 2) return { query: { name, city, state }, error: "Enter the city." }
-  if (!state) return { query: { name, city, state }, error: "Choose a state." }
-  return { query: { name, city, state } }
+  return readSearchQuery(body)
 }
 
 async function start() {
@@ -124,6 +120,7 @@ async function start() {
   await hydrateHostedKeys()
   recoverStaleTrafficJobs()
   const app = express()
+  app.set("trust proxy", 1)
   app.use(cors({ origin: true, credentials: true }))
   app.use((req, res, next) => {
     if (req.path === "/api/admin/geo-points" && req.method === "POST") {
@@ -217,8 +214,18 @@ async function start() {
       return
     }
     const keys = isSellerMode() ? ((req.body ?? {}) as ApiKeys) : {}
+    const user = actor(req)
     try {
-      const result = await searchBusiness(parsed.query, keys)
+      if (desktop) {
+        res.json(await searchBusiness(parsed.query, keys))
+        return
+      }
+      const result = await runWebsiteSearch({
+        query: parsed.query,
+        search: (query) => searchBusiness(query, keys),
+        signedIn: Boolean(user),
+        ip: requestIp(req),
+      })
       res.json(result)
     } catch {
       res.status(500).json({ error: "Search failed unexpectedly." })

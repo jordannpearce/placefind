@@ -1,5 +1,6 @@
 import { chunkTasks, formatLocationCoordinate, mapsGridTask, type GridPoint } from "./grid.ts"
 import { mapsPlaceUrl } from "./match.ts"
+import { mapsKeywordFromQuery } from "./search-query.ts"
 import { toStateAbbr, toStateName } from "./states.ts"
 import type { BusinessListing, HoursRow, KeyTestResult, SearchQuery } from "./types.ts"
 
@@ -308,7 +309,7 @@ export async function searchDataForSeo(
       ? mapsKeyword
       : { keyword: mapsKeyword, coordinate }
   const location = [query.city, toStateName(query.state), "United States"].filter(Boolean).join(",")
-  const keyword = options.keyword?.trim() || [query.name, query.city, toStateName(query.state)].filter(Boolean).join(" ")
+  const keyword = options.keyword?.trim() || mapsKeywordFromQuery(query)
   const point = options.coordinate
   const task = {
     language_code: "en",

@@ -28,7 +28,11 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 function ListingCard({ listing, featured }: { listing: BusinessListing; featured?: boolean }) {
   const source = publicListingSource(listing.source)
   return (
-    <article className={`rounded-2xl border p-5 ${featured ? "border-brass/50 bg-raised" : "border-line bg-panel"}`}>
+    <article className={`overflow-hidden rounded-2xl border ${featured ? "border-brass/50 bg-raised" : "border-line bg-panel"}`}>
+      {listing.image && (
+        <img src={listing.image} alt="" className="h-44 w-full object-cover" />
+      )}
+      <div className="p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           {featured && (
@@ -110,6 +114,7 @@ function ListingCard({ listing, featured }: { listing: BusinessListing; featured
           </a>
         )}
       </div>
+      </div>
     </article>
   )
 }
@@ -118,9 +123,11 @@ type Props = {
   loading: boolean
   result: SearchResponse | null
   error: string | null
+  emptyTitle?: string
+  emptyBody?: string
 }
 
-export function ResultPanel({ loading, result, error }: Props) {
+export function ResultPanel({ loading, result, error, emptyTitle, emptyBody }: Props) {
   if (loading) {
     return (
       <div className="rounded-2xl border border-line bg-panel p-8">
@@ -142,7 +149,7 @@ export function ResultPanel({ loading, result, error }: Props) {
   if (error) {
     return (
       <div className="rounded-2xl border border-clay/40 bg-panel p-8">
-        <p className="font-display text-2xl text-paper">The test scan did not finish</p>
+        <p className="font-display text-2xl text-paper">The lookup did not finish</p>
         <p className="mt-2 text-sm text-muted">{publicSearchMessage(error)}</p>
       </div>
     )
@@ -151,10 +158,10 @@ export function ResultPanel({ loading, result, error }: Props) {
   if (!result) {
     return (
       <div className="rounded-2xl border border-dashed border-line bg-panel/60 p-8">
-        <p className="font-display text-3xl text-paper">See what PlaceFind does</p>
+        <p className="font-display text-3xl text-paper">{emptyTitle || "Look up a listing"}</p>
         <p className="mt-3 max-w-md text-sm leading-6 text-muted">
-          This is a preview of PlaceFind on Windows. Enter a business name, city, and state to look up a Google Maps
-          listing — name, address, phone, rating, and a Maps link.
+          {emptyBody ||
+            "Enter a business name or a keyword, plus the city and state, to pull the Google Maps listing."}
         </p>
       </div>
     )

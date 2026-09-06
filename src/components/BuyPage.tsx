@@ -49,7 +49,7 @@ export function BuyPage({ user, onAuthed, onTryScan }: Props) {
             onClick={onTryScan}
             className="mt-5 inline-flex h-11 items-center rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
           >
-            Run a test scan
+            See a sample listing
           </button>
         )}
 

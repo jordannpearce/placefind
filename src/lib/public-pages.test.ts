@@ -1,0 +1,53 @@
+import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import path from "node:path"
+import { describe, it } from "node:test"
+import { fileURLToPath } from "node:url"
+import { LEGAL_PAGES, legalNavLinks } from "./legal.ts"
+import { isPublicVendorLeak } from "./public-copy.ts"
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+
+const PUBLIC_FILES = [
+  "App.tsx",
+  "components/HomePage.tsx",
+  "components/LegalPage.tsx",
+  "components/SiteFooter.tsx",
+  "components/SearchForm.tsx",
+  "components/ResultPanel.tsx",
+  "components/BuyPage.tsx",
+  "components/DownloadPage.tsx",
+  "components/AuthPage.tsx",
+  "components/AccountPage.tsx",
+  "lib/legal.ts",
+  "lib/nav.ts",
+]
+
+describe("public website copy", () => {
+  it("has footer legal links without vendor names", () => {
+    const labels = legalNavLinks().map((link) => link.label)
+    assert.deepEqual(labels, ["Terms", "Policy", "Email policy", "Data policy", "Refunds"])
+    for (const page of LEGAL_PAGES) {
+      assert.equal(isPublicVendorLeak(page.title + page.intro), false, page.title)
+      for (const section of page.sections) {
+        assert.equal(isPublicVendorLeak(section.heading), false, section.heading)
+        for (const paragraph of section.body) {
+          assert.equal(isPublicVendorLeak(paragraph), false, paragraph.slice(0, 80))
+          assert.equal(/\bip address\b|per ip|we log your|rate limit/i.test(paragraph), false, paragraph.slice(0, 80))
+        }
+      }
+    }
+  })
+
+  it("keeps public UI files free of vendor names", () => {
+    for (const rel of PUBLIC_FILES) {
+      const text = readFileSync(path.join(root, rel), "utf8")
+      assert.equal(isPublicVendorLeak(text), false, rel)
+    }
+  })
+
+  it("does not advertise a used-search or IP limit", () => {
+    const home = readFileSync(path.join(root, "components/HomePage.tsx"), "utf8")
+    assert.equal(/already in use|you('ve| have) used|ip limit|logged your ip/i.test(home), false)
+  })
+})
