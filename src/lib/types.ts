@@ -292,6 +292,7 @@ export type GridScanRun = {
   finishedAt?: string
   scannedAt: string
   keyword: string
+  keywords?: string[]
   gridSize: number
   spacingMiles: number
   zoom?: number
@@ -311,6 +312,7 @@ export type GridScanRun = {
 export type ScanComparePin = {
   row: number
   col: number
+  keyword?: string
   lat: number
   lng: number
   previousRank: number | null
@@ -422,7 +424,8 @@ export type CampaignInput = {
   businessName?: string
   city?: string
   state?: string
-  keywords?: string[]
+  keywords?: string[] | string
+  keyword?: string
   placeId?: string
   listingTitle?: string
   listingAddress?: string

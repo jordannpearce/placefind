@@ -73,6 +73,7 @@ import {
   readCampaigns,
   scanCampaign,
   updateCampaign,
+  normalizeKeywords,
 } from "./campaigns.ts"
 import {
   geoPointsMeta,
@@ -354,17 +355,22 @@ async function start() {
       })
       return
     }
-    const body = (req.body ?? {}) as ApiKeys & { keywords?: string[]; keyword?: string }
+    const body = (req.body ?? {}) as ApiKeys & { keywords?: string[] | string; keyword?: string }
     const keys = isSellerMode() ? body : {}
     const campaign = getCampaign(String(req.params.id ?? ""), user.id)
     if (!campaign) {
       res.status(404).json({ error: "That campaign was not found." })
       return
     }
-    const requested = body.keyword ? [body.keyword] : body.keywords
-    const rerunKeyword = requested?.length ? requested : campaign.lastGridScan?.keyword ? [campaign.lastGridScan.keyword] : undefined
+    const requested = normalizeKeywords([
+      ...(body.keywords == null ? [] : Array.isArray(body.keywords) ? body.keywords : [body.keywords]),
+      ...(body.keyword == null ? [] : [body.keyword]),
+    ])
+    const rerunKeywords = requested.length
+      ? requested
+      : normalizeKeywords(campaign.lastGridScan?.keywords ?? campaign.lastGridScan?.keyword)
     try {
-      const result = await scanCampaign(campaign.id, keys, rerunKeyword, user.id)
+      const result = await scanCampaign(campaign.id, keys, rerunKeywords.length ? rerunKeywords : undefined, user.id)
       res.json({ ...result, ...campaignMeta() })
     } catch (error) {
       if (error instanceof CampaignError) {
@@ -420,11 +426,14 @@ async function start() {
       })
       return
     }
-    const body = (req.body ?? {}) as ApiKeys & { keywords?: string[]; keyword?: string }
+    const body = (req.body ?? {}) as ApiKeys & { keywords?: string[] | string; keyword?: string }
     const keys = isSellerMode() ? body : {}
-    const requested = body.keyword ? [body.keyword] : body.keywords
+    const requested = normalizeKeywords([
+      ...(body.keywords == null ? [] : Array.isArray(body.keywords) ? body.keywords : [body.keywords]),
+      ...(body.keyword == null ? [] : [body.keyword]),
+    ])
     try {
-      const result = await scanCampaign(String(req.params.id ?? ""), keys, requested, user.id)
+      const result = await scanCampaign(String(req.params.id ?? ""), keys, requested.length ? requested : undefined, user.id)
       res.json({ ...result, ...campaignMeta() })
     } catch (error) {
       if (error instanceof CampaignError) {

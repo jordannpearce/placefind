@@ -2,7 +2,9 @@ import { randomBytes } from "node:crypto"
 import {
   CampaignError,
   getCampaign,
+  keywordCapMessage,
   mapsPlaceUrlFromCampaign,
+  MAX_KEYWORDS,
   readCampaigns,
   saveCampaign,
   type Campaign,
@@ -11,6 +13,7 @@ import {
   type TrafficLogLine,
   type TrafficPinResult,
 } from "./campaigns.ts"
+import { mergeKeywordLists, parseKeywordText } from "../src/lib/keywords.ts"
 import {
   DEFAULT_TRAFFIC_SEARCHES,
   MAX_TRAFFIC_SEARCHES,
@@ -63,7 +66,7 @@ export function noPinsSelectedMessage() {
 }
 
 export function noKeywordsSelectedMessage() {
-  return "Select at least one keyword"
+  return "Add at least one keyword"
 }
 
 export function trafficAlreadyRunningMessage() {
@@ -143,8 +146,27 @@ export function campaignKeywordId(keyword: string, index: number): string {
 
 export function listedTrafficKeywords(campaign: Campaign): string[] {
   if (campaign.keywords.length > 0) return campaign.keywords
-  const fallback = (campaign.lastGridScan?.keyword || campaign.businessName || "").trim()
-  return fallback ? [fallback] : []
+  const fromScan = campaign.lastGridScan?.keywords?.length
+    ? campaign.lastGridScan.keywords
+    : (campaign.lastGridScan?.keyword || campaign.businessName || "").trim()
+  return typeof fromScan === "string" ? (fromScan ? [fromScan] : []) : fromScan
+}
+
+function trafficKeywordTokens(raw: unknown): string[] {
+  if (raw == null) return []
+  if (typeof raw === "string") return parseKeywordText(raw)
+  if (!Array.isArray(raw)) return []
+  const tokens: string[] = []
+  for (const item of raw) {
+    const token = String(item ?? "").trim()
+    if (!token) continue
+    if (/^\d+$/.test(token) || /^\d+:/.test(token)) {
+      tokens.push(token)
+      continue
+    }
+    tokens.push(...parseKeywordText(token))
+  }
+  return tokens
 }
 
 export function selectTrafficKeywords(
@@ -154,19 +176,31 @@ export function selectTrafficKeywords(
   const listed = listedTrafficKeywords(campaign)
   const specified = Boolean(input && (input.keywords !== undefined || input.keywordIds !== undefined))
   if (!specified) return listed
-  if (!Array.isArray(input?.keywords) && !Array.isArray(input?.keywordIds)) return []
+  if (input?.keywords === undefined && input?.keywordIds === undefined) return []
+  if (
+    input?.keywords !== undefined &&
+    !Array.isArray(input.keywords) &&
+    typeof input.keywords !== "string" &&
+    input?.keywordIds === undefined
+  ) {
+    return []
+  }
+  if (
+    input?.keywordIds !== undefined &&
+    !Array.isArray(input.keywordIds) &&
+    typeof input.keywordIds !== "string" &&
+    input?.keywords === undefined
+  ) {
+    return []
+  }
 
-  const requested = [
-    ...(Array.isArray(input?.keywordIds) ? input.keywordIds : []),
-    ...(Array.isArray(input?.keywords) ? input.keywords : []),
-  ]
+  const requested = [...trafficKeywordTokens(input?.keywordIds), ...trafficKeywordTokens(input?.keywords)]
   if (requested.length === 0) return []
 
   const byLower = new Map(listed.map((keyword) => [keyword.toLowerCase(), keyword]))
   const picked = new Set<string>()
-  for (const item of requested) {
-    const token = String(item ?? "").trim()
-    if (!token) continue
+  const extras: string[] = []
+  for (const token of requested) {
     if (/^\d+$/.test(token)) {
       const match = listed[Number(token)]
       if (match) picked.add(match.toLowerCase())
@@ -179,9 +213,13 @@ export function selectTrafficKeywords(
       continue
     }
     const match = byLower.get(token.toLowerCase())
-    if (match) picked.add(match.toLowerCase())
+    if (match) {
+      picked.add(match.toLowerCase())
+      continue
+    }
+    if (!extras.some((row) => row.toLowerCase() === token.toLowerCase())) extras.push(token)
   }
-  return listed.filter((keyword) => picked.has(keyword.toLowerCase()))
+  return [...listed.filter((keyword) => picked.has(keyword.toLowerCase())), ...extras]
 }
 
 export function pinCoordLabel(pin: { lat: number; lng: number }): string {
@@ -618,6 +656,10 @@ export function startCampaignTraffic(
 
   const keywords = selectTrafficKeywords(campaign, startInput)
   if (keywords.length === 0) throw new CampaignError(noKeywordsSelectedMessage(), 400)
+  if (keywords.length > MAX_KEYWORDS) throw new CampaignError(keywordCapMessage())
+
+  const persistedKeywords = mergeKeywordLists(campaign.keywords, keywords)
+  if (persistedKeywords.length > MAX_KEYWORDS) throw new CampaignError(keywordCapMessage())
 
   const current = normalizeTrafficJob(campaign.lastTrafficJob)
   if (current?.status === "running" && runningJobs.has(campaign.id)) {
@@ -651,7 +693,13 @@ export function startCampaignTraffic(
     lastSelectedKeywords: keywords,
     lastSearchCount: searches,
   }
-  const next = saveCampaign({ ...campaign, lastTrafficJob: job, trafficSchedule, updatedAt: startedAt })
+  const next = saveCampaign({
+    ...campaign,
+    keywords: persistedKeywords,
+    lastTrafficJob: job,
+    trafficSchedule,
+    updatedAt: startedAt,
+  })
 
   const abort = new AbortController()
   const handle: RunningHandle = {

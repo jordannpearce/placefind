@@ -9,6 +9,7 @@ import {
   scanCampaign,
   type Campaign,
 } from "./campaigns.ts"
+import { normalizeKeywords } from "../src/lib/keywords.ts"
 import { gridPinId } from "../src/lib/grid.ts"
 import { nextRunAt, scheduleDue, type ScanSchedule, type TrafficSchedule } from "./schedule.ts"
 import { startCampaignTraffic } from "./traffic.ts"
@@ -16,8 +17,13 @@ import { startCampaignTraffic } from "./traffic.ts"
 export const SCHEDULER_INTERVAL_MS = 60_000
 export { nextRunAt, scheduleDue }
 
+export function scheduledScanKeywords(campaign: Campaign): string[] {
+  if (campaign.keywords.length > 0) return campaign.keywords
+  return normalizeKeywords(campaign.lastGridScan?.keywords ?? campaign.lastGridScan?.keyword)
+}
+
 export function scheduledScanKeyword(campaign: Campaign): string {
-  return (campaign.lastGridScan?.keyword || campaign.keywords[0] || "").trim()
+  return scheduledScanKeywords(campaign)[0] || ""
 }
 
 export function scheduledTrafficPinIds(campaign: Campaign): string[] {
@@ -48,8 +54,8 @@ async function runDueScan(campaign: Campaign, now: Date) {
     console.log(`PlaceFind scheduler: skip scan for ${campaign.id}; a scan is already running.`)
     return
   }
-  const keyword = scheduledScanKeyword(campaign)
-  if (!keyword) {
+  const keywords = scheduledScanKeywords(campaign)
+  if (keywords.length === 0) {
     console.log(`PlaceFind scheduler: skip scan for ${campaign.id}; no keyword.`)
     return
   }
@@ -66,7 +72,7 @@ async function runDueScan(campaign: Campaign, now: Date) {
   })
   console.log(`PlaceFind scheduler: starting scan for ${campaign.id} (${campaign.name}).`)
   try {
-    await scanCampaign(campaign.id, emptyApiKeys(), [keyword], campaign.userId)
+    await scanCampaign(campaign.id, emptyApiKeys(), keywords, campaign.userId)
     const after = getCampaign(campaign.id)
     if (after?.scanSchedule) {
       saveCampaign({

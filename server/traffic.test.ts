@@ -444,6 +444,8 @@ describe("runCampaignTraffic", () => {
     assert.deepEqual(selectTrafficKeywords(scanned, { keywordIds: ["2", "0"] }), ["barbecue", "smoked meats"])
     assert.deepEqual(selectTrafficKeywords(scanned), ["barbecue", "brisket", "smoked meats"])
     assert.deepEqual(selectTrafficKeywords(scanned, { keywords: [] }), [])
+    assert.deepEqual(selectTrafficKeywords(scanned, { keywords: "ribs, barbecue" }), ["barbecue", "ribs"])
+    assert.deepEqual(selectTrafficKeywords(scanned, { keywords: ["sliced brisket"] }), ["sliced brisket"])
     const pins = pinsForTraffic(scanned, pinIdsFor(scanned))
     const pairs = pairsForTraffic(pins, ["barbecue", "smoked meats"])
     assert.deepEqual(

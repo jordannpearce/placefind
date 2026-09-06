@@ -57,6 +57,15 @@ import {
   trafficSearchHelpCopy,
   trafficStartConfirmCopy,
 } from "../lib/traffic-plan.ts"
+import {
+  formatKeywordText,
+  keywordHelpCopy,
+  mergeKeywordLists,
+  parseKeywordText,
+  parseKeywordsOrError,
+  scanKeywordsLabel,
+  trafficKeywordTypeHelpCopy,
+} from "../lib/keywords.ts"
 import type {
   ApiKeys,
   BusinessListing,
@@ -128,6 +137,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [query, setQuery] = useState<SearchQuery>(emptyQuery)
   const [keywordDraft, setKeywordDraft] = useState("")
+  const [trafficKeywordDraft, setTrafficKeywordDraft] = useState("")
   const [activeKeyword, setActiveKeyword] = useState("")
   const [gridSize, setGridSize] = useState(5)
   const [spacingMiles, setSpacingMiles] = useState(1)
@@ -214,6 +224,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setConfirmed(null)
       setActiveKeyword("")
       setKeywordDraft("")
+      setTrafficKeywordDraft("")
       setGridSize(5)
       setSpacingMiles(1)
       setPinSource("grid")
@@ -230,7 +241,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setQuery(searchQueryFromCampaign(campaign))
     setConfirmed(confirmedListingFromCampaign(campaign))
     setActiveKeyword(campaign.lastGridScan?.keyword || campaign.keywords[0] || "")
-    setKeywordDraft("")
+    setKeywordDraft(formatKeywordText(campaign.keywords))
+    setTrafficKeywordDraft("")
     setGridSize(campaign.gridSize ?? 5)
     setSpacingMiles(campaign.spacingMiles ?? 1)
     setPinSource(campaign.pinSource === "city_gps" ? "city_gps" : "grid")
@@ -537,7 +549,10 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       trafficSchedule: {
         ...trafficScheduleDraft,
         lastSelectedPinIds: selectedPinIds,
-        lastSelectedKeywords: selectedKeywordsInListedOrder(listedTrafficKeywords(selected), selectedKeywords),
+        lastSelectedKeywords: selectedKeywordsInListedOrder(
+          listedTrafficKeywords(selected),
+          mergeKeywordLists(selectedKeywords, parseKeywordText(trafficKeywordDraft)),
+        ),
         lastSearchCount: value,
       },
     })
@@ -545,43 +560,49 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       .catch((err) => setError(err instanceof Error ? err.message : "Could not save the search count."))
   }
 
-  async function onAddKeyword() {
-    if (!selected) return
-    const keyword = keywordDraft.trim()
-    if (!keyword) return
-    if (selected.keywords.length >= maxKeywords) {
-      setError(`A campaign can have at most ${maxKeywords} keywords.`)
-      return
+  function parsedCampaignKeywords() {
+    const parsed = parseKeywordsOrError(keywordDraft || selected?.keywords, maxKeywords)
+    return parsed
+  }
+
+  async function persistKeywordList(keywords: string[]) {
+    const parsed = parseKeywordsOrError(keywords, maxKeywords)
+    if (parsed.error) {
+      setError(parsed.error)
+      return null
     }
+    setKeywordDraft(formatKeywordText(parsed.keywords))
+    if (!activeKeyword && parsed.keywords[0]) setActiveKeyword(parsed.keywords[0])
+    setSelectedKeywords((current) => mergeKeywordLists(current, parsed.keywords).filter((keyword) =>
+      parsed.keywords.some((row) => row.toLowerCase() === keyword.toLowerCase()) ||
+      current.some((row) => row.toLowerCase() === keyword.toLowerCase()),
+    ))
+    if (!selected || creating) return parsed.keywords
     setSaving(true)
     setError(null)
     try {
-      const next = await updateCampaign(selected.id, { keywords: [...selected.keywords, keyword] })
+      const next = await updateCampaign(selected.id, { keywords: parsed.keywords })
       replaceCampaign(next)
-      setKeywordDraft("")
-      if (!activeKeyword) setActiveKeyword(keyword)
-      setSelectedKeywords((current) => (current.some((row) => row.toLowerCase() === keyword.toLowerCase()) ? current : [...current, keyword]))
+      setKeywordDraft(formatKeywordText(next.keywords))
+      setSelectedKeywords((current) => {
+        const listed = listedTrafficKeywords(next)
+        return selectedKeywordsInListedOrder(listed, current.length ? mergeKeywordLists(current, next.keywords) : listed)
+      })
+      return next.keywords
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add that keyword.")
+      setError(err instanceof Error ? err.message : "Could not save those keywords.")
+      return null
     } finally {
       setSaving(false)
     }
   }
 
   async function onRemoveKeyword(keyword: string) {
-    if (!selected) return
-    setSaving(true)
-    setError(null)
-    try {
-      const next = await updateCampaign(selected.id, { keywords: selected.keywords.filter((row) => row !== keyword) })
-      replaceCampaign(next)
-      if (activeKeyword.toLowerCase() === keyword.toLowerCase()) setActiveKeyword(next.keywords[0] || "")
-      setSelectedKeywords((current) => current.filter((row) => row.toLowerCase() !== keyword.toLowerCase()))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remove that keyword.")
-    } finally {
-      setSaving(false)
-    }
+    const current = parseKeywordText(keywordDraft).length ? parseKeywordText(keywordDraft) : selected?.keywords ?? []
+    const next = current.filter((row) => row.toLowerCase() !== keyword.toLowerCase())
+    const saved = await persistKeywordList(next)
+    if (activeKeyword.toLowerCase() === keyword.toLowerCase()) setActiveKeyword(saved?.[0] || next[0] || "")
+    setSelectedKeywords((rows) => rows.filter((row) => row.toLowerCase() !== keyword.toLowerCase()))
   }
 
   async function onDelete() {
@@ -608,8 +629,13 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setError("Confirm a Maps listing before scanning.")
       return
     }
-    const target = (activeKeyword || keywordDraft || selected?.keywords[0] || "").trim()
-    if (!target) {
+    const parsed = parsedCampaignKeywords()
+    if (parsed.error) {
+      setError(parsed.error)
+      return
+    }
+    const targets = parsed.keywords
+    if (targets.length === 0) {
       setError("Add a keyword before scanning this business.")
       return
     }
@@ -625,7 +651,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       if (!campaign || creating) {
         campaign = await createCampaign(
           campaignInputFromListing(confirmed, query, {
-            keywords: [target],
+            keywords: targets,
             gridSize,
             spacingMiles,
             pinSource,
@@ -635,12 +661,9 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
         setSelectedId(campaign.id)
         setCampaigns((current) => [campaign!, ...current.filter((row) => row.id !== campaign!.id)])
       } else {
-        const keywords = campaign.keywords.some((row) => row.toLowerCase() === target.toLowerCase())
-          ? campaign.keywords
-          : [...campaign.keywords, target]
         campaign = await updateCampaign(
           campaign.id,
-          campaignInputFromListing(confirmed, query, { keywords, gridSize, spacingMiles, pinSource }),
+          campaignInputFromListing(confirmed, query, { keywords: targets, gridSize, spacingMiles, pinSource }),
         )
         replaceCampaign(campaign)
       }
@@ -651,24 +674,27 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
           campaignId: campaign.id,
           startedAt: new Date().toISOString(),
           scannedAt: new Date().toISOString(),
-          keyword: target,
+          keyword: targets[0]!,
+          keywords: targets,
           gridSize,
           spacingMiles,
           pinSource,
           usedCityGps,
           center: { lat: confirmed.lat, lng: confirmed.lng },
           placeId: confirmed.placeId,
-          pointCount: gridSearchCount(gridSize),
+          pointCount: gridSearchCount(gridSize) * targets.length,
           foundCount: 0,
-          points: buildPreviewPoints({ lat: confirmed.lat, lng: confirmed.lng }, gridSize, spacingMiles, target).map(
-            (point) => ({ ...point, status: "pending" as const }),
+          points: targets.flatMap((keyword) =>
+            buildPreviewPoints({ lat: confirmed.lat, lng: confirmed.lng }, gridSize, spacingMiles, keyword).map(
+              (point) => ({ ...point, status: "pending" as const }),
+            ),
           ),
           status: "running",
         },
       })
       let payload: Awaited<ReturnType<typeof scanCampaign>> | null = null
       try {
-        payload = await scanCampaign(campaign.id, keys, hideKeys, [target])
+        payload = await scanCampaign(campaign.id, keys, hideKeys, targets)
       } catch (err) {
         const message = err instanceof Error ? err.message : "Could not scan Maps."
         try {
@@ -683,7 +709,9 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
           if (points.some((point) => point.status === "rank" || point.status === "not_found")) {
             const found = latest.campaign.lastGridScan?.foundCount ?? 0
             const total = latest.campaign.lastGridScan?.pointCount ?? points.length
-            setNotice(`Scan finished. ${confirmed.title} appeared at ${found} of ${total} grid points for “${target}”.`)
+            setNotice(
+              `Scan finished. ${confirmed.title} appeared at ${found} of ${total} grid points for ${scanKeywordsLabel({ keywords: targets })}.`,
+            )
             return
           }
         } catch {
@@ -693,8 +721,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
         return
       }
       replaceCampaign(payload.campaign)
-      setActiveKeyword(payload.grid?.keyword || target)
-      setKeywordDraft("")
+      setActiveKeyword(payload.grid?.keyword || targets[0] || "")
+      setKeywordDraft(formatKeywordText(payload.campaign.keywords))
       await refreshScans(campaign.id)
       setCompare(null)
       const finishedPoints = payload.grid?.points ?? []
@@ -707,7 +735,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       const total = payload.grid?.pointCount ?? 0
       setUsedCityGps(Boolean(payload.grid?.usedCityGps))
       setNotice(
-        `Scan finished and saved. ${confirmed.title} appeared at ${found} of ${total} grid points for “${target}”.${
+        `Scan finished and saved. ${confirmed.title} appeared at ${found} of ${total} grid points for ${scanKeywordsLabel({ keywords: payload.grid?.keywords || targets })}.${
           payload.grid?.usedCityGps ? ` ${usingCityGpsBackupNote()}.` : ""
         }`,
       )
@@ -748,7 +776,12 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const trafficRunning = trafficJob?.status === "running"
   const busy = Boolean(saving || scanning || searching || startingTraffic || stoppingTraffic || rerunning || comparing)
   const scanFinished = campaignScanFinished(selected)
-  const liveScanLabel = scanLiveStatus(countFinishedScanPins(points), gridSearchCount(gridSize))
+  const liveScanTotal =
+    scanning && grid?.points?.length ? grid.points.length : gridSearchCount(gridSize) * Math.max(1, parseKeywordText(keywordDraft).length || selected?.keywords.length || 1)
+  const liveScanLabel = scanLiveStatus(
+    countFinishedScanPins(scanning && grid?.points ? grid.points : points),
+    liveScanTotal,
+  )
   const pinsSelectable = Boolean(scanFinished && points.length > 0 && !scanning)
   const showStartTraffic = startTrafficVisible(confirmed)
   const showStopTraffic = stopTrafficVisible(trafficJob)
@@ -765,6 +798,14 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const trafficLog = trafficJob?.log ?? []
   const trafficResults = trafficJob?.results ?? []
   const trafficKeywords = listedTrafficKeywords(selected)
+  const typedTrafficKeywords = parseKeywordText(trafficKeywordDraft)
+  const trafficKeywordPool = mergeKeywordLists(trafficKeywords, typedTrafficKeywords)
+  const trafficKeywordSelection = selectedKeywordsInListedOrder(
+    trafficKeywordPool,
+    mergeKeywordLists(selectedKeywords, typedTrafficKeywords),
+  )
+  const editorKeywords = parseKeywordText(keywordDraft)
+  const chipKeywords = editorKeywords.length ? editorKeywords : selected?.keywords ?? []
 
   function togglePin(point: GridPointResult) {
     const pinId = gridPinId(point)
@@ -795,11 +836,22 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setError(noPinsSelectedMessage())
       return
     }
-    const keywords = selectedKeywordsInListedOrder(trafficKeywords, selectedKeywords)
+    const typed = parseKeywordText(trafficKeywordDraft)
+    const listed = mergeKeywordLists(trafficKeywords, typed)
+    const parsed = parseKeywordsOrError(listed, maxKeywords)
+    if (parsed.error) {
+      setError(parsed.error)
+      return
+    }
+    const keywords = selectedKeywordsInListedOrder(parsed.keywords, mergeKeywordLists(selectedKeywords, typed))
     if (keywords.length === 0) {
       window.alert(noKeywordsSelectedMessage())
       setError(noKeywordsSelectedMessage())
       return
+    }
+    if (typed.length > 0 && selected && !creating) {
+      const saved = await persistKeywordList(parsed.keywords)
+      if (!saved) return
     }
     const available = selectedPinIds.length * keywords.length
     const planned = plannedTrafficSearchCount(available, searchCount)
@@ -866,14 +918,17 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     try {
       if (source.gridSize) setGridSize(source.gridSize)
       if (source.spacingMiles) setSpacingMiles(source.spacingMiles)
-      if (source.keyword) setActiveKeyword(source.keyword)
-      const payload = await rerunCampaignScan(selected.id, keys, Boolean(hosted?.included && !seller), source.keyword ? [source.keyword] : undefined)
+      const rerunKeywords = source.keywords?.length ? source.keywords : source.keyword ? [source.keyword] : undefined
+      if (rerunKeywords?.[0]) setActiveKeyword(rerunKeywords[0])
+      const payload = await rerunCampaignScan(selected.id, keys, Boolean(hosted?.included && !seller), rerunKeywords)
       replaceCampaign(payload.campaign)
       await refreshScans(selected.id)
       setCompare(null)
       const found = payload.grid?.foundCount ?? 0
       const total = payload.grid?.pointCount ?? 0
-      setNotice(`Rerun saved. ${found} of ${total} grid points found “${payload.grid?.keyword || source.keyword}”.`)
+      setNotice(
+        `Rerun saved. ${found} of ${total} grid points found ${scanKeywordsLabel({ keywords: payload.grid?.keywords, keyword: payload.grid?.keyword || source.keyword })}.`,
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not rerun that scan.")
     } finally {
@@ -926,7 +981,10 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
           ...trafficScheduleDraft,
           utcOffsetMinutes: trafficScheduleDraft.timeZone === "local" ? utcOffsetMinutes : undefined,
           lastSelectedPinIds: selectedPinIds,
-          lastSelectedKeywords: selectedKeywordsInListedOrder(listedTrafficKeywords(selected), selectedKeywords),
+          lastSelectedKeywords: selectedKeywordsInListedOrder(
+            listedTrafficKeywords(selected),
+            mergeKeywordLists(selectedKeywords, parseKeywordText(trafficKeywordDraft)),
+          ),
         },
       })
       replaceCampaign(next)
@@ -1178,8 +1236,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             {showStartTraffic && (
               <p id="traffic-searches-help" className="mt-3 text-sm text-muted">
                 {trafficSearchHelpCopy()}{" "}
-                {selectedKeywordsInListedOrder(trafficKeywords, selectedKeywords).length > 0 && selectedPinIds.length > 0
-                  ? `This run will do ${plannedTrafficSearchCount(selectedPinIds.length * selectedKeywordsInListedOrder(trafficKeywords, selectedKeywords).length, searchCount)} of ${selectedPinIds.length * selectedKeywordsInListedOrder(trafficKeywords, selectedKeywords).length} pin/keyword pairs.`
+                {trafficKeywordSelection.length > 0 && selectedPinIds.length > 0
+                  ? `This run will do ${plannedTrafficSearchCount(selectedPinIds.length * trafficKeywordSelection.length, searchCount)} of ${selectedPinIds.length * trafficKeywordSelection.length} pin/keyword pairs.`
                   : "Select pins and keywords first."}
               </p>
             )}
@@ -1190,23 +1248,49 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             )}
             {mapsReady && (
               <p className="mt-4 rounded-xl border border-brass/25 bg-brass/5 px-4 py-3 text-sm text-paper/80">
-                A {gridSize}×{gridSize} scan runs {gridSearchCount(gridSize)} paid Maps searches — one for each grid point,
-                from that point’s coordinates. A 7×7 scan is 49 paid searches.
+                A {gridSize}×{gridSize} scan runs {gridSearchCount(gridSize) * Math.max(1, chipKeywords.length)} paid Maps
+                searches
+                {chipKeywords.length > 1
+                  ? ` — ${gridSearchCount(gridSize)} points × ${chipKeywords.length} keywords.`
+                  : " — one for each grid point, from that point’s coordinates."}{" "}
+                A 7×7 scan is {49 * Math.max(1, chipKeywords.length)} paid searches
+                {chipKeywords.length > 1 ? ` for ${chipKeywords.length} keywords.` : "."}
                 {desktop ? " Larger grids take a few minutes." : ""}
               </p>
             )}
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <label className="grid gap-1.5 sm:col-span-1">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Keyword</span>
-                <input
-                  value={activeKeyword}
-                  onChange={(event) => setActiveKeyword(event.target.value)}
-                  placeholder="barbecue"
-                  autoComplete="off"
-                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none placeholder:text-muted/50 focus:border-brass"
-                />
-              </label>
+            <label className="mt-4 grid gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Keywords</span>
+              <textarea
+                data-testid="scan-keywords"
+                value={keywordDraft}
+                onChange={(event) => {
+                  setKeywordDraft(event.target.value)
+                  const parsed = parseKeywordText(event.target.value)
+                  if (parsed[0] && !parsed.some((row) => row.toLowerCase() === activeKeyword.toLowerCase())) {
+                    setActiveKeyword(parsed[0])
+                  }
+                }}
+                onBlur={() => {
+                  const parsed = parsedCampaignKeywords()
+                  if (parsed.error) {
+                    setError(parsed.error)
+                    return
+                  }
+                  if (!selected || creating) return
+                  if (parsed.keywords.join("\0") === selected.keywords.join("\0")) return
+                  void persistKeywordList(parsed.keywords)
+                }}
+                placeholder="barbecue, brisket, smoked meats"
+                rows={3}
+                autoComplete="off"
+                disabled={busy}
+                className="min-h-[5.5rem] w-full rounded-lg border border-line bg-ink px-3 py-2 text-paper outline-none placeholder:text-muted/50 focus:border-brass"
+              />
+              <span className="text-xs text-muted">{keywordHelpCopy(maxKeywords)}</span>
+            </label>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1.5">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Grid size</span>
                 <select
@@ -1268,35 +1352,9 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               )}
             </div>
 
-            {selected && !creating && (
-              <form
-                className="mt-4 flex flex-col gap-2 sm:flex-row"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  void onAddKeyword()
-                }}
-              >
-                <input
-                  value={keywordDraft}
-                  onChange={(event) => setKeywordDraft(event.target.value)}
-                  placeholder="Add another keyword"
-                  autoComplete="off"
-                  disabled={busy || selected.keywords.length >= maxKeywords}
-                  className="h-11 flex-1 rounded-lg border border-line bg-ink px-3 text-paper outline-none placeholder:text-muted/50 focus:border-brass"
-                />
-                <button
-                  type="submit"
-                  disabled={busy || !keywordDraft.trim() || selected.keywords.length >= maxKeywords}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-line px-4 text-sm text-paper/80 hover:border-brass disabled:opacity-60"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add keyword
-                </button>
-              </form>
-            )}
-            {selected && selected.keywords.length > 0 && (
+            {chipKeywords.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-2">
-                {selected.keywords.map((keyword) => {
+                {chipKeywords.map((keyword) => {
                   const active = keyword.toLowerCase() === activeKeyword.toLowerCase()
                   return (
                     <button
@@ -1331,39 +1389,53 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               </div>
             )}
 
-            {showStartTraffic && trafficKeywords.length > 0 && (
+            {showStartTraffic && (
               <div className="mt-5 rounded-xl border border-brass/25 bg-brass/5 px-4 py-4" data-testid="traffic-keyword-panel">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Start Traffic keywords</p>
                 <p className="mt-2 text-sm text-paper/80">{trafficKeywordHelpCopy()}</p>
-                <ul className="mt-3 grid gap-2">
-                  {trafficKeywords.map((keyword) => {
-                    const checked = selectedKeywords.some((row) => row.toLowerCase() === keyword.toLowerCase())
-                    return (
-                      <li key={keyword}>
-                        <label className="flex items-start gap-3 text-sm text-paper">
-                          <input
-                            type="checkbox"
-                            data-testid={`traffic-keyword-${keyword}`}
-                            checked={checked}
-                            onChange={() => toggleTrafficKeyword(keyword)}
-                            className="mt-0.5 h-4 w-4 accent-[#c9a227]"
-                          />
-                          <span>
-                            <span className="font-semibold">{keyword}</span>
-                            <span className="mt-0.5 block text-xs text-muted">
-                              Search this keyword on Maps from each selected pin GPS, then open the confirmed listing when it appears.
+                <label className="mt-3 grid gap-1.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Type keywords</span>
+                  <textarea
+                    data-testid="traffic-keywords"
+                    value={trafficKeywordDraft}
+                    onChange={(event) => setTrafficKeywordDraft(event.target.value)}
+                    placeholder="Add more: ribs, sliced brisket"
+                    rows={2}
+                    autoComplete="off"
+                    disabled={busy}
+                    className="min-h-[4rem] w-full rounded-lg border border-line bg-ink px-3 py-2 text-paper outline-none placeholder:text-muted/50 focus:border-brass"
+                  />
+                  <span className="text-xs text-muted">{trafficKeywordTypeHelpCopy()}</span>
+                </label>
+                {trafficKeywordPool.length > 0 && (
+                  <ul className="mt-3 grid gap-2">
+                    {trafficKeywordPool.map((keyword) => {
+                      const checked = trafficKeywordSelection.some((row) => row.toLowerCase() === keyword.toLowerCase())
+                      return (
+                        <li key={keyword}>
+                          <label className="flex items-start gap-3 text-sm text-paper">
+                            <input
+                              type="checkbox"
+                              data-testid={`traffic-keyword-${keyword}`}
+                              checked={checked}
+                              onChange={() => toggleTrafficKeyword(keyword)}
+                              className="mt-0.5 h-4 w-4 accent-[#c9a227]"
+                            />
+                            <span>
+                              <span className="font-semibold">{keyword}</span>
+                              <span className="mt-0.5 block text-xs text-muted">
+                                Search this keyword on Maps from each selected pin GPS, then open the confirmed listing when it appears.
+                              </span>
                             </span>
-                          </span>
-                        </label>
-                      </li>
-                    )
-                  })}
-                </ul>
+                          </label>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
                 <p className="mt-3 text-xs text-muted">
                   Selected keywords run in listed order for each selected pin
-                  {selectedKeywords.length > 0
-                    ? `: ${selectedKeywordsInListedOrder(trafficKeywords, selectedKeywords).join(" → ")}.`
-                    : "."}
+                  {trafficKeywordSelection.length > 0 ? `: ${trafficKeywordSelection.join(" → ")}.` : "."}
                 </p>
               </div>
             )}
@@ -2124,7 +2196,7 @@ function ScheduleFieldset({
             checked={schedule.timeZone === "utc"}
             onChange={() => onChange({ ...schedule, timeZone: "utc" })}
           />
-          UTC (Railway and this server use UTC)
+          UTC (this server uses UTC)
         </label>
       </fieldset>
       {extra}
@@ -2158,7 +2230,7 @@ function SchedulePanel({
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Schedules</p>
       <h4 className="font-display text-2xl text-paper">When scans and traffic run</h4>
       <p className="mt-1 text-sm text-muted">
-        Automatic jobs start on this web process every minute. Keep a single Railway replica so the same scan or traffic job does not fire twice.
+        Automatic jobs start on this web process every minute. Keep a single server replica so the same scan or traffic job does not fire twice.
       </p>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ScheduleFieldset

@@ -52,8 +52,10 @@ describe("normalizeKeywords", () => {
     assert.deepEqual(normalizeKeywords(["  barbecue ", "", "BBQ", "barbecue", "bbq"]), ["barbecue", "BBQ"])
   })
 
-  it("splits a typed keyword string", () => {
+  it("splits a typed keyword string and a legacy single-keyword record", () => {
     assert.deepEqual(normalizeKeywords("barbecue"), ["barbecue"])
+    assert.deepEqual(normalizeKeywords("barbecue, brisket; smoked meats"), ["barbecue", "brisket", "smoked meats"])
+    assert.deepEqual(normalizeKeywords({ keyword: "barbecue" }), ["barbecue"])
   })
 })
 
@@ -101,6 +103,17 @@ describe("validateCampaign", () => {
       keywords,
     })
     assert.equal(parsed.value?.keywords.length, MAX_KEYWORDS)
+  })
+
+  it("accepts a legacy keyword string on create", () => {
+    const parsed = validateCampaign({
+      name: "Austin BBQ",
+      businessName: "Franklin Barbecue",
+      city: "Austin",
+      state: "TX",
+      keyword: "barbecue, brisket",
+    })
+    assert.deepEqual(parsed.value?.keywords, ["barbecue", "brisket"])
   })
 
   it("defaults to a 5×5 grid and one-mile spacing", () => {
@@ -481,8 +494,8 @@ describe("selectScanKeywords", () => {
     assert.deepEqual(selectScanKeywords(campaign), ["barbecue", "brisket", "best bbq"])
   })
 
-  it("only scans keywords that belong to the campaign", () => {
-    assert.deepEqual(selectScanKeywords(campaign, ["Brisket", "pizza", ""]), ["Brisket"])
+  it("keeps campaign spelling and includes newly typed keywords", () => {
+    assert.deepEqual(selectScanKeywords(campaign, ["Brisket", "pizza", ""]), ["brisket", "pizza"])
   })
 })
 
@@ -822,5 +835,61 @@ describe("rank scan Maps keys", () => {
     assert.ok(result.grid.nearbyCities?.includes("Ava"))
     assert.equal(result.grid.nearbyCities?.includes("Dallas"), false)
     assert.ok(result.grid.competitors?.some((row) => row.title === "Austin Barbecue" && row.geoCities.includes("Austin")))
+  })
+
+  it("scans every requested keyword and stores both ranks", async () => {
+    isolateKeys()
+    process.env.DATAFORSEO_LOGIN = "maps-login@example.test"
+    process.env.DATAFORSEO_PASSWORD = "maps-password-test"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-scan-multi-kw-")))
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        placeId: "sample-franklin",
+        listingTitle: "Franklin Barbecue",
+        listingAddress: "900 E 11th St, Austin, TX 78702",
+        keywords: ["barbecue"],
+        gridSize: 3,
+        center: { lat: 30.2701, lng: -97.7313 },
+      },
+      "user-a",
+    )
+    const seen: string[] = []
+    const item: MapsItem = {
+      type: "maps_search",
+      rank_group: 1,
+      title: "Franklin Barbecue",
+      place_id: "sample-franklin",
+    }
+    const client: MapsGridClient = {
+      postTasks: async (tasks) => {
+        for (const task of tasks) seen.push(String(task.keyword || ""))
+        return tasks.map((task) => ({ id: `task-${task.tag}`, tag: task.tag || "" }))
+      },
+      getTask: async (id) => ({ id, status_code: 20000, result: [{ items: [item] }] }),
+      liveAtCoordinate: async (keyword) => {
+        seen.push(keyword)
+        return { items: [item], error: null }
+      },
+    }
+    const result = await scanCampaign(campaign.id, emptyApiKeys(), ["barbecue", "brisket"], "user-a", {
+      client,
+      pollTimeoutMs: 20,
+      sleep: async () => {},
+    })
+    assert.deepEqual(result.grid.keywords, ["barbecue", "brisket"])
+    assert.equal(result.grid.points.length, 18)
+    assert.equal(result.grid.points.filter((point) => point.keyword === "barbecue").length, 9)
+    assert.equal(result.grid.points.filter((point) => point.keyword === "brisket").length, 9)
+    assert.deepEqual(
+      result.scan.results.map((row) => row.keyword),
+      ["barbecue", "brisket"],
+    )
+    assert.deepEqual(result.campaign.keywords, ["barbecue", "brisket"])
+    assert.ok(seen.includes("barbecue"))
+    assert.ok(seen.includes("brisket"))
   })
 })

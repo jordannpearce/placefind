@@ -124,11 +124,11 @@ export function noPinsSelectedMessage() {
 }
 
 export function noKeywordsSelectedMessage() {
-  return "Select at least one keyword"
+  return "Add at least one keyword"
 }
 
 export function trafficKeywordHelpCopy() {
-  return "Traffic will search that keyword on Maps from the selected pin GPS, then open the confirmed listing when it appears. If several keywords are selected, each pin runs them in listed order."
+  return "Traffic will search those keywords on Maps from the selected pin GPS, then open the confirmed listing when it appears. If several keywords are selected, each pin runs them in listed order."
 }
 
 export function trafficLogEmptyCopy() {
@@ -142,8 +142,10 @@ export function trafficLogLoadingCopy() {
 export function listedTrafficKeywords(campaign: Pick<Campaign, "keywords" | "lastGridScan" | "businessName"> | null | undefined): string[] {
   if (!campaign) return []
   if (campaign.keywords.length > 0) return campaign.keywords
-  const fallback = (campaign.lastGridScan?.keyword || campaign.businessName || "").trim()
-  return fallback ? [fallback] : []
+  const fallback = campaign.lastGridScan?.keywords?.length
+    ? campaign.lastGridScan.keywords
+    : (campaign.lastGridScan?.keyword || campaign.businessName || "").trim()
+  return typeof fallback === "string" ? (fallback ? [fallback] : []) : fallback
 }
 
 export function selectedKeywordsInListedOrder(listed: string[], selected: string[]): string[] {

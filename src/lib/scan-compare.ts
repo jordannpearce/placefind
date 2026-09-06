@@ -1,7 +1,8 @@
 import type { GridPointResult, GridScanRun, RankChange, ScanCompare, ScanComparePin } from "./types.ts"
 
-export function pinKey(point: Pick<GridPointResult, "row" | "col">): string {
-  return `${point.row}:${point.col}`
+export function pinKey(point: Pick<GridPointResult, "row" | "col"> & { keyword?: string }): string {
+  const keyword = (point.keyword || "").trim().toLowerCase()
+  return keyword ? `${point.row}:${point.col}:${keyword}` : `${point.row}:${point.col}`
 }
 
 export function rankChange(previous: number | null | undefined, current: number | null | undefined): RankChange {
@@ -42,6 +43,7 @@ export function compareScanRuns(previous: GridScanRun, current: GridScanRun): Sc
     pins.push({
       row,
       col,
+      keyword: right?.keyword || left?.keyword || "",
       lat: right?.lat ?? left?.lat ?? 0,
       lng: right?.lng ?? left?.lng ?? 0,
       previousRank: left?.rank ?? null,

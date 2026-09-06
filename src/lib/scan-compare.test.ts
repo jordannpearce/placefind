@@ -69,4 +69,12 @@ describe("compareScanRuns", () => {
     assert.equal(result.added, 1)
     assert.equal(result.same, 1)
   })
+
+  it("compares the same pin separately for each keyword", () => {
+    const previous = scan("a", [point(0, 0, 5), { ...point(0, 0, 8), keyword: "brisket" }])
+    const current = scan("b", [point(0, 0, 3), { ...point(0, 0, 8), keyword: "brisket" }])
+    const result = compareScanRuns(previous, current)
+    assert.equal(result.pins.find((pin) => pin.keyword === "barbecue")?.change, "up")
+    assert.equal(result.pins.find((pin) => pin.keyword === "brisket")?.change, "same")
+  })
 })

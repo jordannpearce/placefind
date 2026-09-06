@@ -29,13 +29,20 @@ import { normalizePinSource, resolveScanPoints, uniqueCityNamesWithinMiles, type
 import { readCollection, writeCollection } from "./store.ts"
 import type { ApiKeys } from "./types.ts"
 import type { ScanCompare } from "../src/lib/types.ts"
+import {
+  MAX_KEYWORDS,
+  keywordCapMessage,
+  mergeKeywordLists,
+  normalizeKeywords,
+} from "../src/lib/keywords.ts"
+
+export { MAX_KEYWORDS, keywordCapMessage, normalizeKeywords } from "../src/lib/keywords.ts"
 
 export type { PinSource }
 
 export type { ScanSchedule, TrafficSchedule }
 export { listingNotConfirmedForScheduleMessage }
 
-export const MAX_KEYWORDS = 20
 export const MAX_RECENT_SCANS = 10
 export const MAX_GRID_SIZE = 7
 export const MIN_GRID_SIZE = 3
@@ -56,7 +63,8 @@ export type CampaignInput = {
   businessName?: string
   city?: string
   state?: string
-  keywords?: string[]
+  keywords?: string[] | string
+  keyword?: string
   placeId?: string
   listingTitle?: string
   listingAddress?: string
@@ -132,6 +140,7 @@ export type GridScanRun = {
   finishedAt?: string
   scannedAt: string
   keyword: string
+  keywords?: string[]
   gridSize: number
   spacingMiles: number
   zoom: number
@@ -237,21 +246,6 @@ export function scanAlreadyRunningMessage() {
   return "A scan is already running for this campaign."
 }
 
-export function normalizeKeywords(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return []
-  const seen = new Set<string>()
-  const out: string[] = []
-  for (const item of raw) {
-    const keyword = String(item ?? "").trim()
-    if (!keyword) continue
-    const key = keyword.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(keyword)
-  }
-  return out
-}
-
 export function normalizeGridSize(raw: unknown): { value?: number; error?: string } {
   if (raw == null || raw === "") return { value: DEFAULT_GRID_SIZE }
   const size = Number(raw)
@@ -308,12 +302,12 @@ export function validateCampaign(input: CampaignInput): {
   const placeId = input.placeId?.trim() ?? ""
   const listingTitle = input.listingTitle?.trim() ?? ""
   const listingAddress = input.listingAddress?.trim() ?? ""
-  const keywords = normalizeKeywords(input.keywords)
+  const keywords = normalizeKeywords(input.keywords ?? input.keyword)
   if (name.length < 2) return { error: "Enter a campaign name." }
   if (businessName.length < 2) return { error: "Enter the business name to track." }
   if (city.length < 2) return { error: "Enter the city." }
   if (!state) return { error: "Choose a state." }
-  if (keywords.length > MAX_KEYWORDS) return { error: `A campaign can have at most ${MAX_KEYWORDS} keywords.` }
+  if (keywords.length > MAX_KEYWORDS) return { error: keywordCapMessage() }
   const grid = normalizeGridSize(input.gridSize)
   if (grid.error || grid.value == null) return { error: grid.error || "Choose a grid size." }
   const spacing = normalizeSpacingMiles(input.spacingMiles)
@@ -510,6 +504,7 @@ function normalizeStoredScanRun(row: GridScanRun): GridScanRun {
     finishedAt: row.finishedAt || row.scannedAt,
     scannedAt: row.scannedAt || row.finishedAt || new Date().toISOString(),
     keyword: row.keyword ?? "",
+    keywords: normalizeKeywords(row.keywords ?? row.keyword),
     gridSize: row.gridSize,
     spacingMiles: row.spacingMiles,
     zoom: normalizeZoom(row.zoom, row.spacingMiles),
@@ -709,7 +704,9 @@ function normalizeStoredCampaign(row: Campaign): Campaign {
     placeId: row.placeId ?? "",
     listingTitle: row.listingTitle ?? "",
     listingAddress: row.listingAddress ?? "",
-    keywords: normalizeKeywords(row.keywords),
+    keywords: normalizeKeywords(
+      (row as Campaign & { keyword?: unknown }).keywords ?? (row as Campaign & { keyword?: unknown }).keyword,
+    ),
     gridSize: grid.value ?? DEFAULT_GRID_SIZE,
     spacingMiles: spacing.value ?? DEFAULT_SPACING_MILES,
     zoom: normalizeZoom(row.zoom, spacing.value ?? DEFAULT_SPACING_MILES),
@@ -769,7 +766,10 @@ export function updateCampaign(id: string, input: CampaignInput, userId?: string
     businessName: input.businessName !== undefined ? input.businessName : current.businessName,
     city: input.city !== undefined ? input.city : current.city,
     state: input.state !== undefined ? input.state : current.state,
-    keywords: input.keywords !== undefined ? input.keywords : current.keywords,
+    keywords:
+      input.keywords !== undefined || input.keyword !== undefined
+        ? input.keywords ?? input.keyword
+        : current.keywords,
     placeId: input.placeId !== undefined ? input.placeId : current.placeId,
     listingTitle: input.listingTitle !== undefined ? input.listingTitle : current.listingTitle,
     listingAddress: input.listingAddress !== undefined ? input.listingAddress : current.listingAddress,
@@ -839,10 +839,13 @@ function hasDataForSeo(keys: ApiKeys): boolean {
   return Boolean(keys.dataforseoLogin?.trim() && keys.dataforseoPassword?.trim())
 }
 
-export function selectScanKeywords(campaign: Campaign, requested?: string[]): string[] {
-  if (!requested?.length) return campaign.keywords
-  const allowed = new Set(campaign.keywords.map((keyword) => keyword.toLowerCase()))
-  return normalizeKeywords(requested).filter((keyword) => allowed.has(keyword.toLowerCase()))
+export function selectScanKeywords(campaign: Campaign, requested?: string[] | string): string[] {
+  const asked = normalizeKeywords(requested)
+  if (asked.length === 0) return campaign.keywords
+  return mergeKeywordLists(
+    campaign.keywords.filter((keyword) => asked.some((row) => row.toLowerCase() === keyword.toLowerCase())),
+    asked,
+  )
 }
 
 export function mapsKeysMissingMessage() {
@@ -985,10 +988,14 @@ function persistLiveGrid(campaignId: string, grid: GridScanRun): Campaign | null
   })
 }
 
+function sameGridPin(left: Pick<GridPointResult, "row" | "col" | "keyword">, right: Pick<GridPointResult, "row" | "col" | "keyword">) {
+  return left.row === right.row && left.col === right.col && left.keyword.toLowerCase() === right.keyword.toLowerCase()
+}
+
 export async function scanCampaign(
   id: string,
   rawKeys: ApiKeys,
-  requestedKeywords?: string[],
+  requestedKeywords?: string[] | string,
   userId?: string | null,
   options?: ScanCampaignOptions,
 ): Promise<{ campaign: Campaign; scan: ScanRun; grid: GridScanRun }> {
@@ -1009,10 +1016,20 @@ export async function scanCampaign(
     if (keywords.length === 0) {
       throw new CampaignError("Add at least one keyword before running a scan.")
     }
+    if (keywords.length > MAX_KEYWORDS) {
+      throw new CampaignError(keywordCapMessage())
+    }
     if (!hasConfirmedListing(campaign)) {
       throw new CampaignError(listingNotConfirmedMessage(), 400)
     }
-    const keyword = keywords[0]!
+
+    const persistedKeywords = mergeKeywordLists(campaign.keywords, keywords)
+    if (persistedKeywords.length > MAX_KEYWORDS) {
+      throw new CampaignError(keywordCapMessage())
+    }
+    if (persistedKeywords.join("\0") !== campaign.keywords.join("\0")) {
+      saveCampaign({ ...campaign, keywords: persistedKeywords, updatedAt: new Date().toISOString() })
+    }
 
     const startedAt = new Date().toISOString()
     const scannedAt = startedAt
@@ -1041,38 +1058,31 @@ export async function scanCampaign(
         locationCoordinate: point.locationCoordinate || formatLocationCoordinate(point.lat, point.lng, zoom),
       }),
     )
-    const pinContext = {
-      keyword,
-      targetName,
-      placeId,
-      city: campaign.city,
-      state: campaign.state,
-      businessName: campaign.businessName,
-      scannedAt,
-      nearbyCities,
-    }
     const scanId = newId()
-    const pendingPoints: GridPointResult[] = mapsPoints.map((point) => ({
-      row: point.row,
-      col: point.col,
-      lat: point.lat,
-      lng: point.lng,
-      locationCoordinate: point.locationCoordinate,
-      keyword,
-      rank: null,
-      listingTitle: null,
-      rating: null,
-      address: null,
-      mapsUrl: null,
-      scannedAt: "",
-      status: "pending",
-    }))
+    const pendingPoints: GridPointResult[] = keywords.flatMap((keyword) =>
+      mapsPoints.map((point) => ({
+        row: point.row,
+        col: point.col,
+        lat: point.lat,
+        lng: point.lng,
+        locationCoordinate: point.locationCoordinate,
+        keyword,
+        rank: null,
+        listingTitle: null,
+        rating: null,
+        address: null,
+        mapsUrl: null,
+        scannedAt: "",
+        status: "pending" as const,
+      })),
+    )
     let liveGrid: GridScanRun = {
       id: scanId,
       campaignId: campaign.id,
       startedAt,
       scannedAt,
-      keyword,
+      keyword: keywords[0]!,
+      keywords,
       gridSize: campaign.gridSize,
       spacingMiles: campaign.spacingMiles,
       zoom,
@@ -1090,30 +1100,55 @@ export async function scanCampaign(
     }
     persistLiveGrid(campaign.id, liveGrid)
 
-    const cells = await scanMapsGrid(mapsPoints, keyword, keys.dataforseoLogin!, keys.dataforseoPassword!, {
-      client: options?.client,
-      pollTimeoutMs: options?.pollTimeoutMs,
-      sleep: options?.sleep,
-      onCell: (cell) => {
-        const [finished] = finalizeGridPointResults([pinResultFromCell(cell, pinContext)], scannedAt)
-        if (!finished) return
-        const nextPoints = liveGrid.points.map((point) =>
-          point.row === finished.row && point.col === finished.col ? finished : point,
-        )
-        liveGrid = {
-          ...liveGrid,
-          points: nextPoints,
-          foundCount: nextPoints.filter((row) => row.rank != null).length,
-          competitors: rollupCompetitors(nextPoints),
-        }
-        persistLiveGrid(campaign.id, liveGrid)
-      },
-    })
+    const points: GridPointResult[] = []
+    const keywordRanks: KeywordRank[] = []
+    for (const keyword of keywords) {
+      const pinContext = {
+        keyword,
+        targetName,
+        placeId,
+        city: campaign.city,
+        state: campaign.state,
+        businessName: campaign.businessName,
+        scannedAt,
+        nearbyCities,
+      }
+      const cells = await scanMapsGrid(mapsPoints, keyword, keys.dataforseoLogin!, keys.dataforseoPassword!, {
+        client: options?.client,
+        pollTimeoutMs: options?.pollTimeoutMs,
+        sleep: options?.sleep,
+        onCell: (cell) => {
+          const [finished] = finalizeGridPointResults([pinResultFromCell(cell, pinContext)], scannedAt)
+          if (!finished) return
+          const nextPoints = liveGrid.points.map((point) => (sameGridPin(point, finished) ? finished : point))
+          liveGrid = {
+            ...liveGrid,
+            keyword,
+            points: nextPoints,
+            foundCount: nextPoints.filter((row) => row.rank != null).length,
+            competitors: rollupCompetitors(nextPoints),
+          }
+          persistLiveGrid(campaign.id, liveGrid)
+        },
+      })
+      const keywordPoints = finalizeGridPointResults(
+        cells.map((cell) => pinResultFromCell(cell, pinContext)),
+        scannedAt,
+      )
+      points.push(...keywordPoints)
+      const keywordFailed = keywordPoints.length > 0 && keywordPoints.every((row) => row.status === "error")
+      keywordRanks.push({
+        keyword,
+        rank: bestGridRank(keywordPoints),
+        listingTitle: keywordPoints.find((row) => row.rank != null)?.listingTitle ?? null,
+        rating: keywordPoints.find((row) => row.rank != null)?.rating ?? null,
+        address: keywordPoints.find((row) => row.rank != null)?.address ?? null,
+        mapsUrl: keywordPoints.find((row) => row.rank != null)?.mapsUrl ?? null,
+        scannedAt,
+        error: keywordFailed ? keywordPoints[0]?.error : undefined,
+      })
+    }
 
-    const points: GridPointResult[] = finalizeGridPointResults(
-      cells.map((cell) => pinResultFromCell(cell, pinContext)),
-      scannedAt,
-    )
     const finishedAt = new Date().toISOString()
     const allFailed = points.length > 0 && points.every((row) => row.status === "error")
     const grid: GridScanRun = {
@@ -1122,7 +1157,8 @@ export async function scanCampaign(
       startedAt,
       finishedAt,
       scannedAt: finishedAt,
-      keyword,
+      keyword: keywords[0]!,
+      keywords,
       gridSize: campaign.gridSize,
       spacingMiles: campaign.spacingMiles,
       zoom,
@@ -1139,19 +1175,9 @@ export async function scanCampaign(
       nearbyCities,
     }
 
-    const keywordRank: KeywordRank = {
-      keyword,
-      rank: bestGridRank(points),
-      listingTitle: points.find((row) => row.rank != null)?.listingTitle ?? null,
-      rating: points.find((row) => row.rank != null)?.rating ?? null,
-      address: points.find((row) => row.rank != null)?.address ?? null,
-      mapsUrl: points.find((row) => row.rank != null)?.mapsUrl ?? null,
-      scannedAt,
-      error: allFailed ? points[0]?.error : undefined,
-    }
-
     const latest = getCampaign(campaign.id) ?? campaign
-    const merged = mergeKeywordRanks(latest.keywords, latest.lastScan?.results, [keywordRank])
+    const nextKeywords = mergeKeywordLists(latest.keywords, persistedKeywords)
+    const merged = mergeKeywordRanks(nextKeywords, latest.lastScan?.results, keywordRanks)
     const scan: ScanRun = {
       id: grid.id,
       scannedAt,
@@ -1162,6 +1188,7 @@ export async function scanCampaign(
 
     const next: Campaign = {
       ...latest,
+      keywords: nextKeywords,
       center,
       placeId,
       zoom,

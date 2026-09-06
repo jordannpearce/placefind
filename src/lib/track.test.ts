@@ -172,7 +172,7 @@ describe("start traffic button", () => {
     assert.equal(stopTrafficVisible({ status: "running" } as TrafficJob), true)
     assert.equal(stopTrafficVisible({ status: "ok" } as TrafficJob), false)
     assert.equal(noPinsSelectedMessage(), "Select at least one pin")
-    assert.equal(noKeywordsSelectedMessage(), "Select at least one keyword")
+    assert.equal(noKeywordsSelectedMessage(), "Add at least one keyword")
     assert.match(trafficLogEmptyCopy(), /Select pins/)
     assert.match(trafficKeywordHelpCopy(), /selected pin GPS/)
     assert.match(trafficKeywordHelpCopy(), /listed order/)
@@ -188,6 +188,26 @@ describe("start traffic button", () => {
       "smoked meats",
     ])
     assert.deepEqual(selectedKeywordsInListedOrder(listed, []), [])
+    assert.deepEqual(
+      listedTrafficKeywords(
+        campaign({
+          keywords: [],
+          lastGridScan: {
+            id: "g1",
+            scannedAt: "2026-09-06T00:00:00.000Z",
+            keyword: "barbecue",
+            keywords: ["barbecue", "brisket"],
+            gridSize: 3,
+            spacingMiles: 1,
+            center: { lat: 30.27, lng: -97.74 },
+            pointCount: 18,
+            foundCount: 0,
+            points: [],
+          },
+        }),
+      ),
+      ["barbecue", "brisket"],
+    )
   })
 })
 
