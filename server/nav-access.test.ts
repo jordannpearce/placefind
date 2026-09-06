@@ -71,7 +71,7 @@ describe("navLinks", () => {
     assert.equal(guest.includes("Download"), false)
     assert.equal(guest.includes("Buy"), false)
     const labels = navLinks({ desktop: false, store: true, admin: false, user }).map((link) => link.label)
-    assert.deepEqual(labels, ["Home", "Directory", "Create listing", "Test scan", "Track", "Account"])
+    assert.deepEqual(labels, ["Home", "Directory", "Create listing", "Crawl", "Account"])
     assert.equal(labels.includes("Download"), false)
     assert.equal(labels.includes("Buy"), false)
   })

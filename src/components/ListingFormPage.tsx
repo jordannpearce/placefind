@@ -8,6 +8,7 @@ import {
   verifyListing,
 } from "../lib/api.ts"
 import { formatKeywordText } from "../lib/keywords.ts"
+import { listingPriceCopy, LISTING_PRICE_LABEL } from "../lib/pricing.ts"
 import { listingPath, mapsStatusLabel } from "../lib/listings.ts"
 import type { AuthUser, BusinessListing, DirectoryListing, ListingInput } from "../lib/types.ts"
 import { CityStateFields } from "./CityStateFields.tsx"
@@ -43,7 +44,7 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
     if (!listingId) return
     setLoading(true)
     void loadListing(listingId)
-      .then((row) => {
+      .then(({ listing: row }) => {
         setListing(row)
         setForm({
           name: row.name,
@@ -66,7 +67,7 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
     try {
       const next = listingId ? await updateListing(listingId, form) : await createListing(form)
       setListing(next)
-      setNotice(listingId ? "Listing saved." : "Listing created. Check Google Maps next.")
+      setNotice(listingId ? "Listing saved." : "Listing created. Open Crawl Website to write the public profile.")
       if (!listingId) onGo(`/listings/${next.id}/edit`)
       return next
     } catch (err) {
@@ -147,8 +148,7 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Your listing</p>
         <h2 className="mt-2 font-display text-3xl text-paper">{listingId ? "Edit listing" : "Create a listing"}</h2>
         <p className="mt-3 text-sm leading-6 text-muted">
-          Add your business to the PlaceFind directory, then cross-check that it appears on Google Maps. Signed in as{" "}
-          {user.email}.
+          A PlaceFind listing is {LISTING_PRICE_LABEL}. {listingPriceCopy()} Signed in as {user.email}.
         </p>
         {error && <p className="mt-4 rounded-xl border border-clay/40 bg-clay/10 px-4 py-3 text-sm text-clay">{error}</p>}
         {notice && <p className="mt-4 rounded-xl border border-moss/40 bg-moss/10 px-4 py-3 text-sm text-moss">{notice}</p>}

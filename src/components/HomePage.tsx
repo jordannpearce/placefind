@@ -1,55 +1,43 @@
-import { ArrowRight, MapPinned, Search, Store } from "lucide-react"
-import { useState } from "react"
-import { searchBusiness } from "../lib/api.ts"
-import { sampleSearchUsedMessage } from "../lib/public-copy.ts"
-import { CITY_PHOTOS, homeExampleResponse } from "../lib/sample-listing.ts"
-import { emptyKeys } from "../lib/storage.ts"
-import type { AuthUser, SearchQuery, SearchResponse } from "../lib/types.ts"
-import { ResultPanel } from "./ResultPanel.tsx"
-import { SearchForm } from "./SearchForm.tsx"
+import { ArrowRight, BadgeDollarSign, NotebookPen, Store } from "lucide-react"
+import { useEffect, useState } from "react"
+import { searchDirectory } from "../lib/api.ts"
+import { listingLocation, listingPath } from "../lib/listings.ts"
+import { LISTING_PRICE_LABEL, listingPriceCopy } from "../lib/pricing.ts"
+import { CITY_PHOTOS } from "../lib/sample-listing.ts"
+import type { AuthUser, DirectoryListing } from "../lib/types.ts"
 
 type Props = {
   user: AuthUser | null
   onGo: (path: string) => void
 }
 
-const emptyQuery = (): SearchQuery => ({ name: "", city: "", state: "", keyword: "" })
+function stars(average: number | null | undefined) {
+  if (average == null) return "New listing"
+  return `${average.toFixed(1)} · reviews`
+}
 
 export function HomePage({ user, onGo }: Props) {
-  const [query, setQuery] = useState<SearchQuery>(emptyQuery)
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<SearchResponse | null>(homeExampleResponse())
-  const [error, setError] = useState<string | null>(null)
+  const [featured, setFeatured] = useState<DirectoryListing[]>([])
 
-  async function runSearch() {
-    setLoading(true)
-    setError(null)
-    try {
-      const payload = await searchBusiness(query, emptyKeys(), true)
-      setResult(payload)
-      if (payload.error && !payload.best) setError(payload.error)
-    } catch (err) {
-      setResult(null)
-      setError(err instanceof Error ? err.message : sampleSearchUsedMessage())
-    } finally {
-      setLoading(false)
-    }
-  }
+  useEffect(() => {
+    void searchDirectory({})
+      .then((rows) => setFeatured(rows.slice(0, 4)))
+      .catch(() => setFeatured([]))
+  }, [])
 
   return (
     <div className="grid gap-16 pb-4">
       <section className="grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">
-            A business directory with a Google Maps check
-          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Local business directory</p>
           <h2 className="mt-3 font-display text-4xl leading-tight text-paper sm:text-5xl">
-            Find local businesses — and see if they show up on Google Maps
+            A directory for shops, and a profile that belongs to the business
           </h2>
           <p className="mt-5 max-w-xl text-base leading-7 text-muted">
-            PlaceFind is a web directory for people looking for shops, and for businesses that want to list
-            themselves and confirm the matching Google Maps place. Browse by name, city, state, or keyword.
+            PlaceFind is a web directory for people looking for local businesses — bakeries, clinics, shops, and
+            offices. A business can publish its own listing, collect reviews, and show the story behind the brand.
           </p>
+          <p className="mt-4 max-w-xl text-sm leading-6 text-brass">{listingPriceCopy()}</p>
           <div className="mt-7 flex flex-wrap gap-3">
             <button
               type="button"
@@ -64,26 +52,15 @@ export function HomePage({ user, onGo }: Props) {
               onClick={() => onGo(user ? "/listings/new" : "/join")}
               className="inline-flex h-12 items-center rounded-lg border border-line px-5 text-sm text-paper hover:border-brass"
             >
-              {user ? "Create a listing" : "List your business"}
-            </button>
-            <button
-              type="button"
-              onClick={() => onGo("/#sample")}
-              className="inline-flex h-12 items-center rounded-lg px-3 text-sm text-brass hover:underline"
-            >
-              See a sample Maps card
+              {user ? "Create a listing" : `List your business · ${LISTING_PRICE_LABEL}`}
             </button>
           </div>
         </div>
         <figure className="overflow-hidden rounded-2xl border border-line">
-          <img
-            src={CITY_PHOTOS[0].src}
-            alt={CITY_PHOTOS[0].alt}
-            className="h-72 w-full object-cover sm:h-80"
-          />
+          <img src={CITY_PHOTOS[0].src} alt={CITY_PHOTOS[0].alt} className="h-72 w-full object-cover sm:h-80" />
           <figcaption className="bg-panel px-4 py-3 text-xs leading-5 text-muted">
-            Local streets are full of listings. PlaceFind shows a public profile and whether that business
-            matches a Google Maps place.
+            Main streets are full of independent shops. PlaceFind gives each one a public profile people can actually
+            read.
           </figcaption>
         </figure>
       </section>
@@ -95,7 +72,7 @@ export function HomePage({ user, onGo }: Props) {
           </figure>
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">How it works</p>
-            <h3 className="mt-2 font-display text-3xl text-paper">List. Confirm. Be found.</h3>
+            <h3 className="mt-2 font-display text-3xl text-paper">List. Tell the story. Be found.</h3>
             <ol className="mt-5 grid gap-4">
               <li className="rounded-xl border border-line bg-panel px-4 py-3">
                 <p className="text-sm font-semibold text-paper">1. Create an account</p>
@@ -104,17 +81,17 @@ export function HomePage({ user, onGo }: Props) {
                 </p>
               </li>
               <li className="rounded-xl border border-line bg-panel px-4 py-3">
-                <p className="text-sm font-semibold text-paper">2. Add your business</p>
+                <p className="text-sm font-semibold text-paper">2. Publish a listing for {LISTING_PRICE_LABEL}</p>
                 <p className="mt-1 text-sm leading-6 text-muted">
-                  Name, city, state, category, and the keywords customers type — plus phone, website, or hours if
-                  you have them.
+                  Name, city, state, category, website, and the keywords customers type. The listing is a monthly
+                  directory profile — not a one-time flyer.
                 </p>
               </li>
               <li className="rounded-xl border border-line bg-panel px-4 py-3">
-                <p className="text-sm font-semibold text-paper">3. Cross-check Google Maps</p>
+                <p className="text-sm font-semibold text-paper">3. Build an enhanced profile</p>
                 <p className="mt-1 text-sm leading-6 text-muted">
-                  PlaceFind searches that name in that city. You confirm the matching place, or we mark it as not
-                  found.
+                  From the dashboard, request a website crawl. We look for brand, license, years in business, and what
+                  you specialize in, then write the profile visitors read.
                 </p>
               </li>
             </ol>
@@ -124,94 +101,81 @@ export function HomePage({ user, onGo }: Props) {
 
       <section>
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Why people use it</p>
-        <h3 className="mt-2 font-display text-3xl text-paper">A directory that also looks at the map</h3>
+        <h3 className="mt-2 font-display text-3xl text-paper">A directory with a real profile</h3>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <article className="rounded-2xl border border-line bg-panel p-5">
-            <Search className="h-5 w-5 text-brass" />
+            <Store className="h-5 w-5 text-brass" />
             <h4 className="mt-3 font-display text-xl text-paper">Find a business</h4>
             <p className="mt-2 text-sm leading-6 text-muted">
-              Browse PlaceFind listings by name, city, state, or keyword. Open a profile for contact details and
-              Maps status.
+              Browse by name, city, state, or keyword. Open a profile for contact details, the written story, and
+              reviews.
             </p>
           </article>
           <article className="rounded-2xl border border-line bg-panel p-5">
-            <Store className="h-5 w-5 text-brass" />
-            <h4 className="mt-3 font-display text-xl text-paper">List your shop</h4>
+            <BadgeDollarSign className="h-5 w-5 text-brass" />
+            <h4 className="mt-3 font-display text-xl text-paper">{LISTING_PRICE_LABEL}</h4>
             <p className="mt-2 text-sm leading-6 text-muted">
-              Businesses publish their own PlaceFind profile so customers — and other businesses — can find them.
+              A business pays {LISTING_PRICE_LABEL} to keep an active listing in the directory. Cancel from the account
+              when the shop no longer wants to appear.
             </p>
           </article>
           <article className="rounded-2xl border border-line bg-panel p-5">
-            <MapPinned className="h-5 w-5 text-brass" />
-            <h4 className="mt-3 font-display text-xl text-paper">See who shows on Maps</h4>
+            <NotebookPen className="h-5 w-5 text-brass" />
+            <h4 className="mt-3 font-display text-xl text-paper">Reviews and enhanced info</h4>
             <p className="mt-2 text-sm leading-6 text-muted">
-              Confirm the Google Maps place for a listing. Signed-in accounts can also track ranks around a
-              confirmed business.
+              Visitors leave reviews. The profile also keeps brand, license, years open, and specialty after a crawl.
             </p>
           </article>
         </div>
       </section>
 
       <section id="sample" className="scroll-mt-8">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Sample scan</p>
-            <h3 className="mt-2 font-display text-3xl text-paper">Try a Maps card the way PlaceFind shows it</h3>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-              Enter a business, city, state, and optional keyword. After you look around, here is an example from
-              Austin — Franklin Barbecue — so you can still see the shape of a match.
-            </p>
-          </div>
+        <div className="mb-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">In the directory</p>
+          <h3 className="mt-2 font-display text-3xl text-paper">Sample listings you can open today</h3>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+            These are live PlaceFind profiles — name, city, written copy, and reviews. Browse the full directory when
+            you want a city or keyword.
+          </p>
         </div>
-        <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
-          <aside className="min-w-0 rounded-2xl border border-line bg-panel p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Look up a listing</p>
-            <h4 className="mt-1 font-display text-2xl text-paper">Name, city, keyword</h4>
-            <p className="mb-4 mt-2 text-sm leading-6 text-muted">
-              This preview shows a Maps match. Signed-in accounts can run more lookups from the test scan, or
-              confirm a listing they own.
-            </p>
-            {user && (
-              <button type="button" onClick={() => onGo("/try")} className="mb-4 text-sm text-brass hover:underline">
-                Open the internal test scan
+        <ul className="grid gap-4 sm:grid-cols-2">
+          {featured.map((listing) => (
+            <li key={listing.id}>
+              <button
+                type="button"
+                onClick={() => onGo(listingPath(listing.id))}
+                className="h-full w-full rounded-2xl border border-line bg-panel p-5 text-left hover:border-brass/60"
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">
+                  {listing.category || "Business"}
+                </p>
+                <h4 className="mt-1 font-display text-2xl text-paper">{listing.brand || listing.name}</h4>
+                <p className="mt-1 text-sm text-muted">{listingLocation(listing)}</p>
+                {listing.specialty && <p className="mt-2 text-sm text-paper/80">{listing.specialty}</p>}
+                <p className="mt-3 text-xs text-brass">{stars(listing.reviewSummary?.average)}</p>
               </button>
-            )}
-            <SearchForm
-              query={query}
-              onChange={setQuery}
-              onSearch={() => void runSearch()}
-              loading={loading}
-              history={[]}
-              onHistory={() => undefined}
-              submitLabel="Show listing"
-              showHistory={false}
-            />
-          </aside>
-          <div>
-            <ResultPanel
-              loading={loading}
-              result={result}
-              error={error && !result?.best ? error : null}
-              emptyTitle="Here's an example"
-              emptyBody="Franklin Barbecue in Austin is a familiar Maps listing. Run the form to try another name, or keep this card as a guide to what PlaceFind returns."
-            />
-          </div>
-        </div>
+            </li>
+          ))}
+        </ul>
+        {featured.length === 0 && (
+          <p className="rounded-2xl border border-line bg-panel px-5 py-8 text-sm text-muted">
+            The directory is still loading. Open Browse to see every listing.
+          </p>
+        )}
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">
         <figure className="overflow-hidden rounded-2xl border border-line">
           <img src={CITY_PHOTOS[1].src} alt={CITY_PHOTOS[1].alt} className="h-64 w-full object-cover" />
           <figcaption className="bg-panel px-4 py-3 text-sm leading-6 text-muted">
-            A packed dining room does not always mean a strong Maps listing. PlaceFind shows the public profile
-            and whether a matching place was found.
+            A crowded dining room is not a profile. PlaceFind writes the facts a new customer actually needs.
           </figcaption>
         </figure>
         <figure className="overflow-hidden rounded-2xl border border-line">
           <img src={CITY_PHOTOS[2].src} alt={CITY_PHOTOS[2].alt} className="h-64 w-full object-cover" />
           <figcaption className="bg-panel px-4 py-3 text-sm leading-6 text-muted">
-            Small shops live or die on neighborhood search. A keyword plus a city is often how a new customer
-            finds them — or finds the place next door.
+            Small shops live on neighborhood word of mouth. A directory listing plus reviews is how the next street
+            over finds them.
           </figcaption>
         </figure>
       </section>
@@ -220,10 +184,10 @@ export function HomePage({ user, onGo }: Props) {
         <div className="grid items-center gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">For businesses</p>
-            <h3 className="mt-2 font-display text-3xl text-paper">Put your shop in the directory</h3>
+            <h3 className="mt-2 font-display text-3xl text-paper">List your shop for {LISTING_PRICE_LABEL}</h3>
             <p className="mt-3 max-w-xl text-sm leading-7 text-muted">
-              Create a PlaceFind account, add your listing, and confirm the Google Maps place. Visitors can find
-              you by name or keyword. You can come back later to edit the profile or track ranks.
+              Create an account, publish the listing, then open the dashboard and press Crawl Website. We read the site
+              and sitemap, pull brand, license, years in business, and specialty, and write the public profile.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <button
@@ -231,7 +195,7 @@ export function HomePage({ user, onGo }: Props) {
                 onClick={() => onGo(user ? "/listings/new" : "/join")}
                 className="inline-flex h-11 items-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
               >
-                {user ? "Create a listing" : "Create an account"}
+                {user ? "Create a listing" : "Start a listing"}
               </button>
               <button
                 type="button"
@@ -244,9 +208,9 @@ export function HomePage({ user, onGo }: Props) {
           </div>
           <ul className="grid gap-3 text-sm text-paper/85">
             <li className="rounded-xl border border-line bg-panel px-4 py-3">Public directory by name, city, and keyword</li>
-            <li className="rounded-xl border border-line bg-panel px-4 py-3">Businesses publish their own listing</li>
-            <li className="rounded-xl border border-line bg-panel px-4 py-3">Confirm the matching Google Maps place</li>
-            <li className="rounded-xl border border-line bg-panel px-4 py-3">See found, not found, or pending status</li>
+            <li className="rounded-xl border border-line bg-panel px-4 py-3">{LISTING_PRICE_LABEL} for an active listing</li>
+            <li className="rounded-xl border border-line bg-panel px-4 py-3">Website crawl writes brand, license, and specialty</li>
+            <li className="rounded-xl border border-line bg-panel px-4 py-3">Reviews and enhanced profile on every listing</li>
           </ul>
         </div>
       </section>

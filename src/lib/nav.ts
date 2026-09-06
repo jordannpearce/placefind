@@ -15,6 +15,7 @@ export type AppPath =
   | "/try"
   | "/demo"
   | "/directory"
+  | "/dashboard"
   | "/listings"
   | "/terms"
   | "/privacy"
@@ -50,6 +51,7 @@ const PATHS: AppPath[] = [
   "/try",
   "/demo",
   "/directory",
+  "/dashboard",
   "/listings",
   "/terms",
   "/privacy",
@@ -87,6 +89,7 @@ export function currentPath(): AppPath {
   if (path.startsWith("/try")) return "/try"
   if (path.startsWith("/demo")) return "/demo"
   if (path.startsWith("/directory")) return "/directory"
+  if (path.startsWith("/dashboard")) return "/dashboard"
   if (path.startsWith("/listings")) return "/listings"
   if (path.startsWith("/terms")) return "/terms"
   if (path.startsWith("/privacy")) return "/privacy"
@@ -113,6 +116,7 @@ export function allowedPath(next: AppPath, access: NavAccess): AppPath {
   if (next === "/sell") return admin ? "/sell" : impersonating ? "/account" : "/admin"
   if (next === "/join") return user ? "/account" : "/join"
   if (next === "/directory" || next === "/listings") return next
+  if (next === "/dashboard") return user ? "/dashboard" : "/login"
   if (next === "/try" || next === "/demo") {
     if (desktop && !user) return "/login"
     return next
@@ -146,7 +150,7 @@ export function navLinks(access: NavAccess): NavLink[] {
   ]
   if (!user) links.push({ href: "/#how-it-works", label: "How it works" })
   if (user) {
-    links.push({ href: "/listings/new", label: "Create listing" }, { href: "/try", label: "Test scan" }, { href: "/track", label: "Track" })
+    links.push({ href: "/listings/new", label: "Create listing" }, { href: "/dashboard", label: "Crawl" })
     links.push({ href: "/account", label: "Account" })
   } else {
     links.push({ href: "/join", label: "Join" }, { href: "/login", label: "Sign in" })
@@ -156,8 +160,9 @@ export function navLinks(access: NavAccess): NavLink[] {
 }
 
 export function pageTitle(path: AppPath): string {
-  if (path === "/") return "PlaceFind — Find businesses on Google Maps"
+  if (path === "/") return "PlaceFind — Local business directory"
   if (path === "/directory") return "Directory · PlaceFind"
+  if (path === "/dashboard") return "Crawl Website · PlaceFind"
   if (path === "/listings") return "Listing · PlaceFind"
   if (path === "/try" || path === "/demo") return "Test scan · PlaceFind"
   if (path === "/join") return "Join · PlaceFind"

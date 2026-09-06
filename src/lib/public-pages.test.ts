@@ -20,6 +20,7 @@ const PUBLIC_FILES = [
   "components/ListingFormPage.tsx",
   "components/AuthPage.tsx",
   "components/AccountPage.tsx",
+  "components/CrawlDashboard.tsx",
   "lib/legal.ts",
   "lib/nav.ts",
 ]
@@ -50,6 +51,15 @@ describe("public website copy", () => {
   it("does not advertise a used-search or IP limit", () => {
     const home = readFileSync(path.join(root, "components/HomePage.tsx"), "utf8")
     assert.equal(/already in use|you('ve| have) used|ip limit|logged your ip/i.test(home), false)
+  })
+
+  it("keeps Google Maps off the homepage and prices a listing at $150 per month", () => {
+    const home = readFileSync(path.join(root, "components/HomePage.tsx"), "utf8")
+    assert.equal(/google maps/i.test(home), false)
+    assert.match(home, /LISTING_PRICE_LABEL|listingPriceCopy|\$150/)
+    assert.match(home, /business directory/i)
+    const pricing = readFileSync(path.join(root, "lib/pricing.ts"), "utf8")
+    assert.match(pricing, /\$150 per month/)
   })
 
   it("does not mention download, Windows, or license keys on the public site", () => {

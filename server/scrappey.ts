@@ -28,6 +28,14 @@ function scrappeyUrl(key: string): string {
   return `${SCRAPPEY_ENDPOINT}?key=${encodeURIComponent(key)}`
 }
 
+export async function fetchCrawledPage(
+  key: string,
+  url: string,
+  timeoutMs = 180_000,
+): Promise<{ text: string; currentUrl: string; error: string | null }> {
+  return scrappeyGet(key, url, timeoutMs)
+}
+
 async function scrappeyGet(key: string, url: string, timeoutMs = 90_000): Promise<{ text: string; currentUrl: string; error: string | null }> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)

@@ -37,6 +37,13 @@ export function AccountPage({ user, onLogout, onGo }: Props) {
           </button>
           <button
             type="button"
+            onClick={() => onGo("/dashboard")}
+            className="h-11 rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
+          >
+            Crawl Website
+          </button>
+          <button
+            type="button"
             onClick={async () => {
               await logout()
               onLogout()
@@ -53,7 +60,8 @@ export function AccountPage({ user, onLogout, onGo }: Props) {
         {error && <p className="mt-3 text-sm text-clay">{error}</p>}
         {listings.length === 0 ? (
           <p className="mt-3 text-sm text-muted">
-            No listings yet. Create a PlaceFind profile for your business, then confirm it on Google Maps.
+            No listings yet. A PlaceFind listing is $150 per month. Create one, then open Crawl Website to write the
+            profile.
           </p>
         ) : (
           <ul className="mt-4 grid gap-3">

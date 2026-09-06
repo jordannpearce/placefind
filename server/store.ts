@@ -14,6 +14,8 @@ export type StoreCollection =
   | "password_resets"
   | "search_ip"
   | "listings"
+  | "crawls"
+  | "reviews"
 
 type JsonRow = Record<string, unknown>
 
@@ -28,6 +30,8 @@ const FILES: Record<StoreCollection, string> = {
   password_resets: "password-resets.json",
   search_ip: "search-ip.json",
   listings: "listings.json",
+  crawls: "crawls.json",
+  reviews: "reviews.json",
 }
 
 const SCHEMA_SQL = `
@@ -118,6 +122,14 @@ CREATE TABLE IF NOT EXISTS listings (
   id TEXT PRIMARY KEY,
   payload JSONB NOT NULL
 );
+CREATE TABLE IF NOT EXISTS crawls (
+  id TEXT PRIMARY KEY,
+  payload JSONB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS reviews (
+  id TEXT PRIMARY KEY,
+  payload JSONB NOT NULL
+);
 `
 
 const memory: Record<StoreCollection, JsonRow[]> = {
@@ -131,6 +143,8 @@ const memory: Record<StoreCollection, JsonRow[]> = {
   password_resets: [],
   search_ip: [],
   listings: [],
+  crawls: [],
+  reviews: [],
 }
 
 let loaded = false
@@ -307,18 +321,18 @@ async function persistPostgres(name: StoreCollection) {
           row.count ?? 1,
         ])
       }
-    } else if (name === "listings") {
+    } else if (name === "listings" || name === "crawls" || name === "reviews") {
       const unique = uniqueRowsByKey(rows, "id")
       const ids = unique.map((row) => String(row.id))
       for (const row of unique) {
         await client.query(
-          `INSERT INTO listings (id, payload) VALUES ($1,$2::jsonb)
+          `INSERT INTO ${name} (id, payload) VALUES ($1,$2::jsonb)
            ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload`,
           [row.id, JSON.stringify(row)],
         )
       }
-      if (ids.length === 0) await client.query("DELETE FROM listings")
-      else await client.query("DELETE FROM listings WHERE NOT (id = ANY($1::text[]))", [ids])
+      if (ids.length === 0) await client.query(`DELETE FROM ${name}`)
+      else await client.query(`DELETE FROM ${name} WHERE NOT (id = ANY($1::text[]))`, [ids])
     }
     await client.query("COMMIT")
   } catch (error) {
@@ -358,6 +372,8 @@ async function loadPostgres() {
     `SELECT hash, first_at AS "firstAt", last_at AS "lastAt", count FROM search_ip`,
   )
   const listings = await pool.query("SELECT payload FROM listings")
+  const crawls = await pool.query("SELECT payload FROM crawls")
+  const reviews = await pool.query("SELECT payload FROM reviews")
   memory.users = users.rows
   memory.sessions = sessions.rows
   memory.orders = orders.rows
@@ -368,6 +384,8 @@ async function loadPostgres() {
   memory.password_resets = resets.rows
   memory.search_ip = searchIp.rows
   memory.listings = listings.rows.map((row) => row.payload as JsonRow)
+  memory.crawls = crawls.rows.map((row) => row.payload as JsonRow)
+  memory.reviews = reviews.rows.map((row) => row.payload as JsonRow)
 }
 
 function collectionEmpty() {

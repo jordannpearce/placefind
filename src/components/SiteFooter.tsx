@@ -14,7 +14,7 @@ export function SiteFooter({ onGo }: Props) {
         <div>
           <p className="font-display text-xl text-paper">PlaceFind</p>
           <p className="mt-1 max-w-md text-sm leading-6 text-muted">
-            A web directory for finding local businesses — and checking whether they appear on Google Maps.
+            A web directory for local businesses. List a shop for $150 per month, then publish a profile with reviews.
           </p>
         </div>
         <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm" aria-label="Legal">

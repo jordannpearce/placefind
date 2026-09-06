@@ -102,6 +102,9 @@ import {
   updateListing,
   verifyListingOnMaps,
 } from "./listings.ts"
+import { createReview, listingReviewSummary, reviewsForListing, seedDirectoryReviews } from "./reviews.ts"
+import { robotsTxt, siteOrigin, sitemapXml } from "./robots.ts"
+import { crawlsForUser, getCrawl, publicCrawl, requestListingCrawl } from "./site-crawl.ts"
 import { initStore } from "./store.ts"
 import { testScrappey } from "./scrappey.ts"
 import { attachUserLicense, checkout, issueAndDeliver, listOrders, ordersForUser, publicOrder, shopSummary } from "./shop.ts"
@@ -131,6 +134,7 @@ function readQuery(body: Partial<SearchQuery>): { query: SearchQuery; error?: st
 async function start() {
   await initStore()
   seedDirectoryListings()
+  seedDirectoryReviews()
   await initGeoPoints()
   await hydrateHostedKeys()
   recoverStaleTrafficJobs()
@@ -171,6 +175,14 @@ async function start() {
   function campaignMeta() {
     return { maxKeywords: MAX_KEYWORDS, maxGridSize: MAX_GRID_SIZE, allowedGridSizes: ALLOWED_GRID_SIZES }
   }
+
+  app.get("/robots.txt", (req, res) => {
+    res.type("text/plain").send(robotsTxt(siteOrigin(req)))
+  })
+
+  app.get("/sitemap.xml", (req, res) => {
+    res.type("application/xml").send(sitemapXml(siteOrigin(req), listPublicListings().map((row) => row.id)))
+  })
 
   app.get("/api/health", (_req, res) => {
     const hosted = hostedKeyStatus()
@@ -219,7 +231,10 @@ async function start() {
     const admin = canManage(req.headers.cookie)
     const user = actor(req)
     res.json({
-      listings: listPublicListings(query).map((row) => publicListing(row, admin || row.ownerUserId === user?.id)),
+      listings: listPublicListings(query).map((row) => ({
+        ...publicListing(row, admin || row.ownerUserId === user?.id),
+        reviewSummary: listingReviewSummary(row.id),
+      })),
     })
   })
 
@@ -228,13 +243,75 @@ async function start() {
       const listing = getListing(String(req.params.id ?? ""))
       const admin = canManage(req.headers.cookie)
       const user = actor(req)
-      res.json({ listing: publicListing(listing, admin || listing.ownerUserId === user?.id) })
+      const reviews = reviewsForListing(listing.id)
+      res.json({
+        listing: publicListing(listing, admin || listing.ownerUserId === user?.id),
+        reviews,
+        reviewSummary: listingReviewSummary(listing.id),
+      })
     } catch (error) {
       if (error instanceof ListingError) {
         res.status(error.status).json({ error: error.message })
         return
       }
       res.status(500).json({ error: "Could not load that listing." })
+    }
+  })
+
+  app.post("/api/listings/:id/reviews", (req, res) => {
+    try {
+      const review = createReview(String(req.params.id ?? ""), req.body ?? {})
+      res.status(201).json({
+        review,
+        reviews: reviewsForListing(review.listingId),
+        reviewSummary: listingReviewSummary(review.listingId),
+      })
+    } catch (error) {
+      if (error instanceof ListingError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not save that review." })
+    }
+  })
+
+  app.get("/api/crawls", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    res.json({ crawls: crawlsForUser(user.id, user.role === "admin").map(publicCrawl) })
+  })
+
+  app.post("/api/crawls", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    try {
+      const job = requestListingCrawl(
+        String(req.body?.listingId ?? ""),
+        user.id,
+        user.role === "admin",
+        String(req.body?.website ?? ""),
+      )
+      res.status(202).json({ crawl: publicCrawl(job) })
+    } catch (error) {
+      if (error instanceof ListingError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not start that website crawl." })
+    }
+  })
+
+  app.get("/api/crawls/:id", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    try {
+      res.json({ crawl: publicCrawl(getCrawl(String(req.params.id ?? ""), user.id, user.role === "admin")) })
+    } catch (error) {
+      if (error instanceof ListingError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not load that crawl." })
     }
   })
 

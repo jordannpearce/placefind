@@ -13,8 +13,8 @@ const STORE = path.resolve(process.cwd(), ".data", "product.json")
 const FALLBACK: ProductInfo = {
   name: "PlaceFind",
   version: "1.0.0",
-  price: "49",
-  pitch: "A web directory for local businesses, with a Google Maps cross-check.",
+  price: "150",
+  pitch: "A web directory for local businesses. A listing is $150 per month.",
 }
 
 export function readProduct(): ProductInfo {

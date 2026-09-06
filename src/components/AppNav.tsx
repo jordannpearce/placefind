@@ -23,7 +23,8 @@ export function AppNav({ path, desktop, store, admin, user, onGo }: Props) {
           link.href === pathname ||
           link.href === path ||
           (link.href.startsWith("/#") && path === "/") ||
-          (link.href === "/listings/new" && pathname.startsWith("/listings"))
+          (link.href === "/listings/new" && pathname.startsWith("/listings")) ||
+          (link.href === "/dashboard" && pathname.startsWith("/dashboard"))
         return (
           <a
             key={link.href}

@@ -27,8 +27,8 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "What PlaceFind is",
         body: [
-          "PlaceFind is a web directory for local businesses. People use it to find businesses, and businesses use it to list themselves and see whether they appear on Google Maps.",
-          "Signed-in businesses can create a listing, confirm the matching Google Maps place, and use optional rank-tracking tools on their account.",
+          "PlaceFind is a web directory for local businesses. People use it to find shops. Businesses use it to publish a listing, request a website crawl, and collect reviews on a public profile.",
+          "A business listing is $150 per month. Signed-in owners can edit the listing, request Crawl Website from the dashboard, and manage the profile visitors see.",
         ],
       },
       {
@@ -41,7 +41,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "Acceptable use",
         body: [
-          "Use PlaceFind to research businesses you have a legitimate interest in — your own listing, competitors, or an area you serve. Do not use it to harass people, scrape at industrial volume, or break the rules of Google Maps or any other site.",
+          "Use PlaceFind to research businesses you have a legitimate interest in — your own listing, competitors, or an area you serve. Do not use it to harass people or scrape the directory at industrial volume.",
           "We may slow or stop public tools when we see automated or abusive traffic. That is a service-protection step, not a promise that every visitor gets unlimited live lookups.",
         ],
       },
@@ -54,7 +54,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "No warranty",
         body: [
-          "Maps results change. Rankings move. PlaceFind presents listings as we find them at search time. We do not guarantee a rank, a lead, or that a listing will stay the same.",
+          "Directory listings, reviews, and crawled profile copy can change. PlaceFind does not guarantee a lead or that a listing will stay the same.",
           "The service is provided as-is. To the extent the law allows, PlaceFind is not liable for lost profits, lost data, or indirect damages from using the site.",
         ],
       },
@@ -157,7 +157,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "Listing data",
         body: [
-          "Business name, city, state, category, keywords, optional contact details, and the Google Maps place you confirmed (or a not-found status). Public directory pages show the profile you published.",
+          "Business name, city, state, category, keywords, optional contact details, website crawl facts (brand, license, years in business, specialty), written profile copy, and visitor reviews. Public directory pages show the profile you published.",
         ],
       },
       {
@@ -197,19 +197,19 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "The public directory is free to browse",
         body: [
-          "Visitors can browse listings and try a sample Maps lookup without paying. Creating an account and adding a listing does not require a purchase today.",
+          "Visitors can browse listings and read profiles without paying. Leaving a review is free.",
         ],
       },
       {
-        heading: "If a paid plan is added later",
+        heading: "Business listings are $150 per month",
         body: [
-          "If you pay for an optional plan in the future, unused time on that plan may be refunded within 14 days of the charge if you write us from the email on your account. We will say so clearly at checkout.",
+          "A business pays $150 per month to keep an active PlaceFind listing. That fee covers the public profile, website crawl, and review desk. Write us from the email on your account within 14 days of the first charge if you want a refund for that first month. Later months are not refunded after the period has started.",
         ],
       },
       {
         heading: "What we do not promise",
         body: [
-          "Maps results, ranks, and traffic on Google Maps are outside our control. A refund is not available because a listing ranked lower than you hoped or because a competitor appeared in a scan.",
+          "A refund is not available because a listing received fewer visits or reviews than you hoped, or because crawled website copy did not match the tone you wanted. You can edit the listing or request another crawl.",
         ],
       },
       {

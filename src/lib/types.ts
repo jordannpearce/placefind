@@ -185,6 +185,21 @@ export type MailSendResult = {
 }
 
 export type MapsStatus = "pending" | "found" | "not_found"
+export type CrawlStatus = "idle" | "queued" | "running" | "ok" | "error"
+
+export type ReviewSummary = {
+  count: number
+  average: number | null
+}
+
+export type ListingReview = {
+  id: string
+  listingId: string
+  authorName: string
+  rating: number
+  text: string
+  createdAt: string
+}
 
 export type DirectoryListing = {
   id: string
@@ -203,8 +218,34 @@ export type DirectoryListing = {
   mapsTitle: string
   mapsAddress: string
   mapsUrl: string | null
+  monthlyPrice?: number
+  brand?: string
+  licenseInfo?: string
+  yearsInBusiness?: string
+  specialty?: string
+  profileContent?: string
+  crawlStatus?: CrawlStatus
+  lastCrawledAt?: string | null
+  reviewSummary?: ReviewSummary
   createdAt: string
   updatedAt: string
+}
+
+export type CrawlJob = {
+  id: string
+  listingId: string
+  websiteUrl: string
+  status: "queued" | "running" | "ok" | "error"
+  sitemapFound: boolean
+  pagesCrawled: number
+  brand: string
+  licenseInfo: string
+  yearsInBusiness: string
+  specialty: string
+  article: string
+  error: string
+  createdAt: string
+  finishedAt: string | null
 }
 
 export type ListingInput = {

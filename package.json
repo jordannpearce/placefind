@@ -2,7 +2,7 @@
   "name": "placefind",
   "private": true,
   "version": "1.0.0",
-  "description": "Web directory for local businesses with a Google Maps cross-check.",
+  "description": "Web directory for local businesses. Listings are $150 per month.",
   "author": "PlaceFind",
   "type": "module",
   "main": "electron/main.cjs",

@@ -28,6 +28,9 @@ import type {
   GeoPointsStatus,
   DirectoryListing,
   ListingInput,
+  ListingReview,
+  ReviewSummary,
+  CrawlJob,
   BusinessListing,
 } from "./types.ts"
 
@@ -276,9 +279,47 @@ export async function searchDirectory(input: {
   return payload.listings
 }
 
-export async function loadListing(id: string): Promise<DirectoryListing> {
-  const payload = await request<{ listing: DirectoryListing }>(`/api/listings/${id}`)
-  return payload.listing
+export async function loadListing(id: string): Promise<{
+  listing: DirectoryListing
+  reviews: ListingReview[]
+  reviewSummary: ReviewSummary
+}> {
+  const payload = await request<{ listing: DirectoryListing; reviews?: ListingReview[]; reviewSummary?: ReviewSummary }>(
+    `/api/listings/${id}`,
+  )
+  return {
+    listing: {
+      ...payload.listing,
+      reviewSummary: payload.reviewSummary ?? payload.listing.reviewSummary,
+    },
+    reviews: payload.reviews ?? [],
+    reviewSummary: payload.reviewSummary ?? { count: 0, average: null },
+  }
+}
+
+export async function createListingReview(
+  id: string,
+  input: { authorName: string; rating: number; text: string },
+): Promise<{ review: ListingReview; reviews: ListingReview[]; reviewSummary: ReviewSummary }> {
+  return request(`/api/listings/${id}/reviews`, { method: "POST", body: JSON.stringify(input) })
+}
+
+export async function loadCrawls(): Promise<CrawlJob[]> {
+  const payload = await request<{ crawls: CrawlJob[] }>("/api/crawls")
+  return payload.crawls
+}
+
+export async function requestWebsiteCrawl(input: { listingId: string; website?: string }): Promise<CrawlJob> {
+  const payload = await request<{ crawl: CrawlJob }>("/api/crawls", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+  return payload.crawl
+}
+
+export async function loadCrawl(id: string): Promise<CrawlJob> {
+  const payload = await request<{ crawl: CrawlJob }>(`/api/crawls/${id}`)
+  return payload.crawl
 }
 
 export async function createListing(input: ListingInput): Promise<DirectoryListing> {

@@ -39,9 +39,9 @@ export function AuthPage({ mode = "login", title, intro, onAuthed, onGoLogin, on
       </h2>
       <p className="mt-3 text-sm leading-6 text-muted">
         {view === "join"
-          ? intro || "Create a PlaceFind account to list your business and check it on Google Maps."
+          ? intro || "Create a PlaceFind account to list your business for $150 per month."
           : view === "login"
-            ? intro || "Sign in to manage your listings, run a test scan, or track ranks."
+            ? intro || "Sign in to manage your listings or request a website crawl."
             : "Enter the email on your PlaceFind account. If it is on file, we will send a one-time reset link."}
       </p>
       {view === "join" && (

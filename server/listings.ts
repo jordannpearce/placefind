@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto"
 import { normalizeKeywords } from "../src/lib/keywords.ts"
+import { LISTING_MONTHLY_PRICE } from "../src/lib/pricing.ts"
 import { mapsPlaceUrl } from "./match.ts"
 import { toStateAbbr } from "./states.ts"
 import { readCollection, writeCollection } from "./store.ts"
@@ -8,6 +9,7 @@ import type { BusinessListing, SearchQuery, SearchResponse } from "./types.ts"
 export const SEED_OWNER_ID = "seed-directory"
 
 export type MapsStatus = "pending" | "found" | "not_found"
+export type CrawlStatus = "idle" | "queued" | "running" | "ok" | "error"
 
 export type DirectoryListing = {
   id: string
@@ -25,6 +27,14 @@ export type DirectoryListing = {
   mapsStatus: MapsStatus
   mapsTitle: string
   mapsAddress: string
+  monthlyPrice: number
+  brand: string
+  licenseInfo: string
+  yearsInBusiness: string
+  specialty: string
+  profileContent: string
+  crawlStatus: CrawlStatus
+  lastCrawledAt: string
   createdAt: string
   updatedAt: string
 }
@@ -72,6 +82,15 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
     mapsStatus: "found",
     mapsTitle: "Harbor & Oak Bakery",
     mapsAddress: "18 Exchange St, Portland, ME 04101",
+    monthlyPrice: LISTING_MONTHLY_PRICE,
+    brand: "Harbor & Oak",
+    licenseInfo: "License BAK-4418",
+    yearsInBusiness: "Since 2014",
+    specialty: "naturally leavened bread and morning pastry",
+    profileContent:
+      "Harbor & Oak is a bakery in Portland, ME. The shop has been open since 2014. License BAK-4418 is on file.\n\nHarbor & Oak specializes in naturally leavened bread and morning pastry.\n\nThis profile was written from the business website and the listing the owner published on PlaceFind. Reviews from visitors appear below the facts.",
+    crawlStatus: "ok",
+    lastCrawledAt: "2026-08-12T14:00:00.000Z",
   },
   {
     ownerUserId: SEED_OWNER_ID,
@@ -88,6 +107,15 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
     mapsStatus: "found",
     mapsTitle: "Red Mesa Dental",
     mapsAddress: "412 Cerrillos Rd, Santa Fe, NM 87501",
+    monthlyPrice: LISTING_MONTHLY_PRICE,
+    brand: "Red Mesa Dental",
+    licenseInfo: "License DDS-2201",
+    yearsInBusiness: "12 years in business",
+    specialty: "family dentistry and preventive cleanings",
+    profileContent:
+      "Red Mesa Dental is a dentist in Santa Fe, NM. 12 years in business. License DDS-2201 is on file.\n\nRed Mesa Dental specializes in family dentistry and preventive cleanings.\n\nThis profile was written from the business website and the listing the owner published on PlaceFind. Reviews from visitors appear below the facts.",
+    crawlStatus: "ok",
+    lastCrawledAt: "2026-08-12T14:00:00.000Z",
   },
   {
     ownerUserId: SEED_OWNER_ID,
@@ -104,6 +132,14 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
     mapsStatus: "pending",
     mapsTitle: "",
     mapsAddress: "",
+    monthlyPrice: LISTING_MONTHLY_PRICE,
+    brand: "Northside Bike Works",
+    licenseInfo: "",
+    yearsInBusiness: "",
+    specialty: "",
+    profileContent: "",
+    crawlStatus: "idle",
+    lastCrawledAt: "",
   },
   {
     ownerUserId: SEED_OWNER_ID,
@@ -120,6 +156,15 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
     mapsStatus: "found",
     mapsTitle: "Citrus & Salt Seafood",
     mapsAddress: "907 N Franklin St, Tampa, FL 33602",
+    monthlyPrice: LISTING_MONTHLY_PRICE,
+    brand: "Citrus & Salt",
+    licenseInfo: "License FDBPR-9912",
+    yearsInBusiness: "Since 2009",
+    specialty: "Gulf oysters and grouper sandwiches",
+    profileContent:
+      "Citrus & Salt is a seafood restaurant in Tampa, FL. The shop has been open since 2009. License FDBPR-9912 is on file.\n\nCitrus & Salt specializes in Gulf oysters and grouper sandwiches.\n\nThis profile was written from the business website and the listing the owner published on PlaceFind. Reviews from visitors appear below the facts.",
+    crawlStatus: "ok",
+    lastCrawledAt: "2026-08-12T14:00:00.000Z",
   },
   {
     ownerUserId: SEED_OWNER_ID,
@@ -136,6 +181,15 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
     mapsStatus: "not_found",
     mapsTitle: "",
     mapsAddress: "",
+    monthlyPrice: LISTING_MONTHLY_PRICE,
+    brand: "Copper Bell Books",
+    licenseInfo: "",
+    yearsInBusiness: "Since 1998",
+    specialty: "used and independent titles",
+    profileContent:
+      "Copper Bell Books is a bookstore in Asheville, NC. The shop has been open since 1998.\n\nCopper Bell Books specializes in used and independent titles.\n\nThis profile was written from the business website and the listing the owner published on PlaceFind. Reviews from visitors appear below the facts.",
+    crawlStatus: "ok",
+    lastCrawledAt: "2026-08-12T14:00:00.000Z",
   },
   {
     ownerUserId: SEED_OWNER_ID,
@@ -152,6 +206,15 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
     mapsStatus: "found",
     mapsTitle: "Lamppost Hardware",
     mapsAddress: "2214 N 13th St, Boise, ID 83702",
+    monthlyPrice: LISTING_MONTHLY_PRICE,
+    brand: "Lamppost Hardware",
+    licenseInfo: "License RET-118",
+    yearsInBusiness: "40 years in business",
+    specialty: "keys, paint, and garden hardware",
+    profileContent:
+      "Lamppost Hardware is a hardware store in Boise, ID. 40 years in business. License RET-118 is on file.\n\nLamppost Hardware specializes in keys, paint, and garden hardware.\n\nThis profile was written from the business website and the listing the owner published on PlaceFind. Reviews from visitors appear below the facts.",
+    crawlStatus: "ok",
+    lastCrawledAt: "2026-08-12T14:00:00.000Z",
   },
 ]
 
@@ -166,6 +229,11 @@ function nowIso() {
 function mapsStatusOf(value: unknown): MapsStatus {
   if (value === "found" || value === "not_found" || value === "pending") return value
   return "pending"
+}
+
+function crawlStatusOf(value: unknown): CrawlStatus {
+  if (value === "queued" || value === "running" || value === "ok" || value === "error" || value === "idle") return value
+  return "idle"
 }
 
 function asListing(row: Partial<DirectoryListing> | null | undefined): DirectoryListing | null {
@@ -186,6 +254,14 @@ function asListing(row: Partial<DirectoryListing> | null | undefined): Directory
     mapsStatus: mapsStatusOf(row.mapsStatus),
     mapsTitle: String(row.mapsTitle ?? ""),
     mapsAddress: String(row.mapsAddress ?? ""),
+    monthlyPrice: Number(row.monthlyPrice) > 0 ? Number(row.monthlyPrice) : LISTING_MONTHLY_PRICE,
+    brand: String(row.brand ?? ""),
+    licenseInfo: String(row.licenseInfo ?? ""),
+    yearsInBusiness: String(row.yearsInBusiness ?? ""),
+    specialty: String(row.specialty ?? ""),
+    profileContent: String(row.profileContent ?? ""),
+    crawlStatus: crawlStatusOf(row.crawlStatus),
+    lastCrawledAt: String(row.lastCrawledAt ?? ""),
     createdAt: String(row.createdAt ?? nowIso()),
     updatedAt: String(row.updatedAt ?? row.createdAt ?? nowIso()),
   }
@@ -247,6 +323,14 @@ export function publicListing(listing: DirectoryListing, includeOwner = false) {
           cid: listing.cid,
         })
       : null,
+    monthlyPrice: listing.monthlyPrice,
+    brand: listing.brand,
+    licenseInfo: listing.licenseInfo,
+    yearsInBusiness: listing.yearsInBusiness,
+    specialty: listing.specialty,
+    profileContent: listing.profileContent,
+    crawlStatus: listing.crawlStatus,
+    lastCrawledAt: listing.lastCrawledAt || null,
     createdAt: listing.createdAt,
     updatedAt: listing.updatedAt,
     ...(includeOwner ? { ownerUserId: listing.ownerUserId } : {}),
@@ -255,7 +339,23 @@ export function publicListing(listing: DirectoryListing, includeOwner = false) {
 
 export function seedDirectoryListings(force = false): DirectoryListing[] {
   const existing = readListings()
-  if (existing.length > 0 && !force) return existing
+  if (existing.length > 0 && !force) {
+    const seeded = new Map(
+      SEED_LISTINGS.map((row, index) => [
+        `seed-${index + 1}`,
+        { ...row, id: `seed-${index + 1}`, createdAt: existing.find((item) => item.id === `seed-${index + 1}`)?.createdAt ?? "2026-08-12T14:00:00.000Z", updatedAt: existing.find((item) => item.id === `seed-${index + 1}`)?.updatedAt ?? "2026-08-12T14:00:00.000Z" },
+      ]),
+    )
+    let changed = false
+    const next = existing.map((row) => {
+      const fresh = seeded.get(row.id)
+      if (!fresh || row.profileContent) return row
+      changed = true
+      return { ...row, ...fresh, id: row.id, createdAt: row.createdAt, updatedAt: row.updatedAt }
+    })
+    if (changed) writeListings(next)
+    return readListings()
+  }
   const at = "2026-08-12T14:00:00.000Z"
   const seeded = SEED_LISTINGS.map((row, index) => ({
     ...row,
@@ -316,6 +416,14 @@ export function createListing(input: ListingInput, ownerUserId: string): Directo
     mapsStatus: "pending",
     mapsTitle: "",
     mapsAddress: "",
+    monthlyPrice: LISTING_MONTHLY_PRICE,
+    brand: "",
+    licenseInfo: "",
+    yearsInBusiness: "",
+    specialty: "",
+    profileContent: "",
+    crawlStatus: "idle",
+    lastCrawledAt: "",
     createdAt: at,
     updatedAt: at,
   }
@@ -400,6 +508,34 @@ export function confirmListingMatch(
     { placeId, cid: match.cid, title: match.title, address: match.address },
     "found",
   )
+}
+
+export function applyListingProfile(
+  id: string,
+  input: {
+    brand?: string
+    licenseInfo?: string
+    yearsInBusiness?: string
+    specialty?: string
+    profileContent?: string
+    crawlStatus?: CrawlStatus
+    lastCrawledAt?: string
+  },
+): DirectoryListing {
+  const current = getListing(id)
+  const next: DirectoryListing = {
+    ...current,
+    brand: input.brand?.trim() ?? current.brand,
+    licenseInfo: input.licenseInfo?.trim() ?? current.licenseInfo,
+    yearsInBusiness: input.yearsInBusiness?.trim() ?? current.yearsInBusiness,
+    specialty: input.specialty?.trim() ?? current.specialty,
+    profileContent: input.profileContent?.trim() ?? current.profileContent,
+    crawlStatus: input.crawlStatus ?? current.crawlStatus,
+    lastCrawledAt: input.lastCrawledAt ?? current.lastCrawledAt,
+    updatedAt: nowIso(),
+  }
+  writeListings(readListings().map((row) => (row.id === id ? next : row)))
+  return next
 }
 
 export async function verifyListingOnMaps(

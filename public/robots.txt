@@ -1,0 +1,11 @@
+# PlaceFind directory. Crawlers are welcome, including scrappey.com.
+User-agent: *
+Allow: /
+
+User-agent: Scrappey
+Allow: /
+
+User-agent: scrappey.com
+Allow: /
+
+Sitemap: /sitemap.xml

@@ -27,7 +27,7 @@ export function publicSearchMessage(text: string | undefined): string | undefine
 
 export function publicCheckoutWarning(internalError?: string): string | undefined {
   if (!internalError) return undefined
-  return "Your account is ready. Sign in to create a listing and check it on Google Maps."
+  return "Your account is ready. Sign in to create a listing for $150 per month."
 }
 
 export function mapsKeysMissingPublicMessage() {

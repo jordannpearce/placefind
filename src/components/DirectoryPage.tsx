@@ -1,7 +1,7 @@
 import { LoaderCircle, MapPinned, Search } from "lucide-react"
 import { useEffect, useState } from "react"
 import { searchDirectory } from "../lib/api.ts"
-import { listingLocation, listingPath, mapsStatusLabel } from "../lib/listings.ts"
+import { listingLocation, listingPath } from "../lib/listings.ts"
 import type { AuthUser, DirectoryListing } from "../lib/types.ts"
 import { CityStateFields } from "./CityStateFields.tsx"
 
@@ -90,7 +90,7 @@ export function DirectoryPage({ user, onGo }: Props) {
             onClick={() => onGo(user ? "/listings/new" : "/join")}
             className="mt-4 text-sm text-brass hover:underline"
           >
-            {user ? "Create your listing" : "Join to list your business"}
+            {user ? "Create your listing" : "List your business · $150 per month"}
           </button>
         </aside>
 
@@ -126,7 +126,11 @@ export function DirectoryPage({ user, onGo }: Props) {
                     {listing.keywords.length > 0 && (
                       <p className="mt-2 text-sm text-paper/80">{listing.keywords.slice(0, 3).join(" · ")}</p>
                     )}
-                    <p className="mt-3 text-xs text-brass">{mapsStatusLabel(listing.mapsStatus)}</p>
+                    <p className="mt-3 text-xs text-brass">
+                      {listing.reviewSummary?.average != null
+                        ? `${listing.reviewSummary.average.toFixed(1)} · ${listing.reviewSummary.count} review${listing.reviewSummary.count === 1 ? "" : "s"}`
+                        : listing.specialty || "New listing"}
+                    </p>
                   </button>
                 </li>
               ))}

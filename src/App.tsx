@@ -5,6 +5,7 @@ import { AdminPage } from "./components/AdminPage.tsx"
 import { AppNav } from "./components/AppNav.tsx"
 import { AuthPage } from "./components/AuthPage.tsx"
 import { ResetPage } from "./components/ResetPage.tsx"
+import { CrawlDashboard } from "./components/CrawlDashboard.tsx"
 import { DirectoryPage } from "./components/DirectoryPage.tsx"
 import { HomePage } from "./components/HomePage.tsx"
 import { LegalPage } from "./components/LegalPage.tsx"
@@ -170,7 +171,13 @@ export default function App() {
   }
 
   function onAuthed(next: AuthUser) {
-    const stay = path === "/track" || path === "/try" || path === "/demo" || path === "/listings" || path === "/directory"
+    const stay =
+      path === "/track" ||
+      path === "/try" ||
+      path === "/demo" ||
+      path === "/listings" ||
+      path === "/directory" ||
+      path === "/dashboard"
     void refreshSession(next, stay ? path : desktop ? "/" : "/account")
   }
 
@@ -208,6 +215,7 @@ export default function App() {
   const needsTrackLogin = !desktop && path === "/track" && !user
   const needsTryLogin = !desktop && (path === "/try" || path === "/demo") && !user
   const needsListingLogin = !desktop && path === "/listings" && listingCreate && !user
+  const needsDashboardLogin = !desktop && path === "/dashboard" && !user
   const showHome = !desktop && path === "/"
   const showLegal = isLegalPath(path)
   const showLookup = ((desktop && path === "/") || (!desktop && (path === "/try" || path === "/demo") && Boolean(user))) && !needsDesktopLogin
@@ -273,6 +281,7 @@ export default function App() {
         {showLegal && <LegalPage path={path} />}
         {showHome && <HomePage user={user} onGo={go} />}
         {path === "/directory" && <DirectoryPage user={user} onGo={go} />}
+        {path === "/dashboard" && user && <CrawlDashboard user={user} onGo={go} />}
         {path === "/listings" && listingCreate && user && <ListingFormPage user={user} onGo={go} />}
         {path === "/listings" && listingId && listingEdit && user && (
           <ListingFormPage listingId={listingId} user={user} onGo={go} />
@@ -284,6 +293,7 @@ export default function App() {
           needsTrackLogin ||
           needsTryLogin ||
           needsListingLogin ||
+          needsDashboardLogin ||
           (path === "/login" && !user) ||
           (path === "/join" && !user)) && (
           <AuthPage
@@ -294,18 +304,22 @@ export default function App() {
                 ? "Sign in to track ranks"
                 : needsTryLogin
                   ? "Sign in to run a test scan"
-                  : needsListingLogin || path === "/join"
-                    ? "Create a PlaceFind account"
-                    : undefined
+                  : needsDashboardLogin
+                    ? "Sign in to crawl a website"
+                    : needsListingLogin || path === "/join"
+                      ? "Create a PlaceFind account"
+                      : undefined
             }
             intro={
               needsTrackLogin
                 ? "Grid tracking is for signed-in customers."
                 : needsTryLogin
-                  ? "The live test scan is for signed-in customers. Visitors can try the sample search on the home page."
-                  : needsListingLogin || path === "/join"
-                    ? "Create an account to add your business to the directory and cross-check it on Google Maps."
-                    : undefined
+                  ? "The live test scan is for signed-in customers."
+                  : needsDashboardLogin
+                    ? "Website crawls are a signed-in dashboard tool. Create an account to request Crawl Website."
+                    : needsListingLogin || path === "/join"
+                      ? "Create an account to publish a PlaceFind listing for $150 per month and build a public profile."
+                      : undefined
             }
             onAuthed={onAuthed}
             onGoLogin={() => go("/login")}
