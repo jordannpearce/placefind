@@ -83,7 +83,7 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
       const next = listingId ? await updateListing(listingId, form) : await createListing(form)
       setListing(next)
       setForm(formFromListing(next))
-      setNotice(listingId ? "Listing saved." : "Listing created. Open Crawl Website to write the public profile.")
+      setNotice(listingId ? "Listing saved." : "Listing created. Open Crawl Website to write a public profile article.")
       if (!listingId) onGo(`${listingPath(next)}/edit`)
       return next
     } catch (err) {

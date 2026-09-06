@@ -14,7 +14,7 @@ const FALLBACK_PRESETS: MailPreset[] = [
     type: "activation",
     label: "Confirm your listing",
     subject: "Confirm your PlaceFind listing",
-    text: "Hi {{first}},\n\nYour PlaceFind account is ready.\n\n1. Sign in and open your account.\n2. Create a listing with your business name, city, and state.\n3. Open Crawl Website to write the public profile.\n",
+    text: "Hi {{first}},\n\nYour PlaceFind account is ready.\n\n1. Sign in and open your account.\n2. Create a listing with your business name, city, and state.\n3. Open Crawl Website to write a public profile article.\n",
   },
   {
     type: "marketing",

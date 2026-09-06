@@ -18,8 +18,8 @@ A web directory for local businesses. A shop can publish a listing for **$150 pe
 
 1. Create an account at `/join`.
 2. Publish a listing for $150 per month (name, city, state, category, website).
-3. Open **Crawl** in the dashboard and press **Crawl Website**. PlaceFind reads the site and sitemap, then writes brand, license, years in business, specialty, and profile copy.
-4. The public profile at `/listings/:id` shows enhanced info and visitor reviews.
+3. Open **Crawl** in the dashboard and press **Crawl Website**. PlaceFind reads the site and sitemap, looks for license info and company facts, and writes a profile article. It does not change the listing form.
+4. The public profile at `/listings/:id` shows that article and visitor reviews.
 
 ## Run it locally
 

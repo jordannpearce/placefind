@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
-import { createListing } from "./listings.ts"
+import { applyListingProfile, createListing, getListing } from "./listings.ts"
 import {
   crawlWebsitePages,
   MAX_PAGES,
@@ -18,20 +18,65 @@ describe("website crawl writing", () => {
     reloadStoreFromDisk()
   })
 
-  it("extracts facts and writes listing copy from crawled pages", () => {
+  it("extracts facts for the crawl job and writes a profile article without changing listing fields", () => {
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-crawl-")))
     const listing = createListing(
-      { name: "Harbor & Oak Bakery", city: "Portland", state: "ME", category: "Bakery", website: "https://harbor.example" },
+      {
+        name: "Harbor & Oak Bakery",
+        street: "18 Exchange St",
+        city: "Portland",
+        state: "ME",
+        zip: "04101",
+        category: "Bakery",
+        keywords: "pastry, coffee, sourdough",
+        phone: "(207) 555-0142",
+        website: "https://harbor.example",
+        hours: "Tue–Sun 7:00 AM–3:00 PM",
+      },
       "user-1",
     )
+    const before = getListing(listing.id)
     const result = runCrawlFromPages(listing, [
       "# Harbor & Oak\nEstablished in 2014. License #BAK-4418.\nWe specialize in naturally leavened bread.",
     ], true)
     assert.equal(result.sitemapFound, true)
     assert.equal(result.pagesCrawled, 1)
     assert.equal(result.facts.licenseInfo, "License BAK-4418")
-    assert.match(result.article, /Harbor & Oak/)
+    assert.equal(result.facts.yearsInBusiness, "Since 2014")
+    assert.match(result.facts.specialty, /naturally leavened bread/)
+    assert.match(result.article, /Harbor & Oak Bakery/)
+    assert.match(result.article, /pastry/)
+    assert.match(result.article, /coffee/)
+    assert.match(result.article, /sourdough/)
     assert.match(result.article, /Portland/)
+    assert.match(result.article, /BAK-4418/)
+    assert.equal(/lorem ipsum/i.test(result.article), false)
+
+    const applied = applyListingProfile(listing.id, {
+      profileContent: result.article,
+      crawlStatus: "ok",
+      lastCrawledAt: "2026-09-06T14:00:00.000Z",
+    })
+    assert.equal(applied.profileContent, result.article)
+    assert.equal(applied.crawlStatus, "ok")
+    assert.equal(applied.name, before.name)
+    assert.equal(applied.street, before.street)
+    assert.equal(applied.city, before.city)
+    assert.equal(applied.state, before.state)
+    assert.equal(applied.zip, before.zip)
+    assert.equal(applied.phone, before.phone)
+    assert.equal(applied.website, before.website)
+    assert.equal(applied.hours, before.hours)
+    assert.equal(applied.category, before.category)
+    assert.deepEqual(applied.keywords, before.keywords)
+    assert.equal(applied.placeId, before.placeId)
+    assert.equal(applied.cid, before.cid)
+    assert.equal(applied.brand, before.brand)
+    assert.equal(applied.licenseInfo, before.licenseInfo)
+    assert.equal(applied.yearsInBusiness, before.yearsInBusiness)
+    assert.equal(applied.specialty, before.specialty)
+    assert.equal(applied.brand, "")
+    assert.equal(applied.licenseInfo, "")
   })
 
   it("prefers sitemap urls, then discovered same-origin links, and caps unique pages", () => {

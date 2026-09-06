@@ -131,23 +131,42 @@ export function mergeSiteFacts(pages: string[], fallbackName = ""): SiteFacts {
   }
 }
 
+function keywordPhrase(keywords: string[]): string {
+  const cleaned = keywords.map((row) => row.trim()).filter(Boolean)
+  if (cleaned.length === 0) return ""
+  if (cleaned.length === 1) return cleaned[0]!
+  if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}`
+  return `${cleaned.slice(0, -1).join(", ")}, and ${cleaned[cleaned.length - 1]}`
+}
+
 export function writeProfileArticle(
   facts: SiteFacts,
-  listing: { name: string; city: string; state: string; category?: string },
+  listing: { name: string; city: string; state: string; category?: string; keywords?: string[] },
 ): string {
-  const name = facts.brand || listing.name
+  const name = listing.name.trim() || facts.brand
   const place = [listing.city, listing.state].filter(Boolean).join(", ")
   const category = listing.category?.trim() || "local business"
-  const years = facts.yearsInBusiness ? ` ${facts.yearsInBusiness.replace(/^Since /, "The shop has been open since ")}.` : ""
+  const keywords = listing.keywords ?? []
+  const phrase = keywordPhrase(keywords)
+  const years = facts.yearsInBusiness
+    ? facts.yearsInBusiness.startsWith("Since")
+      ? ` ${name} has been open since ${facts.yearsInBusiness.replace(/^Since /, "")}.`
+      : ` ${facts.yearsInBusiness.replace(/\.?$/, "")}.`
+    : ""
   const license = facts.licenseInfo ? ` ${facts.licenseInfo} is on file.` : ""
   const specialty = facts.specialty
-    ? ` ${name} specializes in ${facts.specialty.replace(/^we (?:are|offer|provide|focus on)\s+/i, "")}.`
+    ? `${name} specializes in ${facts.specialty.replace(/^we (?:are|offer|provide|focus on)\s+/i, "")}.`
     : ""
 
-  const lead = `${name} is a ${category} in ${place || "the directory"}.${years}${license}`
+  const lead = phrase
+    ? `${name} is a ${category} in ${place || "the directory"}, listed for ${phrase}.${years}${license}`
+    : `${name} is a ${category} in ${place || "the directory"}.${years}${license}`
   const middle = specialty
     ? specialty.trim()
-    : `${name} is listed in the PlaceFind directory so neighbors and other businesses can find a clear profile, hours, and contact details in one place.`
-  const close = `This profile was written from the business website and the listing the owner published on PlaceFind. Reviews from visitors appear below the facts.`
+    : phrase
+      ? `Neighbors looking for ${phrase} can use this PlaceFind profile to reach ${name}. Hours, contact details, and reviews sit with the listing the owner published.`
+      : `${name} is listed in the PlaceFind directory so neighbors and other businesses can find a clear profile, hours, and contact details in one place.`
+  const close =
+    "This article was written from the listing the owner published and facts found on the business website. Reviews from visitors appear below."
   return [lead.trim(), middle.trim(), close].filter(Boolean).join("\n\n")
 }

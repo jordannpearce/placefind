@@ -112,7 +112,7 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
   }
 
   const canEdit = Boolean(user && (user.role === "admin" || listing.ownerUserId === user.id))
-  const enhanced = Boolean(listing.brand || listing.licenseInfo || listing.yearsInBusiness || listing.specialty || listing.profileContent)
+  const enhanced = Boolean(listing.profileContent)
 
   return (
     <article className="mx-auto grid w-full max-w-3xl gap-6">
@@ -176,41 +176,11 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
       <section className="rounded-2xl border border-line bg-panel p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Enhanced profile</p>
         {enhanced ? (
-          <>
-            <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
-              {listing.brand && (
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">Brand</dt>
-                  <dd className="mt-1 text-paper">{listing.brand}</dd>
-                </div>
-              )}
-              {listing.licenseInfo && (
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">License</dt>
-                  <dd className="mt-1 text-paper">{listing.licenseInfo}</dd>
-                </div>
-              )}
-              {listing.yearsInBusiness && (
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">How long in business</dt>
-                  <dd className="mt-1 text-paper">{listing.yearsInBusiness}</dd>
-                </div>
-              )}
-              {listing.specialty && (
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">Specializes in</dt>
-                  <dd className="mt-1 text-paper">{listing.specialty}</dd>
-                </div>
-              )}
-            </dl>
-            {listing.profileContent && (
-              <div className="mt-5 whitespace-pre-wrap text-sm leading-7 text-paper/90">{listing.profileContent}</div>
-            )}
-          </>
+          <div className="mt-4 whitespace-pre-wrap text-sm leading-7 text-paper/90">{listing.profileContent}</div>
         ) : (
           <p className="mt-3 text-sm leading-6 text-muted">
-            This listing is in the directory. After the owner runs Crawl Website, brand, license, years in business,
-            and specialty land here.
+            This listing is in the directory. After the owner runs Crawl Website, an article about the business lands
+            here. Listing details stay as the owner entered them.
           </p>
         )}
       </section>

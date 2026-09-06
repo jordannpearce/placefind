@@ -157,7 +157,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "Listing data",
         body: [
-          "Business name, city, state, category, keywords, optional contact details, website crawl facts (brand, license, years in business, specialty), written profile copy, and visitor reviews. Public directory pages show the profile you published.",
+          "Business name, city, state, category, keywords, optional contact details, and visitor reviews. Crawl Website stores license and company facts on the crawl request and writes a profile article. It does not overwrite the listing form. Public directory pages show the listing you published plus that article.",
         ],
       },
       {

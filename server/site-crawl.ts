@@ -325,10 +325,10 @@ export async function crawlWebsitePages(
 
 function finishFacts(listing: DirectoryListing, facts: SiteFacts): SiteFacts {
   return {
-    brand: facts.brand || listing.brand || listing.name,
-    licenseInfo: facts.licenseInfo || listing.licenseInfo,
-    yearsInBusiness: facts.yearsInBusiness || listing.yearsInBusiness,
-    specialty: facts.specialty || listing.specialty || listing.category,
+    brand: facts.brand || listing.name,
+    licenseInfo: facts.licenseInfo,
+    yearsInBusiness: facts.yearsInBusiness,
+    specialty: facts.specialty,
   }
 }
 
@@ -428,7 +428,6 @@ async function runCrawlJob(id: string) {
       finishedAt: nowIso(),
     })
     applyListingProfile(finished.listingId, {
-      ...merged,
       profileContent: article,
       crawlStatus: "ok",
       lastCrawledAt: finished.finishedAt,

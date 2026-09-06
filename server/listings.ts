@@ -654,10 +654,6 @@ export function confirmListingMatch(
 export function applyListingProfile(
   id: string,
   input: {
-    brand?: string
-    licenseInfo?: string
-    yearsInBusiness?: string
-    specialty?: string
     profileContent?: string
     crawlStatus?: CrawlStatus
     lastCrawledAt?: string
@@ -666,10 +662,6 @@ export function applyListingProfile(
   const current = getListing(id)
   const next: DirectoryListing = {
     ...current,
-    brand: input.brand?.trim() ?? current.brand,
-    licenseInfo: input.licenseInfo?.trim() ?? current.licenseInfo,
-    yearsInBusiness: input.yearsInBusiness?.trim() ?? current.yearsInBusiness,
-    specialty: input.specialty?.trim() ?? current.specialty,
     profileContent: input.profileContent?.trim() ?? current.profileContent,
     crawlStatus: input.crawlStatus ?? current.crawlStatus,
     lastCrawledAt: input.lastCrawledAt ?? current.lastCrawledAt,

@@ -27,13 +27,43 @@ describe("site facts", () => {
     assert.match(facts.specialty, /naturally leavened bread/)
   })
 
-  it("merges facts across pages and writes a profile", () => {
+  it("merges facts across pages and writes a profile article from listing keywords", () => {
     const facts = mergeSiteFacts(["# Other", "12 years in business. We offer family dentistry."], "Red Mesa Dental")
     assert.equal(facts.yearsInBusiness, "12 years in business")
-    const article = writeProfileArticle(facts, { name: "Red Mesa Dental", city: "Santa Fe", state: "NM", category: "Dentist" })
-    assert.match(article, /Red Mesa Dental|family dentistry/)
+    const article = writeProfileArticle(facts, {
+      name: "Red Mesa Dental",
+      city: "Santa Fe",
+      state: "NM",
+      category: "Dentist",
+      keywords: ["family dentist", "teeth cleaning"],
+    })
+    assert.match(article, /Red Mesa Dental/)
+    assert.match(article, /family dentist/)
+    assert.match(article, /teeth cleaning/)
     assert.match(article, /Santa Fe/)
+    assert.match(article, /Dentist/)
+    assert.match(article, /12 years in business/)
+    assert.match(article, /family dentistry/)
     assert.match(article, /Reviews from visitors/)
+    assert.equal(/lorem ipsum/i.test(article), false)
+  })
+
+  it("mentions found license and years without needing listing columns", () => {
+    const facts = extractSiteFacts(PAGE, "Fallback")
+    const article = writeProfileArticle(facts, {
+      name: "Harbor & Oak Bakery",
+      city: "Portland",
+      state: "ME",
+      category: "Bakery",
+      keywords: ["pastry", "coffee", "sourdough"],
+    })
+    assert.match(article, /Harbor & Oak Bakery/)
+    assert.match(article, /pastry/)
+    assert.match(article, /Portland, ME/)
+    assert.match(article, /Bakery/)
+    assert.match(article, /2014/)
+    assert.match(article, /BAK-4418/)
+    assert.equal(article.includes("Harbor & Oak Bakery is a Bakery in Portland, ME, listed for pastry, coffee, and sourdough."), true)
   })
 
   it("parses sitemap loc tags", () => {

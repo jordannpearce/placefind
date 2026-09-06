@@ -11,7 +11,7 @@ type Props = {
 }
 
 function statusLabel(status: CrawlJob["status"] | DirectoryListing["crawlStatus"]) {
-  if (status === "ok") return "Profile written"
+  if (status === "ok") return "Article written"
   if (status === "running" || status === "queued") return "Crawling website…"
   if (status === "error") return "Crawl could not finish"
   return "Ready to crawl"
@@ -100,8 +100,9 @@ export function CrawlDashboard({ user, onGo }: Props) {
         <h2 className="mt-2 font-display text-3xl text-paper">Crawl Website</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
           This desk is separate from the public directory. Ask PlaceFind to read every page on the site, plus every URL
-          in the sitemap when one exists, then we pull brand, license, years in business, and what you specialize in —
-          and write the profile visitors see.
+          in the sitemap when one exists. We look for license info and key company facts, then write an article onto
+          the public profile. Crawl Website does not change the listing form — name, address, phone, website, hours,
+          category, keywords, and Maps details stay as you entered them.
         </p>
         <p className="mt-2 text-sm text-muted">Signed in as {user.email}.</p>
         {error && <p className="mt-4 rounded-xl border border-clay/40 bg-clay/10 px-4 py-3 text-sm text-clay">{error}</p>}
@@ -181,35 +182,45 @@ export function CrawlDashboard({ user, onGo }: Props) {
           </p>
           {active.error && <p className="mt-3 text-sm text-clay">{active.error}</p>}
           {(active.brand || active.licenseInfo || active.yearsInBusiness || active.specialty) && (
-            <dl className="mt-5 grid gap-3 sm:grid-cols-2 text-sm">
-              {active.brand && (
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">Brand</dt>
-                  <dd className="mt-1 text-paper">{active.brand}</dd>
-                </div>
-              )}
-              {active.licenseInfo && (
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">License</dt>
-                  <dd className="mt-1 text-paper">{active.licenseInfo}</dd>
-                </div>
-              )}
-              {active.yearsInBusiness && (
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">How long in business</dt>
-                  <dd className="mt-1 text-paper">{active.yearsInBusiness}</dd>
-                </div>
-              )}
-              {active.specialty && (
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">Specializes in</dt>
-                  <dd className="mt-1 text-paper">{active.specialty}</dd>
-                </div>
-              )}
-            </dl>
+            <div className="mt-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Found on this crawl</p>
+              <p className="mt-1 text-xs text-muted">
+                Read-only crawl results. These facts are used to write the article. They are not saved over the listing
+                form.
+              </p>
+              <dl className="mt-3 grid gap-3 sm:grid-cols-2 text-sm">
+                {active.brand && (
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">Brand found</dt>
+                    <dd className="mt-1 text-paper">{active.brand}</dd>
+                  </div>
+                )}
+                {active.licenseInfo && (
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">License found</dt>
+                    <dd className="mt-1 text-paper">{active.licenseInfo}</dd>
+                  </div>
+                )}
+                {active.yearsInBusiness && (
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">How long in business</dt>
+                    <dd className="mt-1 text-paper">{active.yearsInBusiness}</dd>
+                  </div>
+                )}
+                {active.specialty && (
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">Specializes in</dt>
+                    <dd className="mt-1 text-paper">{active.specialty}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
           )}
           {active.article && (
-            <div className="mt-5 whitespace-pre-wrap text-sm leading-7 text-paper/90">{active.article}</div>
+            <div className="mt-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Profile article</p>
+              <div className="mt-2 whitespace-pre-wrap text-sm leading-7 text-paper/90">{active.article}</div>
+            </div>
           )}
           <button
             type="button"
@@ -229,7 +240,7 @@ export function CrawlDashboard({ user, onGo }: Props) {
           </h3>
           <p className="mt-2 text-sm text-muted">
             Every page PlaceFind opened is listed here — URL, whether it loaded, the title or snippet, and any facts
-            pulled from that page.
+            pulled from that page. This is a crawl log, not a list of listing-form edits.
           </p>
           <ul className="mt-5 grid gap-3">
             {active.pages?.map((page) => (

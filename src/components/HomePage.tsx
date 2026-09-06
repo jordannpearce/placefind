@@ -92,8 +92,8 @@ export function HomePage({ user, onGo }: Props) {
               <li className="rounded-xl border border-line bg-panel px-4 py-3">
                 <p className="text-sm font-semibold text-paper">3. Build an enhanced profile</p>
                 <p className="mt-1 text-sm leading-6 text-muted">
-                  From the dashboard, request a website crawl. We look for brand, license, years in business, and what
-                  you specialize in, then write the profile visitors read.
+                  From the dashboard, request Crawl Website. We look for license info and key company facts, then write
+                  an article onto the public profile. The listing form stays as you entered it.
                 </p>
               </li>
             </ol>
@@ -125,7 +125,8 @@ export function HomePage({ user, onGo }: Props) {
             <NotebookPen className="h-5 w-5 text-brass" />
             <h4 className="mt-3 font-display text-xl text-paper">Reviews and enhanced info</h4>
             <p className="mt-2 text-sm leading-6 text-muted">
-              Visitors leave reviews. The profile also keeps brand, license, years open, and specialty after a crawl.
+              Visitors leave reviews. After Crawl Website, the public profile also shows an article written from the
+              listing keywords and facts found on the site.
             </p>
           </article>
         </div>
@@ -215,7 +216,8 @@ export function HomePage({ user, onGo }: Props) {
             <h3 className="mt-2 font-display text-3xl text-paper">List your shop for {LISTING_PRICE_LABEL}</h3>
             <p className="mt-3 max-w-xl text-sm leading-7 text-muted">
               Create an account, publish the listing, then open the dashboard and press Crawl Website. We read the site
-              and sitemap, pull brand, license, years in business, and specialty, and write the public profile.
+              and sitemap, look for license info and company facts, and write an article onto the public profile. The
+              listing details you entered stay put.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <button
@@ -237,7 +239,7 @@ export function HomePage({ user, onGo }: Props) {
           <ul className="grid gap-3 text-sm text-paper/85">
             <li className="rounded-xl border border-line bg-panel px-4 py-3">Public directory by name, city, and keyword</li>
             <li className="rounded-xl border border-line bg-panel px-4 py-3">{LISTING_PRICE_LABEL} for an active listing</li>
-            <li className="rounded-xl border border-line bg-panel px-4 py-3">Website crawl writes brand, license, and specialty</li>
+            <li className="rounded-xl border border-line bg-panel px-4 py-3">Crawl Website writes a public profile article</li>
             <li className="rounded-xl border border-line bg-panel px-4 py-3">Reviews and enhanced profile on every listing</li>
           </ul>
         </div>
