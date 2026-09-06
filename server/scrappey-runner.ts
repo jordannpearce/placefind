@@ -1,5 +1,9 @@
 const SCRAPPEY_ENDPOINT = "https://publisher.scrappey.com/api/v1"
 
+/** Maps + listing clicks routinely take more than 60s. Do not treat that wait as unreachable. */
+export const RUNNER_PAGE_TIMEOUT_MS = 180_000
+export const RUNNER_SESSION_TIMEOUT_MS = 90_000
+
 export type ScrappeyBrowserAction = {
   type: string
   cssSelector?: string
@@ -72,11 +76,25 @@ export function sanitizeRunnerError(text: string): string {
   if (!stripped) return "Traffic runner could not finish this session."
   if (/could not find the listing/i.test(stripped)) return listingNotFoundMessage()
   if (/listing not in this area/i.test(stripped)) return listingNotInAreaMessage()
+  if (/timeout|timed out|aborted due to timeout/i.test(stripped)) return "Traffic runner timed out."
   if (/scrappey|dataforseo|api key/i.test(stripped)) {
-    if (/timeout|timed out/i.test(stripped)) return "Traffic runner timed out."
     return "Traffic runner could not finish this session."
   }
   return stripped
+}
+
+export function classifyRunnerFetchError(error: unknown, userAborted = false): string {
+  if (userAborted) return "Traffic stopped."
+  const name = error instanceof Error ? error.name : ""
+  const message = error instanceof Error ? error.message : String(error ?? "")
+  if (
+    name === "TimeoutError" ||
+    name === "AbortError" ||
+    /timeout|timed out|aborted due to timeout/i.test(`${name} ${message}`)
+  ) {
+    return "Traffic runner timed out."
+  }
+  return "Could not reach the traffic runner."
 }
 
 export function cssStringLiteral(value: string): string {
@@ -168,10 +186,15 @@ export function listingClickActions(listing: TrafficListingTarget | string): Scr
   return actions
 }
 
+function runnerHttpTimeoutError(status: number): string | null {
+  if (status === 408 || status === 504 || status === 524) return "Traffic runner timed out."
+  return null
+}
+
 async function scrappeyRequest(
   key: string,
   body: Record<string, unknown>,
-  timeoutMs = 90_000,
+  timeoutMs = RUNNER_PAGE_TIMEOUT_MS,
   signal?: AbortSignal,
 ): Promise<{ payload: ScrappeyResponse; error: string | null }> {
   const timeout = AbortSignal.timeout(timeoutMs)
@@ -183,17 +206,23 @@ async function scrappeyRequest(
       body: JSON.stringify(body),
       signal: combined,
     })
-    const payload = (await response.json()) as ScrappeyResponse
+    const httpTimeout = runnerHttpTimeoutError(response.status)
+    let payload: ScrappeyResponse
+    try {
+      payload = (await response.json()) as ScrappeyResponse
+    } catch {
+      return { payload: {}, error: httpTimeout || "Could not reach the traffic runner." }
+    }
+    if (httpTimeout && (payload.error || payload.solution?.verified === false)) {
+      return { payload, error: httpTimeout }
+    }
     if (payload.error || payload.solution?.verified === false) {
       return { payload, error: payload.error || "Could not open the Maps page." }
     }
+    if (httpTimeout) return { payload, error: httpTimeout }
     return { payload, error: null }
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      if (signal?.aborted) return { payload: {}, error: "Traffic stopped." }
-      return { payload: {}, error: "Traffic runner timed out." }
-    }
-    return { payload: {}, error: "Could not reach the traffic runner." }
+    return { payload: {}, error: classifyRunnerFetchError(error, Boolean(signal?.aborted)) }
   }
 }
 
@@ -212,7 +241,7 @@ async function runnerGet(
   if (options.session) body.session = options.session
   if (options.profileId) body.profileId = options.profileId
   if (options.browserActions?.length) body.browserActions = options.browserActions
-  const page = await scrappeyRequest(key, body, 90_000, options.signal)
+  const page = await scrappeyRequest(key, body, RUNNER_PAGE_TIMEOUT_MS, options.signal)
   if (page.error) return { currentUrl: url, text: "", error: sanitizeRunnerError(page.error) }
   const text = page.payload.solution?.markdown || page.payload.solution?.innerText || ""
   return { currentUrl: page.payload.solution?.currentUrl || url, text, error: null }
@@ -230,7 +259,7 @@ async function createRunnerSession(
       session: sessionId,
       proxyCountry: "UnitedStates",
     },
-    90_000,
+    RUNNER_SESSION_TIMEOUT_MS,
     signal,
   )
   return { sessionId: result.payload.session || sessionId, error: result.error }
