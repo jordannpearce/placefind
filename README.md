@@ -35,13 +35,12 @@ npm run desktop
 You can also build from a terminal:
 
 ```bash
+# Linux (this project): needs the nsis package so makensis can write Setup.exe
+sudo apt-get install -y nsis
 npm run dist:win
 ```
 
-That writes:
-
-- `release/PlaceFind-Setup-1.0.0.exe` — installer with a folder picker, desktop shortcut, and uninstaller
-- `release/PlaceFind-Portable-1.0.0.exe` — single-file app, no install
+That writes `release/PlaceFind-Setup-1.0.0.exe` — a Windows installer with a license page, folder picker, desktop shortcut, Start menu shortcut, and uninstaller.
 
 The setup file is unsigned unless you add your own Windows code-signing certificate. Windows may show SmartScreen the first time; buyers choose **More info → Run anyway**.
 

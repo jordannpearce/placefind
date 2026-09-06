@@ -68,7 +68,12 @@ export function installerPath(name: string): string | null {
 }
 
 export function getInstallerStatus(): InstallerStatus {
-  return { ...state, files: listInstallers() }
+  const files = listInstallers()
+  const ready = files.some((file) => file.kind === "setup" && file.size > 1_000_000)
+  if (ready && state.status !== "running") {
+    return { ...state, status: "ok", error: undefined, files }
+  }
+  return { ...state, files }
 }
 
 function appendLog(chunk: string) {
