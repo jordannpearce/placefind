@@ -7,7 +7,6 @@ import {
   loadCampaigns,
   scanCampaign,
   searchBusiness,
-  startCampaignTraffic,
   updateCampaign,
 } from "../lib/api.ts"
 import { buildPreviewPoints, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
@@ -70,7 +69,6 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [searching, setSearching] = useState(false)
   const [saving, setSaving] = useState(false)
   const [scanning, setScanning] = useState(false)
-  const [startingTraffic, setStartingTraffic] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [searchResult, setSearchResult] = useState<SearchResponse | null>(null)
@@ -398,36 +396,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setNotice(null)
   }
 
-  async function onStartTraffic() {
-    if (!selected) return
-    const sessions = 3
-    const requests = sessions * 2
-    const ok = window.confirm(
-      `Start ${sessions} traffic sessions for ${confirmed?.title || selected.businessName}?\n\nThis uses your Maps traffic runner to search Maps and open the listing profile.\n\nEstimated ${requests} Maps requests (2 per session).`,
-    )
-    if (!ok) return
-    setStartingTraffic(true)
-    setError(null)
-    setNotice(null)
-    try {
-      const payload = await startCampaignTraffic(selected.id, keys, Boolean(hosted?.included && !seller), sessions)
-      replaceCampaign(payload.campaign)
-      const job = payload.traffic
-      setNotice(`Traffic finished. ${job.sessionsOk} of ${job.sessionsAttempted} sessions opened the listing.`)
-      if (job.lastError && job.sessionsOk === 0) setError(job.lastError)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start traffic.")
-    } finally {
-      setStartingTraffic(false)
-    }
-  }
-
   const mapsReady = Boolean((keys.dataforseoLogin && keys.dataforseoPassword) || hosted?.dataforseo)
-  const busy = Boolean(saving || scanning || searching || startingTraffic)
-  const trafficReady = Boolean(
-    (selected?.lastGridScan && selected.lastGridScan.foundCount > 0) ||
-      (selected?.lastScan && selected.lastScan.foundCount > 0),
-  )
+  const busy = Boolean(saving || scanning || searching)
   const step = searching ? 1 : confirmed ? 3 : listings.length > 0 ? 2 : 1
 
   if (loading) {
@@ -624,28 +594,15 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void onScan()}
-                  disabled={busy || !canScan}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
-                >
-                  {scanning && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                  {scanning ? "Scanning the grid…" : "Scan business"}
-                </button>
-                {trafficReady && selected && !creating && (
-                  <button
-                    type="button"
-                    onClick={() => void onStartTraffic()}
-                    disabled={busy}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-brass bg-brass/10 px-4 font-semibold text-brass hover:bg-brass/20 disabled:opacity-60"
-                  >
-                    {startingTraffic && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                    {startingTraffic ? "Starting traffic…" : "Start Traffic"}
-                  </button>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => void onScan()}
+                disabled={busy || !canScan}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
+              >
+                {scanning && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                {scanning ? "Scanning the grid…" : "Scan business"}
+              </button>
             </div>
 
             {!mapsReady && (
