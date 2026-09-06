@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto"
 import { scanMapsGrid, searchDataForSeo } from "./dataforseo.ts"
 import { geocodeCityState } from "./geocode.ts"
 import { formatLocationCoordinate, type GridPoint as MapsGridPoint } from "./grid.ts"
-import { mergeHostedKeys } from "./hosted-keys.ts"
+import { mapsScanConfigured, mergeHostedKeys } from "./hosted-keys.ts"
 import { mapsPlaceUrl } from "./match.ts"
 import { publicSearchMessage } from "./public-copy.ts"
 import { rankFromMapsItems, rankOfBusiness } from "./rank.ts"
@@ -241,6 +241,53 @@ export function buildGridPoints(center: GeoPoint, gridSize: number, spacingMiles
   return points
 }
 
+export function gridPointsForCampaign(
+  campaign: Pick<Campaign, "center" | "gridSize" | "spacingMiles" | "zoom">,
+  gridSize?: number,
+  spacingMiles?: number,
+): GridPoint[] {
+  const center = normalizeCenter(campaign.center)
+  if (!center) return []
+  return buildGridPoints(center, gridSize ?? campaign.gridSize, spacingMiles ?? campaign.spacingMiles, campaign.zoom)
+}
+
+export async function loadCampaignGrid(
+  id: string,
+  userId?: string | null,
+  input: { gridSize?: number; spacingMiles?: number } = {},
+): Promise<{ campaign: Campaign; center: GeoPoint; points: GridPoint[]; gridSize: number; spacingMiles: number }> {
+  const campaign = getCampaign(id, userId)
+  if (!campaign) throw new CampaignError("That campaign was not found.", 404)
+
+  const grid = normalizeGridSize(input.gridSize ?? campaign.gridSize)
+  if (grid.error || grid.value == null) throw new CampaignError(grid.error || "Choose a grid size.")
+  const spacing = normalizeSpacingMiles(input.spacingMiles ?? campaign.spacingMiles)
+  if (spacing.error || spacing.value == null) throw new CampaignError(spacing.error || "Enter the distance between points.")
+
+  let next = campaign
+  let center = normalizeCenter(campaign.center)
+  if (!center) {
+    const located = await geocodeCity(campaign.city, campaign.state)
+    if (!located) {
+      throw new CampaignError("Could not find a map location for this business. Check the city and state.")
+    }
+    center = located
+    next = saveCampaign({
+      ...campaign,
+      center,
+      updatedAt: new Date().toISOString(),
+    })
+  }
+
+  return {
+    campaign: next,
+    center,
+    points: buildGridPoints(center, grid.value, spacing.value, next.zoom),
+    gridSize: grid.value,
+    spacingMiles: spacing.value,
+  }
+}
+
 function ownsCampaign(campaign: Campaign, userId?: string | null) {
   if (!userId) return false
   if (!campaign.userId) return true
@@ -376,10 +423,10 @@ export function selectScanKeywords(campaign: Campaign, requested?: string[]): st
 }
 
 export function mapsKeysMissingMessage() {
-  return isSellerMode()
-    ? "Add a DataForSEO login and API password in Admin, or seal them on Sell, before running a rank scan."
-    : "Maps search is not configured, so a rank scan cannot run."
+  return "Maps search is not configured, so a rank scan cannot run."
 }
+
+export { mapsScanConfigured }
 
 export async function geocodeCity(city: string, state: string): Promise<GeoPoint | null> {
   return geocodeCityState(city, state)
@@ -435,7 +482,7 @@ export async function scanCampaign(
   if (!campaign) throw new CampaignError("That campaign was not found.", 404)
 
   const keys = mergeHostedKeys(rawKeys)
-  if (!hasDataForSeo(keys)) {
+  if (!mapsScanConfigured(rawKeys)) {
     throw new CampaignError(mapsKeysMissingMessage())
   }
 

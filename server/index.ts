@@ -23,7 +23,7 @@ import {
   userFromCookie,
 } from "./auth.ts"
 import { testDataForSeo } from "./dataforseo.ts"
-import { hostedKeyStatus, readHostedKeys, writeHostedKeys } from "./hosted-keys.ts"
+import { hostedKeyStatus, hydrateHostedKeys, readHostedKeys, writeHostedKeys } from "./hosted-keys.ts"
 import { getInstallerStatus, installerPath, startInstallerBuild, startSetupRepack } from "./installer.ts"
 import {
   activateLicense,
@@ -57,7 +57,9 @@ import {
   MAX_KEYWORDS,
   createCampaign,
   deleteCampaign,
+  geocodeCity,
   getCampaign,
+  loadCampaignGrid,
   readCampaigns,
   scanCampaign,
   updateCampaign,
@@ -98,6 +100,7 @@ function readQuery(body: Partial<SearchQuery>): { query: SearchQuery; error?: st
 
 async function start() {
   await initStore()
+  await hydrateHostedKeys()
   const app = express()
   app.use(cors({ origin: true, credentials: true }))
   app.use(express.json({ limit: "1mb" }))
@@ -235,6 +238,37 @@ async function start() {
         return
       }
       res.status(500).json({ error: "Could not update the campaign." })
+    }
+  })
+
+  app.get("/api/geocode", async (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const city = String(req.query.city ?? "")
+    const state = String(req.query.state ?? "")
+    const center = await geocodeCity(city, state)
+    if (!center) {
+      res.status(404).json({ error: "Could not find that city on the map." })
+      return
+    }
+    res.json({ center })
+  })
+
+  app.get("/api/campaigns/:id/grid", async (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const gridSize = req.query.gridSize == null || req.query.gridSize === "" ? undefined : Number(req.query.gridSize)
+    const spacingMiles =
+      req.query.spacingMiles == null || req.query.spacingMiles === "" ? undefined : Number(req.query.spacingMiles)
+    try {
+      const result = await loadCampaignGrid(String(req.params.id ?? ""), user.id, { gridSize, spacingMiles })
+      res.json({ ...result, ...campaignMeta() })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not place the grid on the map." })
     }
   })
 
@@ -397,7 +431,7 @@ async function start() {
     res.json(hostedKeyStatus({ revealHints: true }))
   })
 
-  app.post("/api/hosted-keys", (req, res) => {
+  app.post("/api/hosted-keys", async (req, res) => {
     if (!manage(req, res)) return
     const body = (req.body ?? {}) as {
       scrappeyKey?: string
@@ -405,7 +439,7 @@ async function start() {
       dataforseoPassword?: string
       rebuild?: boolean
     }
-    const hosted = writeHostedKeys(body)
+    const hosted = await writeHostedKeys(body)
     const unpacked = existsSync(path.join(process.cwd(), "release", "win-unpacked", "PlaceFind.exe"))
     const installer = unpacked && body.rebuild !== false ? startSetupRepack() : getInstallerStatus()
     res.json({ hosted, installer })

@@ -47,13 +47,21 @@ Production start is `npm run start` (`NODE_ENV=production` + the built Express s
 
 The Railway project **placefind** already has a **Postgres** service. It is linked to the **placefind** web service, so Railway injects `DATABASE_URL`. You do not need to create another database. To look at it: Railway dashboard → **placefind** → **Postgres**.
 
-On boot the app creates users, sessions, orders, issued licenses, mail outbox, and campaigns if they are missing (`server/schema.sql`). To re-apply that schema when `DATABASE_URL` can reach the database:
+On boot the app creates users, sessions, orders, issued licenses, mail outbox, campaigns, and hosted_keys if they are missing (`server/schema.sql`). To re-apply that schema when `DATABASE_URL` can reach the database:
 
 ```bash
 npm run db:migrate
 ```
 
-Set `NODE_ENV=production` and `ADMIN_EMAIL` to your admin inbox. Copy seller tokens from local `.env` into Railway only if you need them; they are not required for the public site to boot.
+Set `NODE_ENV=production` and `ADMIN_EMAIL` to your admin inbox.
+
+Rank scans and live Maps search on Railway need these service variables (same names as local `.env`):
+
+- `DATAFORSEO_LOGIN`
+- `DATAFORSEO_PASSWORD`
+- `SCRAPPEY_API_KEY`
+
+The public site boots without them, but Track rank scans return “Maps search is not configured”. Saving keys on **Admin** writes the sealed file and, when `DATABASE_URL` is set, a `hosted_keys` row. Railway disk is not durable, so keep the three variables on the **placefind** service as well. Do not commit the values.
 
 `railway.toml` and `Dockerfile` are in the repo. Health check: `/api/health`.
 

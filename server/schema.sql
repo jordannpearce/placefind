@@ -1,5 +1,7 @@
--- PlaceFind app data. Secrets (hosted keys, license admin token, mail API key)
--- stay in gitignored files, not in these tables.
+-- PlaceFind app data. License-admin tokens and mail API keys stay in gitignored
+-- files. Maps credentials are also sealed into hosted_keys when DATABASE_URL is
+-- set so Railway can read them after a restart. Prefer Railway variables
+-- DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD, and SCRAPPEY_API_KEY as the durable source.
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -56,4 +58,10 @@ CREATE TABLE IF NOT EXISTS password_resets (
   user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   expires_at TIMESTAMPTZ NOT NULL,
   used_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS hosted_keys (
+  id TEXT PRIMARY KEY,
+  sealed TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
 );

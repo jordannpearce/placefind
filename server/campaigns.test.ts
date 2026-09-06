@@ -4,22 +4,27 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
 import {
+  CampaignError,
   MAX_KEYWORDS,
   MAX_GRID_SIZE,
   bestGridRank,
   buildGridPoints,
   createCampaign,
+  loadCampaignGrid,
   mapsKeysMissingMessage,
+  mapsScanConfigured,
   mergeKeywordRanks,
   normalizeGridSize,
   normalizeKeywords,
   rankColor,
   readCampaigns,
+  scanCampaign,
   selectScanKeywords,
   validateCampaign,
   type Campaign,
   type KeywordRank,
 } from "./campaigns.ts"
+import { emptyApiKeys, resetHostedKeysCacheForTests } from "./hosted-keys.ts"
 import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
 
 function rank(keyword: string, position: number | null): KeywordRank {
@@ -134,8 +139,22 @@ describe("buildGridPoints", () => {
     assert.ok(south.lat < center.lat)
   })
 
-  it("caps a 7×7 grid at 49 points", () => {
-    assert.equal(buildGridPoints(center, 7, 0.5).length, 49)
+  it("builds a 5×5 grid of 25 points including the center", () => {
+    const points = buildGridPoints(center, 5, 1)
+    assert.equal(points.length, 25)
+    const middle = points.find((point) => point.row === 2 && point.col === 2)
+    assert.ok(middle)
+    assert.ok(Math.abs(middle.lat - center.lat) < 1e-9)
+    assert.ok(Math.abs(middle.lng - center.lng) < 1e-9)
+  })
+
+  it("caps a 7×7 grid at 49 points including the center", () => {
+    const points = buildGridPoints(center, 7, 0.5)
+    assert.equal(points.length, 49)
+    const middle = points.find((point) => point.row === 3 && point.col === 3)
+    assert.ok(middle)
+    assert.ok(Math.abs(middle.lat - center.lat) < 1e-9)
+    assert.ok(Math.abs(middle.lng - center.lng) < 1e-9)
   })
 
   it("labels each cell with a lat,lng,zoom coordinate (max 7 decimals)", () => {
@@ -214,6 +233,32 @@ describe("campaign store", () => {
     assert.equal(readCampaigns("user-b").length, 1)
     assert.equal(readCampaigns("user-a")[0]?.name, "Austin BBQ")
   })
+
+  it("returns grid coordinates without scanning", async () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-grid-")))
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue"],
+        gridSize: 5,
+        center: { lat: 30.270128, lng: -97.739998 },
+      },
+      "user-a",
+    )
+    const preview = await loadCampaignGrid(campaign.id, "user-a")
+    assert.equal(preview.points.length, 25)
+    const middle = preview.points.find((point) => point.row === 2 && point.col === 2)
+    assert.ok(middle)
+    assert.ok(Math.abs(middle.lat - 30.270128) < 1e-9)
+    assert.ok(Math.abs(middle.lng + 97.739998) < 1e-9)
+    const three = await loadCampaignGrid(campaign.id, "user-a", { gridSize: 3 })
+    assert.equal(three.points.length, 9)
+    const seven = await loadCampaignGrid(campaign.id, "user-a", { gridSize: 7 })
+    assert.equal(seven.points.length, 49)
+  })
 })
 
 describe("selectScanKeywords", () => {
@@ -258,5 +303,73 @@ describe("mergeKeywordRanks", () => {
 describe("mapsKeysMissingMessage", () => {
   it("does not tell operators to open Settings", () => {
     assert.equal(/settings/i.test(mapsKeysMissingMessage()), false)
+  })
+
+  it("stays vendor-free for public rank scans", () => {
+    assert.equal(mapsKeysMissingMessage(), "Maps search is not configured, so a rank scan cannot run.")
+  })
+})
+
+describe("rank scan Maps keys", () => {
+  const previous = {
+    keysFile: process.env.PLACEFIND_KEYS_FILE,
+    login: process.env.DATAFORSEO_LOGIN,
+    password: process.env.DATAFORSEO_PASSWORD,
+    scrappey: process.env.SCRAPPEY_API_KEY,
+    dataDir: process.env.PLACEFIND_DATA_DIR,
+  }
+
+  function isolateKeys() {
+    resetHostedKeysCacheForTests()
+    process.env.PLACEFIND_KEYS_FILE = path.join(tmpdir(), "placefind-missing-hosted-keys.json")
+    delete process.env.DATAFORSEO_LOGIN
+    delete process.env.DATAFORSEO_PASSWORD
+    delete process.env.SCRAPPEY_API_KEY
+  }
+
+  after(() => {
+    resetHostedKeysCacheForTests()
+    if (previous.keysFile == null) delete process.env.PLACEFIND_KEYS_FILE
+    else process.env.PLACEFIND_KEYS_FILE = previous.keysFile
+    if (previous.login == null) delete process.env.DATAFORSEO_LOGIN
+    else process.env.DATAFORSEO_LOGIN = previous.login
+    if (previous.password == null) delete process.env.DATAFORSEO_PASSWORD
+    else process.env.DATAFORSEO_PASSWORD = previous.password
+    if (previous.scrappey == null) delete process.env.SCRAPPEY_API_KEY
+    else process.env.SCRAPPEY_API_KEY = previous.scrappey
+    if (previous.dataDir == null) delete process.env.PLACEFIND_DATA_DIR
+    else process.env.PLACEFIND_DATA_DIR = previous.dataDir
+    reloadStoreFromDisk()
+  })
+
+  it("returns the public message when Maps keys are missing", async () => {
+    isolateKeys()
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-scan-keys-")))
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue"],
+      },
+      "user-a",
+    )
+    assert.equal(mapsScanConfigured(emptyApiKeys()), false)
+    await assert.rejects(
+      () => scanCampaign(campaign.id, emptyApiKeys(), ["barbecue"], "user-a"),
+      (error: unknown) => {
+        assert.ok(error instanceof CampaignError)
+        assert.equal(error.message, "Maps search is not configured, so a rank scan cannot run.")
+        return true
+      },
+    )
+  })
+
+  it("passes the configured check when env Maps keys are present", () => {
+    isolateKeys()
+    process.env.DATAFORSEO_LOGIN = "maps-login@example.test"
+    process.env.DATAFORSEO_PASSWORD = "maps-password-test"
+    assert.equal(mapsScanConfigured(emptyApiKeys()), true)
   })
 })

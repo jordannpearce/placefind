@@ -32,8 +32,16 @@ export function MapsSearchPanel({ hosted, onHosted, onError, onMessage }: Props)
       <h3 className="mt-1 font-display text-2xl text-paper">Scan services</h3>
       <p className="mt-2 text-sm leading-6 text-muted">
         Paste the DataForSEO login, DataForSEO API password, and Scrappey key used for Test scan and rank tracking.
-        Saved values stay on this server. This page only shows a last-four hint.
+        Saved values stay on this server and, when a database is connected, in Postgres. On Railway also set
+        DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD, and SCRAPPEY_API_KEY on the placefind service — disk there is not
+        durable. This page only shows a last-four hint.
       </p>
+      {!hosted?.dataforseo && (
+        <p className="mt-3 text-sm text-clay">
+          Maps rank tracking is not configured. Save DataForSEO credentials here, or set the Railway variables, before
+          a Track scan can run.
+        </p>
+      )}
       {keysReady && (
         <p className="mt-3 text-sm text-moss">
           Saved
@@ -115,7 +123,11 @@ export function MapsSearchPanel({ hosted, onHosted, onError, onMessage }: Props)
               setDataforseoLogin("")
               setDataforseoPassword("")
               setResults([])
-              onMessage("Maps search keys saved.")
+              onMessage(
+                next.hosted.savedToDatabase
+                  ? "Maps search keys saved on this server and in the database. On Railway, also keep DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD, and SCRAPPEY_API_KEY on the placefind service."
+                  : "Maps search keys saved on this server. On Railway, set DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD, and SCRAPPEY_API_KEY on the placefind service so rank scans survive deploys.",
+              )
             } catch (err) {
               onError(err instanceof Error ? err.message : "Could not save Maps search keys.")
             } finally {

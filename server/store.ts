@@ -74,6 +74,11 @@ CREATE TABLE IF NOT EXISTS password_resets (
   expires_at TIMESTAMPTZ NOT NULL,
   used_at TIMESTAMPTZ
 );
+CREATE TABLE IF NOT EXISTS hosted_keys (
+  id TEXT PRIMARY KEY,
+  sealed TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
 `
 
 const memory: Record<StoreCollection, JsonRow[]> = {

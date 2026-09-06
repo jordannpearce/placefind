@@ -18,22 +18,35 @@ export type HostedKeyStatus = {
   scrappeyHint: string
   dataforseoHint: string
   seller: boolean
+  savedToDatabase?: boolean
 }
 
-const DATA_FILE = path.resolve(process.cwd(), ".data", "hosted-keys.json")
 const APP_SECRET = "placefind-hosted-v1-maps-lookup"
+const HOSTED_KEYS_ROW = "default"
+
+let cachedDatabaseKeys: HostedKeys | null = null
+let lastDatabaseWriteOk = false
 
 function emptyKeys(): HostedKeys {
   return { scrappeyKey: "", dataforseoLogin: "", dataforseoPassword: "" }
 }
 
+function dataFile() {
+  return path.resolve(process.env.PLACEFIND_DATA_DIR || path.resolve(process.cwd(), ".data"), "hosted-keys.json")
+}
+
 function keyFiles(): string[] {
+  if (process.env.PLACEFIND_KEYS_FILE) return [process.env.PLACEFIND_KEYS_FILE]
   return [
-    process.env.PLACEFIND_KEYS_FILE,
     path.join(process.cwd(), "release", "win-unpacked", "resources", "hosted-keys.json"),
     path.join(path.dirname(fileURLToPath(import.meta.url)), "hosted-keys.json"),
-    DATA_FILE,
-  ].filter((file): file is string => Boolean(file))
+    dataFile(),
+  ]
+}
+
+function postgresUrl() {
+  const url = process.env.DATABASE_URL?.trim() ?? ""
+  return /^postgres(ql)?:\/\//i.test(url) ? url : ""
 }
 
 export function maskSecret(value: string): string {
@@ -88,16 +101,26 @@ export function openSealed(raw: string): Partial<HostedKeys> | null {
   return null
 }
 
+function applyKeySource(keys: HostedKeys, incoming: Partial<HostedKeys> | null | undefined) {
+  if (!incoming) return
+  keys.scrappeyKey = keys.scrappeyKey || incoming.scrappeyKey?.trim() || ""
+  keys.dataforseoLogin = keys.dataforseoLogin || incoming.dataforseoLogin?.trim() || ""
+  keys.dataforseoPassword = keys.dataforseoPassword || incoming.dataforseoPassword?.trim() || ""
+}
+
+function applyEnv(keys: HostedKeys) {
+  if (keys.scrappeyKey) process.env.SCRAPPEY_API_KEY = keys.scrappeyKey
+  if (keys.dataforseoLogin) process.env.DATAFORSEO_LOGIN = keys.dataforseoLogin
+  if (keys.dataforseoPassword) process.env.DATAFORSEO_PASSWORD = keys.dataforseoPassword
+}
+
 export function readHostedKeys(): HostedKeys {
   const keys = emptyKeys()
   for (const file of keyFiles()) {
     if (!existsSync(file)) continue
-    const opened = openSealed(readFileSync(file, "utf8"))
-    if (!opened) continue
-    keys.scrappeyKey = keys.scrappeyKey || opened.scrappeyKey?.trim() || ""
-    keys.dataforseoLogin = keys.dataforseoLogin || opened.dataforseoLogin?.trim() || ""
-    keys.dataforseoPassword = keys.dataforseoPassword || opened.dataforseoPassword?.trim() || ""
+    applyKeySource(keys, openSealed(readFileSync(file, "utf8")))
   }
+  applyKeySource(keys, cachedDatabaseKeys)
   keys.scrappeyKey = keys.scrappeyKey || process.env.SCRAPPEY_API_KEY?.trim() || ""
   keys.dataforseoLogin = keys.dataforseoLogin || process.env.DATAFORSEO_LOGIN?.trim() || ""
   keys.dataforseoPassword = keys.dataforseoPassword || process.env.DATAFORSEO_PASSWORD?.trim() || ""
@@ -117,27 +140,113 @@ export function hostedKeyStatus(options?: { revealHints?: boolean }): HostedKeyS
     scrappeyHint: revealHints ? maskSecret(keys.scrappeyKey) : "",
     dataforseoHint: revealHints && keys.dataforseoLogin ? maskSecret(keys.dataforseoLogin) : "",
     seller,
+    savedToDatabase: lastDatabaseWriteOk || Boolean(cachedDatabaseKeys),
   }
 }
 
-export function writeHostedKeys(input: Partial<HostedKeys>): HostedKeyStatus {
+export function emptyApiKeys(): ApiKeys {
+  return { scrappeyKey: "", dataforseoLogin: "", dataforseoPassword: "", enrichWithScrappey: true }
+}
+
+export function mapsScanConfigured(rawKeys: ApiKeys = emptyApiKeys()): boolean {
+  const keys = mergeHostedKeys(rawKeys)
+  return Boolean(keys.dataforseoLogin?.trim() && keys.dataforseoPassword?.trim())
+}
+
+export function resetHostedKeysCacheForTests() {
+  cachedDatabaseKeys = null
+  lastDatabaseWriteOk = false
+}
+
+async function withPostgres<T>(fn: (client: import("pg").PoolClient) => Promise<T>): Promise<T | null> {
+  const url = postgresUrl()
+  if (!url) return null
+  const pg = await import("pg")
+  const pool = new pg.Pool({
+    connectionString: url,
+    ssl: process.env.DATABASE_SSL === "0" ? undefined : { rejectUnauthorized: false },
+  })
+  const client = await pool.connect()
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS hosted_keys (
+        id TEXT PRIMARY KEY,
+        sealed TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      )
+    `)
+    return await fn(client)
+  } finally {
+    client.release()
+    await pool.end()
+  }
+}
+
+export async function hydrateHostedKeys(): Promise<boolean> {
+  try {
+    const sealed = await withPostgres(async (client) => {
+      const result = await client.query<{ sealed: string }>("SELECT sealed FROM hosted_keys WHERE id = $1", [HOSTED_KEYS_ROW])
+      return result.rows[0]?.sealed ?? ""
+    })
+    if (!sealed) return false
+    const opened = openSealed(sealed)
+    if (!opened) return false
+    cachedDatabaseKeys = {
+      scrappeyKey: opened.scrappeyKey?.trim() || "",
+      dataforseoLogin: opened.dataforseoLogin?.trim() || "",
+      dataforseoPassword: opened.dataforseoPassword?.trim() || "",
+    }
+    lastDatabaseWriteOk = true
+    applyEnv(cachedDatabaseKeys)
+    const file = dataFile()
+    if (!existsSync(file)) {
+      mkdirSync(path.dirname(file), { recursive: true })
+      writeFileSync(file, sealed)
+    }
+    return Boolean(cachedDatabaseKeys.dataforseoLogin && cachedDatabaseKeys.dataforseoPassword)
+  } catch {
+    console.error("PlaceFind could not read saved Maps keys from Postgres.")
+    return false
+  }
+}
+
+export async function writeHostedKeys(input: Partial<HostedKeys>): Promise<HostedKeyStatus> {
   const current = readHostedKeys()
   const next: HostedKeys = {
     scrappeyKey: input.scrappeyKey?.trim() || current.scrappeyKey,
     dataforseoLogin: input.dataforseoLogin?.trim() || current.dataforseoLogin,
     dataforseoPassword: input.dataforseoPassword?.trim() || current.dataforseoPassword,
   }
-  mkdirSync(path.dirname(DATA_FILE), { recursive: true })
-  writeFileSync(DATA_FILE, sealKeys(next))
+  const sealed = sealKeys(next)
+  const file = dataFile()
+  mkdirSync(path.dirname(file), { recursive: true })
+  writeFileSync(file, sealed)
+  cachedDatabaseKeys = next
+  applyEnv(next)
   injectHostedKeysIntoUnpacked()
+  lastDatabaseWriteOk = false
+  try {
+    const wrote = await withPostgres(async (client) => {
+      await client.query(
+        `INSERT INTO hosted_keys (id, sealed, updated_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (id) DO UPDATE SET sealed = EXCLUDED.sealed, updated_at = NOW()`,
+        [HOSTED_KEYS_ROW, sealed],
+      )
+      return true
+    })
+    lastDatabaseWriteOk = Boolean(wrote)
+  } catch {
+    console.error("PlaceFind could not persist Maps keys to Postgres.")
+  }
   return hostedKeyStatus({ revealHints: true })
 }
 
 export function injectHostedKeysIntoUnpacked(): boolean {
-  if (!existsSync(DATA_FILE)) return false
+  const file = dataFile()
+  if (!existsSync(file)) return false
   const destDir = path.join(process.cwd(), "release", "win-unpacked", "resources")
   if (!existsSync(destDir)) return false
-  writeFileSync(path.join(destDir, "hosted-keys.json"), readFileSync(DATA_FILE))
+  writeFileSync(path.join(destDir, "hosted-keys.json"), readFileSync(file))
   return true
 }
 

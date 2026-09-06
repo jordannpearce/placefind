@@ -3,7 +3,16 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
-import { hostedKeyStatus, maskSecret, openSealed, sealKeys } from "./hosted-keys.ts"
+import {
+  emptyApiKeys,
+  hostedKeyStatus,
+  mapsScanConfigured,
+  maskSecret,
+  openSealed,
+  readHostedKeys,
+  resetHostedKeysCacheForTests,
+  sealKeys,
+} from "./hosted-keys.ts"
 
 describe("maskSecret", () => {
   it("hides all but the last four characters", () => {
@@ -33,11 +42,23 @@ describe("sealKeys", () => {
 })
 
 describe("hostedKeyStatus", () => {
-  const previous = process.env.PLACEFIND_KEYS_FILE
+  const previous = {
+    keysFile: process.env.PLACEFIND_KEYS_FILE,
+    login: process.env.DATAFORSEO_LOGIN,
+    password: process.env.DATAFORSEO_PASSWORD,
+    scrappey: process.env.SCRAPPEY_API_KEY,
+  }
 
   after(() => {
-    if (previous == null) delete process.env.PLACEFIND_KEYS_FILE
-    else process.env.PLACEFIND_KEYS_FILE = previous
+    resetHostedKeysCacheForTests()
+    if (previous.keysFile == null) delete process.env.PLACEFIND_KEYS_FILE
+    else process.env.PLACEFIND_KEYS_FILE = previous.keysFile
+    if (previous.login == null) delete process.env.DATAFORSEO_LOGIN
+    else process.env.DATAFORSEO_LOGIN = previous.login
+    if (previous.password == null) delete process.env.DATAFORSEO_PASSWORD
+    else process.env.DATAFORSEO_PASSWORD = previous.password
+    if (previous.scrappey == null) delete process.env.SCRAPPEY_API_KEY
+    else process.env.SCRAPPEY_API_KEY = previous.scrappey
   })
 
   it("shows last-four hints only when revealHints is set", () => {
@@ -61,5 +82,20 @@ describe("hostedKeyStatus", () => {
     assert.equal(shown.dataforseoHint.includes("owner@example.com"), false)
     assert.match(shown.scrappeyHint, /alue$/)
     assert.match(shown.dataforseoHint, /\.com$/)
+  })
+
+  it("falls back to env Maps keys when no key file is present", () => {
+    resetHostedKeysCacheForTests()
+    process.env.PLACEFIND_KEYS_FILE = path.join(tmpdir(), "placefind-absent-hosted-keys.json")
+    delete process.env.SCRAPPEY_API_KEY
+    process.env.DATAFORSEO_LOGIN = "env-login@example.test"
+    process.env.DATAFORSEO_PASSWORD = "env-password-test"
+    const keys = readHostedKeys()
+    assert.equal(keys.dataforseoLogin, "env-login@example.test")
+    assert.equal(mapsScanConfigured(emptyApiKeys()), true)
+    delete process.env.DATAFORSEO_LOGIN
+    delete process.env.DATAFORSEO_PASSWORD
+    resetHostedKeysCacheForTests()
+    assert.equal(mapsScanConfigured(emptyApiKeys()), false)
   })
 })

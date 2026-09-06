@@ -98,6 +98,7 @@ export type HostedKeyStatus = {
   scrappeyHint: string
   dataforseoHint: string
   seller: boolean
+  savedToDatabase?: boolean
 }
 
 export type LicenseStatus = {
@@ -211,12 +212,15 @@ export type KeywordRank = {
   error?: string
 }
 
-export type GridPointResult = {
+export type GridPoint = {
   row: number
   col: number
   lat: number
   lng: number
   locationCoordinate?: string
+}
+
+export type GridPointResult = GridPoint & {
   keyword: string
   rank: number | null
   listingTitle: string | null
