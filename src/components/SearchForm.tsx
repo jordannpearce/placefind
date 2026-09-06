@@ -1,5 +1,5 @@
 import { LoaderCircle, Search } from "lucide-react"
-import { US_STATES } from "../lib/states.ts"
+import { CityStateFields } from "./CityStateFields.tsx"
 import type { HistoryItem, SearchQuery } from "../lib/types.ts"
 
 const SAMPLES: SearchQuery[] = [
@@ -21,7 +21,7 @@ type Props = {
 export function SearchForm({ query, onChange, onSearch, loading, history, onHistory, submitLabel }: Props) {
   return (
     <form
-      className="flex flex-col gap-4"
+      className="flex min-w-0 flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
         onSearch()
@@ -38,33 +38,13 @@ export function SearchForm({ query, onChange, onSearch, loading, history, onHist
         />
       </label>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_7.5rem]">
-        <label className="grid gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">City</span>
-          <input
-            value={query.city}
-            onChange={(event) => onChange({ ...query, city: event.target.value })}
-            placeholder="Austin"
-            autoComplete="off"
-            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none ring-brass/40 placeholder:text-muted/50 focus:border-brass focus:ring-2"
-          />
-        </label>
-        <label className="grid gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">State</span>
-          <select
-            value={query.state}
-            onChange={(event) => onChange({ ...query, state: event.target.value })}
-            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none ring-brass/40 focus:border-brass focus:ring-2"
-          >
-            <option value="">Select</option>
-            {US_STATES.map((state) => (
-              <option key={state.abbr} value={state.abbr}>
-                {state.abbr}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <CityStateFields
+        city={query.city}
+        state={query.state}
+        onCity={(city) => onChange({ ...query, city })}
+        onState={(state) => onChange({ ...query, state })}
+        fieldClassName="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none ring-brass/40 placeholder:text-muted/50 focus:border-brass focus:ring-2"
+      />
 
       <button
         type="submit"

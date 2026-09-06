@@ -19,7 +19,7 @@ import {
 import { buildPreviewPoints, gridPinId, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
 import { pointsWithCompare, rankChangeColor, rankChangeLabel } from "../lib/scan-compare.ts"
 import { mapsKeysMissingAdminMessage, publicPinScanMessage, publicSearchMessage } from "../lib/public-copy.ts"
-import { US_STATES } from "../lib/states.ts"
+import { CityStateFields } from "./CityStateFields.tsx"
 import {
   campaignInputFromListing,
   confirmedListingFromCampaign,
@@ -990,33 +990,13 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none placeholder:text-muted/50 focus:border-brass"
               />
             </label>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_7.5rem]">
-              <label className="grid gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">City</span>
-                <input
-                  value={query.city}
-                  onChange={(event) => onQueryChange({ ...query, city: event.target.value })}
-                  placeholder="Austin"
-                  autoComplete="off"
-                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none placeholder:text-muted/50 focus:border-brass"
-                />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">State</span>
-                <select
-                  value={query.state}
-                  onChange={(event) => onQueryChange({ ...query, state: event.target.value })}
-                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-                >
-                  <option value="">Select</option>
-                  {US_STATES.map((state) => (
-                    <option key={state.abbr} value={state.abbr}>
-                      {state.abbr}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+            <CityStateFields
+              city={query.city}
+              state={query.state}
+              onCity={(city) => onQueryChange({ ...query, city })}
+              onState={(state) => onQueryChange({ ...query, state })}
+              fieldClassName="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none placeholder:text-muted/50 focus:border-brass"
+            />
             <button
               type="submit"
               disabled={searching}

@@ -268,7 +268,7 @@ export default function App() {
         {showTrack && <TrackPage keys={emptyKeys()} hosted={hosted} seller={seller} desktop={desktop} />}
         {showLookup && (
           <div className="grid flex-1 gap-6 lg:grid-cols-[20rem_1fr]">
-            <aside className="rounded-2xl border border-line bg-panel p-5">
+            <aside className="min-w-0 rounded-2xl border border-line bg-panel p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">
                 {desktop ? "Lookup" : "Try PlaceFind"}
               </p>
