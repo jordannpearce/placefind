@@ -74,6 +74,7 @@ describe("public website copy", () => {
     const listingForm = readFileSync(path.join(root, "components/ListingFormPage.tsx"), "utf8")
     assert.equal(/google maps/i.test(home), false)
     assert.match(listingForm, /Search Google Maps/)
+    assert.match(listingForm, /Add listing manually/)
     assert.match(home, /LISTING_PRICE_LABEL|listingPriceCopy|\$150/)
     assert.match(home, /business directory/i)
     assert.match(home, /No listings yet/)

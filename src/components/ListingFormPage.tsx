@@ -160,14 +160,14 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
       setCandidates(rows)
       setSearched(true)
       if (rows.length === 0) {
-        setDetailsVisible(true)
-        setNotice("No Google Maps place matched this name in that city. Enter the street, ZIP, and the rest of the listing.")
+        enterManually("No Google Maps place matched this name in that city. Add the listing manually — street, ZIP, phone, website, hours, and the rest.")
       } else {
-        setNotice("Choose the Google Maps place that matches your business.")
+        setNotice("Choose the Google Maps place that matches your business. If none of these is your shop, add the listing manually.")
       }
     } catch (err) {
-      setDetailsVisible(true)
+      enterManually(err instanceof Error ? err.message : "Could not search Google Maps.")
       setError(err instanceof Error ? err.message : "Could not search Google Maps.")
+      setNotice("Add the listing manually below, then save.")
     } finally {
       setChecking(false)
     }
@@ -191,15 +191,18 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
     )
   }
 
-  async function markNotFound() {
+  function enterManually(message?: string) {
     setPendingMatch(null)
     setPendingNotFound(true)
-    setCandidates([])
     setDetailsVisible(true)
-    if (!listing) {
-      setNotice("Marked as not found on Google Maps. Enter the rest of the listing, then save.")
-      return
-    }
+    setSearched(true)
+    setNotice(message ?? "Add the listing manually. Enter the street, city, state, ZIP, and the rest, then save.")
+  }
+
+  async function markNotFound() {
+    enterManually("No matching Google Maps place. Add the listing manually, then save.")
+    setCandidates([])
+    if (!listing) return
     setSaving(true)
     try {
       setListing(await confirmListingMatch(listing.id, { mapsStatus: "not_found" }))
@@ -247,7 +250,7 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
         <p className="mt-3 text-sm leading-6 text-muted">
           {editing
             ? "Search Google Maps again to refill phone, website, hours, category, and address from a matching place. You can still edit every field before you save."
-            : "Start with the business name, city, and state. Search Google Maps, pick the matching place, then review the filled listing before you save."}{" "}
+            : "Start with the business name, city, and state. Search Google Maps and pick the matching place, or add the listing manually if nothing matches."}{" "}
           A PlaceFind listing is {LISTING_PRICE_LABEL}. {listingPriceCopy()} Signed in as {user.email}.
         </p>
         {error && <p className="mt-4 rounded-xl border border-clay/40 bg-clay/10 px-4 py-3 text-sm text-clay">{error}</p>}
@@ -298,9 +301,14 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
               />
             </label>
           )}
-          {detailsVisible && !form.street?.trim() && (
+          {detailsVisible && !form.street?.trim() && !pendingNotFound && pendingMatch && (
             <p className="text-sm leading-6 text-muted">
               Google Maps did not include a street address. Enter the street, city, state, and ZIP.
+            </p>
+          )}
+          {detailsVisible && pendingNotFound && !pendingMatch && (
+            <p className="text-sm leading-6 text-muted">
+              Enter the street, city, state, ZIP, and the rest of the listing yourself.
             </p>
           )}
           <div className="mt-1 flex flex-wrap gap-3">
@@ -313,16 +321,14 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
               {checking && <LoaderCircle className="h-4 w-4 animate-spin" />}
               {checking ? "Searching Google Maps…" : "Search Google Maps"}
             </button>
-            {(editing || searched) && (
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void markNotFound()}
-                className="h-11 rounded-lg border border-line px-4 text-sm text-paper hover:border-brass disabled:opacity-60"
-              >
-                Mark as not found
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={saving || checking}
+              onClick={() => void markNotFound()}
+              className="h-11 rounded-lg border border-line px-4 text-sm text-paper hover:border-brass disabled:opacity-60"
+            >
+              Add listing manually
+            </button>
           </div>
           {checking && <p className="text-sm text-muted">Looking up Google Maps listings…</p>}
           {candidates.length > 0 && (
@@ -353,16 +359,16 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
               })}
             </ul>
           )}
-          {searched && !detailsVisible && (
+          {searched && candidates.length > 0 && !pendingNotFound && (
             <button
               type="button"
               onClick={() => {
-                setDetailsVisible(true)
-                setNotice("Enter the rest of the listing, then save.")
+                setCandidates([])
+                enterManually("None of those Google Maps places matched. Add the listing manually, then save.")
               }}
               className="justify-self-start text-sm text-brass hover:underline"
             >
-              Enter the rest without a Maps match
+              None of these — add the listing manually
             </button>
           )}
           {detailsVisible && (
