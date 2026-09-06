@@ -216,7 +216,7 @@ export function normalizeTrafficSchedule(raw: unknown): { value?: TrafficSchedul
   if (raw == null) return { value: defaultTrafficSchedule() }
   if (typeof raw !== "object") return { error: "That traffic schedule is not valid." }
   const input = raw as Partial<TrafficSchedule>
-  const base = normalizeScanSchedule(input)
+  const base = normalizeScanSchedule({ ...defaultScanSchedule(), ...input })
   if (base.error || !base.value) return { error: base.error || "That traffic schedule is not valid." }
   const pinIds = Array.isArray(input.lastSelectedPinIds)
     ? [...new Set(input.lastSelectedPinIds.map((id) => String(id ?? "").trim()).filter(Boolean))]
