@@ -51,6 +51,7 @@ import {
   normalizeTrafficSearches,
   plannedTrafficSearchCount,
   trafficSearchHelpCopy,
+  trafficStartConfirmCopy,
 } from "../lib/traffic-plan.ts"
 import type {
   ApiKeys,
@@ -723,11 +724,17 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setError(noKeywordsSelectedMessage())
       return
     }
-    const sessions = selectedPinIds.length * keywords.length
-    const requests = sessions * 2
+    const available = selectedPinIds.length * keywords.length
+    const planned = plannedTrafficSearchCount(available, searchCount)
     const keywordList = keywords.map((keyword) => `“${keyword}”`).join(", then ")
     const ok = window.confirm(
-      `Start traffic from ${selectedPinIds.length} selected pin${selectedPinIds.length === 1 ? "" : "s"} × ${keywords.length} keyword${keywords.length === 1 ? "" : "s"} for ${confirmed?.title || selected.businessName}?\n\nFor each selected pin, Maps will search ${keywordList} from that pin’s GPS, then open the confirmed listing when it appears.\n\nEstimated ${requests} Maps requests (2 per pin×keyword).`,
+      trafficStartConfirmCopy({
+        pinCount: selectedPinIds.length,
+        keywordCount: keywords.length,
+        searches: searchCount,
+        businessName: confirmed?.title || selected.businessName,
+        keywordList,
+      }),
     )
     if (!ok) return
     setStartingTraffic(true)
@@ -735,14 +742,16 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setNotice(null)
     setTrafficPollError(null)
     try {
+      await persistSearchCount(searchCount)
       const payload = await startCampaignTraffic(selected.id, keys, Boolean(hosted?.included && !seller), {
         pinIds: selectedPinIds,
         keywords,
         keywordIds: keywords,
+        searches: searchCount,
       })
       replaceCampaign(payload.campaign)
       setNotice(
-        `Traffic started from ${selectedPinIds.length} pin${selectedPinIds.length === 1 ? "" : "s"} × ${keywords.length} keyword${keywords.length === 1 ? "" : "s"} in listed order. Watch the live log under the map.`,
+        `Traffic started: ${planned} of ${available} searches (${selectedPinIds.length} pin${selectedPinIds.length === 1 ? "" : "s"} × ${keywords.length} keyword${keywords.length === 1 ? "" : "s"}, first pairs in listed order). Watch the live log under the map.`,
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start traffic.")

@@ -23,3 +23,25 @@ export function plannedTrafficSearchCount(pairCount: number, searches?: unknown)
 export function trafficSearchHelpCopy() {
   return "Total Maps searches this run. Uses selected pins × selected keywords in listed order, then stops."
 }
+
+/** Confirm copy for Start Traffic. Uses the capped search count, not every leftover pair. */
+export function trafficStartConfirmCopy(input: {
+  pinCount: number
+  keywordCount: number
+  searches?: unknown
+  businessName: string
+  keywordList: string
+}): string {
+  const available = Math.max(0, input.pinCount) * Math.max(0, input.keywordCount)
+  const planned = plannedTrafficSearchCount(available, input.searches)
+  const requests = planned * 2
+  const pinLabel = `${input.pinCount} selected pin${input.pinCount === 1 ? "" : "s"}`
+  const keywordLabel = `${input.keywordCount} keyword${input.keywordCount === 1 ? "" : "s"}`
+  return [
+    `Start ${planned} of ${available} searches (${pinLabel} × ${keywordLabel}, first pairs in listed order) for ${input.businessName}?`,
+    "",
+    `Maps will search ${input.keywordList} from each selected pin’s GPS, then open the confirmed listing when it appears.`,
+    "",
+    `Estimated ${requests} Maps requests (2 per search). Stop cancels remaining searches.`,
+  ].join("\n")
+}

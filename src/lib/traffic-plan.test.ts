@@ -6,6 +6,7 @@ import {
   normalizeTrafficSearches,
   planTrafficPairs,
   plannedTrafficSearchCount,
+  trafficStartConfirmCopy,
 } from "./traffic-plan.ts"
 
 describe("normalizeTrafficSearches", () => {
@@ -34,5 +35,20 @@ describe("planTrafficPairs", () => {
     assert.equal(plannedTrafficSearchCount(pairs.length, 4), 4)
     assert.equal(plannedTrafficSearchCount(2, 4), 2)
     assert.equal(plannedTrafficSearchCount(0, 3), 0)
+  })
+})
+
+describe("trafficStartConfirmCopy", () => {
+  it("uses the capped search count, not every leftover pair", () => {
+    const copy = trafficStartConfirmCopy({
+      pinCount: 3,
+      keywordCount: 2,
+      searches: 4,
+      businessName: "Franklin Barbecue",
+      keywordList: "“barbecue”, then “brisket”",
+    })
+    assert.match(copy, /Start 4 of 6 searches/)
+    assert.match(copy, /Estimated 8 Maps requests/)
+    assert.doesNotMatch(copy, /Estimated 12 /)
   })
 })
