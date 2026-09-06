@@ -422,11 +422,22 @@ describe("runCampaignTraffic", () => {
     )
     const scanned = attachScan(created, true)
     const originalFetch = globalThis.fetch
-    globalThis.fetch = (async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20_000))
-      return new Response(JSON.stringify({ solution: { verified: true } }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
+    globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          resolve(
+            new Response(JSON.stringify({ solution: { verified: true } }), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          )
+        }, 20_000)
+        init?.signal?.addEventListener("abort", () => {
+          clearTimeout(timer)
+          const error = new Error("Aborted")
+          error.name = "AbortError"
+          reject(error)
+        })
       })
     }) as typeof fetch
 
