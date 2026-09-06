@@ -194,6 +194,33 @@ describe("scanMapsGrid", () => {
     assert.equal(ok.length, 8)
   })
 
+  it("reports each finished pin so live status can advance", async () => {
+    const points = ninePoints()
+    const seen: string[] = []
+    const client: MapsGridClient = {
+      postTasks: async () => points.map((point) => ({ id: `task-${point.id}`, tag: point.id })),
+      getTask: async (id) => ({
+        id,
+        status_code: 20000,
+        result: [{ items: [mapsItem("Franklin Barbecue", "ChIJ-franklin", 1)] }],
+      }),
+      liveAtCoordinate: async () => {
+        throw new Error("live fallback should not run")
+      },
+    }
+    await scanMapsGrid(points, "barbecue", "login", "password", {
+      client,
+      pollTimeoutMs: 20,
+      sleep: async () => {},
+      onCell: (cell, done) => {
+        seen.push(`${cell.point.id}:${done}`)
+      },
+    })
+    assert.equal(seen.length, 9)
+    assert.equal(seen[0]?.split(":")[2], "1")
+    assert.equal(seen[8]?.split(":")[2], "9")
+  })
+
   it("retries a failed live pin once", async () => {
     const points = [gridPoint("0:0", 0, 0)]
     let liveCalls = 0

@@ -411,11 +411,20 @@ export async function collectPostedTasks(
   getTask: (id: string) => Promise<MapsTaskSnapshot | null>,
   timeoutMs: number,
   wait: (ms: number) => Promise<void> = sleep,
+  onReady?: (tag: string, cell: CollectedCell) => void | Promise<void>,
 ): Promise<Map<string, CollectedCell>> {
   const byTag = new Map<string, CollectedCell>()
   const pending = new Map(posted.map((row) => [row.id, row.tag]))
   const started = Date.now()
   let delay = 1200
+  const store = async (tag: string, cell: CollectedCell) => {
+    byTag.set(tag, cell)
+    try {
+      await onReady?.(tag, cell)
+    } catch {
+      // Progress updates must not abort remaining pins.
+    }
+  }
   while (pending.size > 0 && Date.now() - started < timeoutMs) {
     const ids = [...pending.keys()]
     await runPool(ids, TASK_GET_CONCURRENCY, async (id) => {
@@ -424,16 +433,16 @@ export async function collectPostedTasks(
       const task = await settle(() => getTask(id), null)
       const code = task?.status_code ?? 0
       if (code === TASK_READY || isEmptySerpMessage(task?.status_message)) {
-        byTag.set(tag, { items: task?.result?.[0]?.items ?? [], error: null })
         pending.delete(id)
+        await store(tag, { items: task?.result?.[0]?.items ?? [], error: null })
         return
       }
       if (isFailedMapsStatus(code, task?.status_message)) {
-        byTag.set(tag, {
+        pending.delete(id)
+        await store(tag, {
           items: null,
           error: task?.status_message || "Maps search could not finish this point.",
         })
-        pending.delete(id)
       }
     })
     if (pending.size === 0) break
@@ -539,11 +548,16 @@ export async function scanMapsGrid(
         (id) => client.getTask(id),
         options?.pollTimeoutMs ?? gridPollTimeoutMs(points.length),
         wait,
+        async (tag, cell) => {
+          const point = points.find((row) => row.id === tag)
+          if (point && cell.items != null) await mark(point, cell.items, null)
+        },
       ),
     new Map<string, CollectedCell>(),
   )
   await settle(() => retryFailedGets(posted, collected, (id) => client.getTask(id)), undefined)
   for (const point of points) {
+    if (results.has(point.id)) continue
     const entry = collected.get(point.id)
     if (entry && entry.items != null) await mark(point, entry.items, null)
   }
