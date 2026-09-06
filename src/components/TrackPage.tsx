@@ -1,7 +1,6 @@
 import { ExternalLink, LoaderCircle, Plus, Star, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { createCampaign, deleteCampaign, loadCampaigns, scanCampaign, updateCampaign } from "../lib/api.ts"
-import { publicSearchMessage } from "../lib/public-copy.ts"
 import { US_STATES } from "../lib/states.ts"
 import type { ApiKeys, Campaign, CampaignInput, HostedKeyStatus, KeywordRank } from "../lib/types.ts"
 
@@ -227,8 +226,7 @@ export function TrackPage({ keys, hosted, seller }: Props) {
           : `Scan finished. Found the business for ${found} of ${total} keywords. Missing ranks mean it was not in the Maps results.`,
       )
     } catch (err) {
-      const raw = err instanceof Error ? err.message : "Could not scan Google Maps."
-      setError(seller ? raw : publicSearchMessage(raw) || raw)
+      setError(err instanceof Error ? err.message : "Could not scan Google Maps.")
     } finally {
       setScanning(null)
     }
@@ -541,7 +539,7 @@ export function TrackPage({ keys, hosted, seller }: Props) {
                           <p className="mt-2 text-sm text-paper/80">{row?.listingTitle || "No matching listing yet"}</p>
                           {row?.address && <p className="mt-1 text-sm text-muted">{row.address}</p>}
                           <p className="mt-2 text-xs text-muted">{row ? formatWhen(row.scannedAt) : "Not scanned yet"}</p>
-                          {row?.error && <p className="mt-2 text-sm text-clay">{publicSearchMessage(row.error)}</p>}
+                          {row?.error && <p className="mt-2 text-sm text-clay">{row.error}</p>}
                         </li>
                       )
                     })}

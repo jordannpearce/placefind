@@ -1,14 +1,31 @@
 import { randomBytes } from "node:crypto"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import path from "node:path"
 import { searchDataForSeo } from "./dataforseo.ts"
 import { mergeHostedKeys } from "./hosted-keys.ts"
-import { publicSearchMessage } from "./public-copy.ts"
 import { rankOfBusiness } from "./rank.ts"
 import { isSellerMode } from "./runtime.ts"
-import { readCollection, writeCollection } from "./store.ts"
 import type { ApiKeys } from "./types.ts"
 
 export const MAX_KEYWORDS = 20
 export const MAX_RECENT_SCANS = 10
+
+const DATA_DIR = path.resolve(process.env.PLACEFIND_DATA_DIR || path.resolve(process.cwd(), ".data"))
+const DATA_FILE = path.join(DATA_DIR, "campaigns.json")
+
+function readJson<T>(file: string, fallback: T): T {
+  try {
+    if (!existsSync(file)) return fallback
+    return JSON.parse(readFileSync(file, "utf8")) as T
+  } catch {
+    return fallback
+  }
+}
+
+function writeJson(file: string, value: unknown) {
+  mkdirSync(path.dirname(file), { recursive: true })
+  writeFileSync(file, JSON.stringify(value, null, 2))
+}
 
 export type CampaignInput = {
   name?: string
@@ -94,13 +111,13 @@ export function validateCampaign(input: CampaignInput): { value?: Pick<Campaign,
 }
 
 export function readCampaigns(): Campaign[] {
-  const rows = readCollection<Campaign>("campaigns")
+  const rows = readJson<Campaign[]>(DATA_FILE, [])
   if (!Array.isArray(rows)) return []
   return rows.map(normalizeStoredCampaign)
 }
 
 function writeCampaigns(campaigns: Campaign[]) {
-  writeCollection("campaigns", campaigns)
+  writeJson(DATA_FILE, campaigns)
 }
 
 function normalizeStoredCampaign(row: Campaign): Campaign {
@@ -227,7 +244,7 @@ export async function scanCampaign(id: string, rawKeys: ApiKeys, requestedKeywor
         address: null,
         mapsUrl: null,
         scannedAt,
-        error: isSellerMode() ? live.error : publicSearchMessage(live.error),
+        error: live.error,
       })
       continue
     }
