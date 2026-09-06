@@ -3,6 +3,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
+import { parseStreetAddress } from "../src/lib/address.ts"
 import {
   confirmListingMatch,
   createListing,
@@ -66,14 +67,26 @@ describe("directory listings", () => {
     assert.ok(verified.candidates.length > 0)
     assert.equal(verified.candidates[0]?.title, "Joe's Pizza")
 
+    const candidate = verified.candidates[0]
     const confirmed = confirmListingMatch(created.id, "user-1", false, {
-      placeId: verified.candidates[0]?.placeId ?? "sample-joes",
-      cid: verified.candidates[0]?.cid ?? "",
-      title: verified.candidates[0]?.title,
-      address: verified.candidates[0]?.address,
+      placeId: candidate?.placeId ?? "sample-joes",
+      cid: candidate?.cid ?? "",
+      title: candidate?.title,
+      address: candidate?.address,
+      phone: candidate?.phone ?? undefined,
+      website: candidate?.website ?? undefined,
+      hours: candidate?.hours ?? undefined,
+      category: candidate?.category ?? undefined,
     })
+    const parsed = parseStreetAddress(candidate?.address ?? "", { city: "New York", state: "NY" })
     assert.equal(confirmed.mapsStatus, "found")
     assert.ok(confirmed.placeId)
+    assert.equal(confirmed.street, parsed.street)
+    assert.equal(confirmed.city, parsed.city || "New York")
+    assert.equal(confirmed.state, parsed.state || "NY")
+    assert.equal(confirmed.zip, parsed.zip)
+    if (candidate?.phone) assert.equal(confirmed.phone, candidate.phone)
+    assert.ok(confirmed.mapsAddress)
 
     const missing = await verifyListingOnMaps(
       createListing({ name: "No Such Shoppe", city: "Austin", state: "TX" }, "user-1").id,
@@ -92,6 +105,23 @@ describe("directory listings", () => {
 
     deleteListing(created.id, "user-1")
     assert.throws(() => getListing(created.id), /not in the directory/)
+  })
+
+  it("parses a pasted Maps address into street, city, state, and zip", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-listing-address-")))
+    const created = createListing(
+      {
+        name: "Franklin Barbecue",
+        street: "900 E 11th St, Austin, TX 78702",
+        city: "",
+        state: "",
+      },
+      "user-1",
+    )
+    assert.equal(created.street, "900 E 11th St")
+    assert.equal(created.city, "Austin")
+    assert.equal(created.state, "TX")
+    assert.equal(created.zip, "78702")
   })
 
   it("blocks another customer from editing a listing", () => {

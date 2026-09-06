@@ -21,14 +21,31 @@ type Props = {
 
 const emptyForm = (): ListingInput => ({
   name: "",
+  street: "",
   city: "",
   state: "",
+  zip: "",
   category: "",
   keywords: "",
   phone: "",
   website: "",
   hours: "",
 })
+
+function formFromListing(row: DirectoryListing): ListingInput {
+  return {
+    name: row.name,
+    street: row.street ?? "",
+    city: row.city,
+    state: row.state,
+    zip: row.zip ?? "",
+    category: row.category,
+    keywords: formatKeywordText(row.keywords),
+    phone: row.phone,
+    website: row.website,
+    hours: row.hours,
+  }
+}
 
 export function ListingFormPage({ listingId, user, onGo }: Props) {
   const [form, setForm] = useState<ListingInput>(emptyForm)
@@ -46,16 +63,7 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
     void loadListing(listingId)
       .then(({ listing: row }) => {
         setListing(row)
-        setForm({
-          name: row.name,
-          city: row.city,
-          state: row.state,
-          category: row.category,
-          keywords: formatKeywordText(row.keywords),
-          phone: row.phone,
-          website: row.website,
-          hours: row.hours,
-        })
+        setForm(formFromListing(row))
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load that listing."))
       .finally(() => setLoading(false))
@@ -67,6 +75,7 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
     try {
       const next = listingId ? await updateListing(listingId, form) : await createListing(form)
       setListing(next)
+      setForm(formFromListing(next))
       setNotice(listingId ? "Listing saved." : "Listing created. Open Crawl Website to write the public profile.")
       if (!listingId) onGo(`/listings/${next.id}/edit`)
       return next
@@ -109,9 +118,14 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
         cid: candidate.cid ?? undefined,
         title: candidate.title,
         address: candidate.address,
+        phone: candidate.phone ?? undefined,
+        website: candidate.website ?? undefined,
+        hours: candidate.hours ?? undefined,
+        category: candidate.category ?? undefined,
       })
       setListing(next)
-      setNotice(`Confirmed ${next.mapsTitle || next.name} on Google Maps.`)
+      setForm(formFromListing(next))
+      setNotice(`Confirmed ${next.mapsTitle || next.name} on Google Maps. Street, phone, and hours filled from that listing.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not confirm that place.")
     } finally {
@@ -167,6 +181,15 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
               className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
             />
           </label>
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Street address</span>
+            <input
+              value={form.street ?? ""}
+              onChange={(event) => setForm({ ...form, street: event.target.value })}
+              placeholder="900 E 11th St"
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            />
+          </label>
           <CityStateFields
             city={form.city}
             state={form.state}
@@ -174,6 +197,15 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
             onState={(state) => setForm({ ...form, state })}
             fieldClassName="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
           />
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">ZIP</span>
+            <input
+              value={form.zip ?? ""}
+              onChange={(event) => setForm({ ...form, zip: event.target.value })}
+              placeholder="78702"
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            />
+          </label>
           <label className="grid gap-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Category</span>
             <input
@@ -243,8 +275,8 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Google Maps cross-check</p>
         <h3 className="mt-1 font-display text-2xl text-paper">Confirm the Maps place</h3>
         <p className="mt-2 text-sm leading-6 text-muted">
-          PlaceFind searches the business name, city, and state. Confirm the matching Google Maps place, or mark it as
-          not found.
+          PlaceFind searches the business name, city, and state. Confirm the matching Google Maps place to fill the
+          street address, ZIP, phone, website, and hours — or mark it as not found.
         </p>
         {listing && <p className="mt-3 text-sm text-brass">{mapsStatusLabel(listing.mapsStatus)}</p>}
         <div className="mt-4 flex flex-wrap gap-3">

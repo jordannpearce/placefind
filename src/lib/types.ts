@@ -220,8 +220,10 @@ export type DirectoryListing = {
   id: string
   ownerUserId?: string
   name: string
+  street: string
   city: string
   state: string
+  zip: string
   category: string
   keywords: string[]
   phone: string
@@ -265,8 +267,10 @@ export type CrawlJob = {
 
 export type ListingInput = {
   name: string
+  street?: string
   city: string
   state: string
+  zip?: string
   category?: string
   keywords?: string[] | string
   phone?: string

@@ -1,3 +1,4 @@
+import { formatStreetAddress } from "./address.ts"
 import type { DirectoryListing, MapsStatus } from "./types.ts"
 
 export function mapsStatusLabel(status: MapsStatus): string {
@@ -22,6 +23,17 @@ export function listingPath(id: string): string {
   return `/listings/${id}`
 }
 
-export function listingLocation(listing: Pick<DirectoryListing, "city" | "state">): string {
-  return [listing.city, listing.state].filter(Boolean).join(", ")
+export function listingLocation(
+  listing: Pick<DirectoryListing, "city" | "state"> & { street?: string; zip?: string; mapsAddress?: string },
+): string {
+  return (
+    formatStreetAddress({
+      street: listing.street,
+      city: listing.city,
+      state: listing.state,
+      zip: listing.zip,
+    }) ||
+    listing.mapsAddress?.trim() ||
+    [listing.city, listing.state].filter(Boolean).join(", ")
+  )
 }

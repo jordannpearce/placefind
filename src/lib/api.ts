@@ -275,7 +275,17 @@ export async function verifyListing(id: string): Promise<{
 
 export async function confirmListingMatch(
   id: string,
-  input: { placeId?: string; cid?: string; title?: string; address?: string; mapsStatus?: "pending" | "found" | "not_found" },
+  input: {
+    placeId?: string
+    cid?: string
+    title?: string
+    address?: string
+    phone?: string
+    website?: string
+    hours?: string
+    category?: string
+    mapsStatus?: "pending" | "found" | "not_found"
+  },
 ): Promise<DirectoryListing> {
   const payload = await request<{ listing: DirectoryListing }>(`/api/listings/${id}/confirm`, {
     method: "POST",

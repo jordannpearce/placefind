@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto"
+import { formatStreetAddress, parseStreetAddress } from "../src/lib/address.ts"
 import { normalizeKeywords } from "../src/lib/keywords.ts"
 import { LISTING_MONTHLY_PRICE } from "../src/lib/pricing.ts"
 import { mapsPlaceUrl } from "./match.ts"
@@ -15,8 +16,10 @@ export type DirectoryListing = {
   id: string
   ownerUserId: string
   name: string
+  street: string
   city: string
   state: string
+  zip: string
   category: string
   keywords: string[]
   phone: string
@@ -41,13 +44,27 @@ export type DirectoryListing = {
 
 export type ListingInput = {
   name?: string
+  street?: string
   city?: string
   state?: string
+  zip?: string
   category?: string
   keywords?: string[] | string
   phone?: string
   website?: string
   hours?: string
+}
+
+export type MapsMatchInput = {
+  placeId?: string
+  cid?: string
+  title?: string
+  address?: string
+  phone?: string
+  website?: string
+  hours?: string
+  category?: string
+  mapsStatus?: MapsStatus
 }
 
 export type ListingQuery = {
@@ -70,8 +87,10 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
   {
     ownerUserId: SEED_OWNER_ID,
     name: "Harbor & Oak Bakery",
+    street: "18 Exchange St",
     city: "Portland",
     state: "ME",
+    zip: "04101",
     category: "Bakery",
     keywords: ["pastry", "coffee", "sourdough"],
     phone: "(207) 555-0142",
@@ -95,8 +114,10 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
   {
     ownerUserId: SEED_OWNER_ID,
     name: "Red Mesa Dental",
+    street: "412 Cerrillos Rd",
     city: "Santa Fe",
     state: "NM",
+    zip: "87501",
     category: "Dentist",
     keywords: ["family dentist", "teeth cleaning"],
     phone: "(505) 555-0198",
@@ -120,8 +141,10 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
   {
     ownerUserId: SEED_OWNER_ID,
     name: "Northside Bike Works",
+    street: "",
     city: "Minneapolis",
     state: "MN",
+    zip: "",
     category: "Bicycle shop",
     keywords: ["bike repair", "tune up"],
     phone: "(612) 555-0164",
@@ -144,8 +167,10 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
   {
     ownerUserId: SEED_OWNER_ID,
     name: "Citrus & Salt Seafood",
+    street: "907 N Franklin St",
     city: "Tampa",
     state: "FL",
+    zip: "33602",
     category: "Seafood restaurant",
     keywords: ["oysters", "grouper sandwich"],
     phone: "(813) 555-0117",
@@ -169,8 +194,10 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
   {
     ownerUserId: SEED_OWNER_ID,
     name: "Copper Bell Books",
+    street: "",
     city: "Asheville",
     state: "NC",
+    zip: "",
     category: "Bookstore",
     keywords: ["independent bookstore", "used books"],
     phone: "(828) 555-0133",
@@ -194,8 +221,10 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
   {
     ownerUserId: SEED_OWNER_ID,
     name: "Lamppost Hardware",
+    street: "2214 N 13th St",
     city: "Boise",
     state: "ID",
+    zip: "83702",
     category: "Hardware store",
     keywords: ["keys", "paint", "garden"],
     phone: "(208) 555-0188",
@@ -238,12 +267,22 @@ function crawlStatusOf(value: unknown): CrawlStatus {
 
 function asListing(row: Partial<DirectoryListing> | null | undefined): DirectoryListing | null {
   if (!row?.id || !row.name) return null
+  const parsed = parseStreetAddress(String(row.mapsAddress ?? row.street ?? ""), {
+    city: String(row.city ?? ""),
+    state: String(row.state ?? ""),
+  })
+  const street = String(row.street ?? "").trim() || parsed.street
+  const city = String(row.city ?? "").trim() || parsed.city
+  const state = toStateAbbr(String(row.state ?? "")) || parsed.state || String(row.state ?? "")
+  const zip = String(row.zip ?? "").trim() || parsed.zip
   return {
     id: String(row.id),
     ownerUserId: String(row.ownerUserId ?? ""),
     name: String(row.name),
-    city: String(row.city ?? ""),
-    state: toStateAbbr(String(row.state ?? "")) || String(row.state ?? ""),
+    street,
+    city,
+    state,
+    zip,
     category: String(row.category ?? ""),
     keywords: normalizeKeywords(row.keywords),
     phone: String(row.phone ?? ""),
@@ -279,15 +318,34 @@ function writeListings(rows: DirectoryListing[]) {
 }
 
 function haystack(listing: DirectoryListing) {
-  return [listing.name, listing.city, listing.state, listing.category, listing.keywords.join(" "), listing.mapsTitle, listing.mapsAddress]
+  return [
+    listing.name,
+    listing.street,
+    listing.city,
+    listing.state,
+    listing.zip,
+    listing.category,
+    listing.keywords.join(" "),
+    listing.mapsTitle,
+    listing.mapsAddress,
+  ]
     .join(" ")
     .toLowerCase()
 }
 
 export function validateListing(input: ListingInput): { value?: ListingInput; error?: string } {
   const name = input.name?.trim() ?? ""
-  const city = input.city?.trim() ?? ""
-  const state = toStateAbbr(input.state?.trim() ?? "") || (input.state?.trim() ?? "")
+  let street = input.street?.trim() ?? ""
+  let city = input.city?.trim() ?? ""
+  let state = toStateAbbr(input.state?.trim() ?? "") || (input.state?.trim() ?? "")
+  let zip = input.zip?.trim() ?? ""
+  if (street.includes(",") && (!city || !zip)) {
+    const parsed = parseStreetAddress(street, { city, state })
+    street = parsed.street || street
+    city = parsed.city || city
+    state = parsed.state || state
+    zip = parsed.zip || zip
+  }
   const category = input.category?.trim() ?? ""
   const keywords = normalizeKeywords(input.keywords)
   const phone = input.phone?.trim() ?? ""
@@ -296,15 +354,17 @@ export function validateListing(input: ListingInput): { value?: ListingInput; er
   if (name.length < 2) return { error: "Enter the business name." }
   if (city.length < 2) return { error: "Enter the city." }
   if (!state) return { error: "Choose a state." }
-  return { value: { name, city, state, category, keywords, phone, website, hours } }
+  return { value: { name, street, city, state, zip, category, keywords, phone, website, hours } }
 }
 
 export function publicListing(listing: DirectoryListing, includeOwner = false) {
   return {
     id: listing.id,
     name: listing.name,
+    street: listing.street,
     city: listing.city,
     state: listing.state,
+    zip: listing.zip,
     category: listing.category,
     keywords: listing.keywords,
     phone: listing.phone,
@@ -318,7 +378,7 @@ export function publicListing(listing: DirectoryListing, includeOwner = false) {
     mapsUrl: listing.placeId
       ? mapsPlaceUrl({
           title: listing.mapsTitle || listing.name,
-          address: listing.mapsAddress,
+          address: listing.mapsAddress || formatStreetAddress(listing),
           placeId: listing.placeId,
           cid: listing.cid,
         })
@@ -396,6 +456,14 @@ export function listingsForUser(userId: string): DirectoryListing[] {
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
+export function deleteListingsOwnedBy(ownerUserId: string): string[] {
+  const listings = readListings()
+  const removed = listings.filter((row) => row.ownerUserId === ownerUserId)
+  if (removed.length === 0) return []
+  writeListings(listings.filter((row) => row.ownerUserId !== ownerUserId))
+  return removed.map((row) => row.id)
+}
+
 export function createListing(input: ListingInput, ownerUserId: string): DirectoryListing {
   const parsed = validateListing(input)
   if (parsed.error || !parsed.value) throw new ListingError(400, parsed.error || "Could not save the listing.")
@@ -404,8 +472,10 @@ export function createListing(input: ListingInput, ownerUserId: string): Directo
     id: newId(),
     ownerUserId,
     name: parsed.value.name ?? "",
+    street: parsed.value.street ?? "",
     city: parsed.value.city ?? "",
     state: parsed.value.state ?? "",
+    zip: parsed.value.zip ?? "",
     category: parsed.value.category ?? "",
     keywords: parsed.value.keywords ?? [],
     phone: parsed.value.phone ?? "",
@@ -444,8 +514,10 @@ export function updateListing(id: string, input: ListingInput, userId: string, a
   const next: DirectoryListing = {
     ...current,
     name: parsed.value.name ?? current.name,
+    street: parsed.value.street ?? current.street,
     city: parsed.value.city ?? current.city,
     state: parsed.value.state ?? current.state,
+    zip: parsed.value.zip ?? current.zip,
     category: parsed.value.category ?? current.category,
     keywords: parsed.value.keywords ?? current.keywords,
     phone: parsed.value.phone ?? current.phone,
@@ -474,15 +546,25 @@ export function listingSearchQuery(listing: Pick<DirectoryListing, "name" | "cit
 
 export function applyMapsMatch(
   listing: DirectoryListing,
-  match: { placeId?: string; cid?: string; title?: string; address?: string } | null,
+  match: MapsMatchInput | null,
   status: MapsStatus,
 ): DirectoryListing {
+  const address = match?.address?.trim() ?? ""
+  const parsed = parseStreetAddress(address, { city: listing.city, state: listing.state })
   const next: DirectoryListing = {
     ...listing,
     placeId: match?.placeId?.trim() ?? "",
     cid: match?.cid?.trim() ?? "",
     mapsTitle: match?.title?.trim() ?? "",
-    mapsAddress: match?.address?.trim() ?? "",
+    mapsAddress: address,
+    street: parsed.street || listing.street,
+    city: parsed.city || listing.city,
+    state: parsed.state || listing.state,
+    zip: parsed.zip || listing.zip,
+    phone: match?.phone?.trim() || listing.phone,
+    website: match?.website?.trim() || listing.website,
+    hours: match?.hours?.trim() || listing.hours,
+    category: match?.category?.trim() || listing.category,
     mapsStatus: status,
     updatedAt: nowIso(),
   }
@@ -494,7 +576,7 @@ export function confirmListingMatch(
   id: string,
   userId: string,
   admin: boolean,
-  match: { placeId?: string; cid?: string; title?: string; address?: string; mapsStatus?: MapsStatus },
+  match: MapsMatchInput,
 ): DirectoryListing {
   const current = getListing(id)
   assertCanEdit(current, userId, admin)
@@ -505,7 +587,16 @@ export function confirmListingMatch(
   if (!placeId) throw new ListingError(400, "Choose a Google Maps place to confirm.")
   return applyMapsMatch(
     current,
-    { placeId, cid: match.cid, title: match.title, address: match.address },
+    {
+      placeId,
+      cid: match.cid,
+      title: match.title,
+      address: match.address,
+      phone: match.phone,
+      website: match.website,
+      hours: match.hours,
+      category: match.category,
+    },
     "found",
   )
 }

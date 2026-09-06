@@ -51,3 +51,12 @@ export const US_STATES = [
   { abbr: "WI", name: "Wisconsin" },
   { abbr: "WY", name: "Wyoming" },
 ] as const
+
+export function toStateAbbr(value: string): string {
+  const raw = value.trim()
+  if (!raw) return ""
+  const upper = raw.toUpperCase()
+  if (US_STATES.some((state) => state.abbr === upper)) return upper
+  const match = US_STATES.find((state) => state.name.toLowerCase() === raw.toLowerCase())
+  return match?.abbr ?? raw
+}

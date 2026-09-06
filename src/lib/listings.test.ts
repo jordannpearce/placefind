@@ -9,6 +9,10 @@ describe("listing copy", () => {
     assert.equal(mapsStatusLabel("pending"), "Maps check pending")
     assert.match(mapsStatusDetail({ mapsStatus: "pending", mapsTitle: "", mapsAddress: "" }), /not been cross-checked/)
     assert.equal(listingLocation({ city: "Tampa", state: "FL" }), "Tampa, FL")
+    assert.equal(
+      listingLocation({ street: "907 N Franklin St", city: "Tampa", state: "FL", zip: "33602" }),
+      "907 N Franklin St, Tampa, FL 33602",
+    )
     const text = [mapsStatusLabel("found"), mapsStatusDetail({ mapsStatus: "found", mapsTitle: "Harbor & Oak", mapsAddress: "18 Exchange St" })].join(" ")
     assert.equal(/download|windows|desktop|license key|setup\.exe/i.test(text), false)
   })

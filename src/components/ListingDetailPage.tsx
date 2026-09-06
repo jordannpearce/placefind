@@ -1,7 +1,7 @@
 import { ExternalLink, LoaderCircle, MapPin, Phone, Star } from "lucide-react"
 import { useEffect, useState } from "react"
 import { createListingReview, loadListing } from "../lib/api.ts"
-import { listingLocation } from "../lib/listings.ts"
+import { listingLocation, mapsStatusDetail } from "../lib/listings.ts"
 import { LISTING_PRICE_LABEL } from "../lib/pricing.ts"
 import type { AuthUser, DirectoryListing, ListingReview, ReviewSummary } from "../lib/types.ts"
 
@@ -90,10 +90,24 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
           {listing.category || "PlaceFind listing"}
         </p>
         <h2 className="mt-2 font-display text-4xl text-paper">{listing.brand || listing.name}</h2>
-        <p className="mt-2 flex items-center gap-2 text-sm text-muted">
-          <MapPin className="h-4 w-4" />
+        <p className="mt-2 flex items-start gap-2 text-sm text-muted">
+          <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
           {listingLocation(listing)}
         </p>
+        {listing.mapsUrl && (
+          <a
+            href={listing.mapsUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-flex items-center gap-2 text-sm text-brass hover:underline"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Open in Maps
+          </a>
+        )}
+        {listing.mapsStatus !== "pending" && (
+          <p className="mt-2 text-xs leading-5 text-muted">{mapsStatusDetail(listing)}</p>
+        )}
         <p className="mt-3 text-sm text-brass">
           {summary.average != null
             ? `${summary.average.toFixed(1)} from ${summary.count} review${summary.count === 1 ? "" : "s"}`
