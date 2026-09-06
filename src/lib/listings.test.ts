@@ -39,6 +39,7 @@ describe("listing copy", () => {
   it("builds a brand-and-category listing slug and keeps the old id path as a redirect", () => {
     assert.equal(listingSlugFromParts({ brand: "Harbor & Oak", name: "Harbor & Oak Bakery", category: "Bakery" }), "harbor-oak-bakery")
     assert.equal(listingSlugFromParts({ name: "Harbor & Oak Bakery", category: "Bakery" }), "harbor-oak-bakery")
+    assert.equal(listingSlugFromParts({ name: "Joe's Pizza", category: "Pizza restaurant" }), "joes-pizza-pizza-restaurant")
     assert.equal(listingPath({ id: "seed-1", slug: "harbor-oak-bakery" }), "/listings/harbor-oak-bakery")
     assert.equal(listingPath("seed-1"), "/listings/seed-1")
     assert.equal(listingRedirectPath("seed-1", { id: "seed-1", slug: "harbor-oak-bakery" }), "/listings/harbor-oak-bakery")
