@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { RANK_MATCH_THRESHOLD, rankOfBusiness } from "./rank.ts"
+import { RANK_MATCH_THRESHOLD, rankFromMapsItems, rankOfBusiness, type MapsSerpItem } from "./rank.ts"
 
 function listing(title: string, city = "Austin", state = "TX") {
   return {
@@ -50,5 +50,86 @@ describe("rankOfBusiness", () => {
     const hit = rankOfBusiness(listings, "Franklin Barbecue", "Austin", "TX")
     assert.equal(hit.rank, null)
     assert.ok(hit.matchScore < RANK_MATCH_THRESHOLD)
+  })
+})
+
+const mapsFixture: MapsSerpItem[] = [
+  {
+    type: "maps_paid_item",
+    rank_group: 1,
+    rank_absolute: 1,
+    title: "Sponsored Car Rental",
+    place_id: "paid-1",
+    address: "1 Ad Ave, New York, NY",
+    domain: "ads.example.com",
+    rating: { value: 4.1, votes_count: 12 },
+  },
+  {
+    type: "maps_search",
+    rank_group: 1,
+    rank_absolute: 2,
+    title: "Enterprise Rent-A-Car",
+    place_id: "ChIJ-enterprise",
+    address: "100 Water St, New York, NY",
+    domain: "enterprise.com",
+    rating: { value: 4.3, votes_count: 210 },
+  },
+  {
+    type: "maps_search",
+    rank_group: 2,
+    rank_absolute: 3,
+    title: "Hertz",
+    place_id: "ChIJ-hertz",
+    address: "200 Water St, New York, NY",
+    domain: "hertz.com",
+    rating: { value: 4.0, votes_count: 88 },
+  },
+  {
+    type: "maps_search",
+    rank_group: 3,
+    rank_absolute: 4,
+    title: "Statue of Liberty Car Rental",
+    place_id: "ChIJd8BlQ2BZwokRAFUEcm_qrcA",
+    address: "Liberty Island, New York, NY",
+    domain: "libertycars.example",
+    rating: { value: 4.8, votes_count: 1543 },
+  },
+]
+
+describe("rankFromMapsItems", () => {
+  it("returns the 1-based organic position when place_id matches", () => {
+    const hit = rankFromMapsItems(mapsFixture, {
+      name: "Statue of Liberty Car Rental",
+      placeId: "ChIJd8BlQ2BZwokRAFUEcm_qrcA",
+      city: "New York",
+      state: "NY",
+    })
+    assert.equal(hit.rank, 3)
+    assert.equal(hit.listing?.place_id, "ChIJd8BlQ2BZwokRAFUEcm_qrcA")
+    assert.equal(hit.listing?.domain, "libertycars.example")
+    assert.equal(hit.listing?.rating?.votes_count, 1543)
+  })
+
+  it("matches by business name when place_id is absent", () => {
+    const hit = rankFromMapsItems(mapsFixture, { name: "Hertz", city: "New York", state: "NY" })
+    assert.equal(hit.rank, 2)
+    assert.equal(hit.listing?.title, "Hertz")
+  })
+
+  it("does not count paid listings as organic rank", () => {
+    const hit = rankFromMapsItems(mapsFixture, { name: "Sponsored Car Rental", placeId: "paid-1" })
+    assert.equal(hit.rank, null)
+    assert.equal(hit.listing, null)
+  })
+
+  it("returns not found when the business is missing from that coordinate's items", () => {
+    const hit = rankFromMapsItems(mapsFixture, {
+      name: "Avis",
+      placeId: "ChIJ-missing",
+      city: "New York",
+      state: "NY",
+    })
+    assert.equal(hit.rank, null)
+    assert.equal(hit.listing, null)
   })
 })

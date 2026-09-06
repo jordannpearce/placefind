@@ -14,6 +14,7 @@ import type {
   ProductInfo,
   RuntimeInfo,
   ScanRun,
+  GridScanRun,
   SearchQuery,
   SearchResponse,
 } from "./types.ts"
@@ -259,11 +260,23 @@ export async function testMail(input: { resendApiKey?: string; fromEmail?: strin
   return request("/api/admin/mail/test", { method: "POST", body: JSON.stringify(input) })
 }
 
-export async function loadCampaigns(): Promise<{ campaigns: Campaign[]; maxKeywords: number }> {
-  const payload = await request<{ campaigns?: Campaign[]; maxKeywords?: number }>("/api/campaigns")
+export async function loadCampaigns(): Promise<{
+  campaigns: Campaign[]
+  maxKeywords: number
+  maxGridSize: number
+  allowedGridSizes: number[]
+}> {
+  const payload = await request<{
+    campaigns?: Campaign[]
+    maxKeywords?: number
+    maxGridSize?: number
+    allowedGridSizes?: number[]
+  }>("/api/campaigns")
   return {
     campaigns: Array.isArray(payload.campaigns) ? payload.campaigns : [],
     maxKeywords: payload.maxKeywords ?? 20,
+    maxGridSize: payload.maxGridSize ?? 7,
+    allowedGridSizes: payload.allowedGridSizes ?? [3, 5, 7],
   }
 }
 
@@ -292,7 +305,7 @@ export async function scanCampaign(
   keys: ApiKeys,
   hideClientKeys = false,
   keywords?: string[],
-): Promise<{ campaign: Campaign; scan: ScanRun }> {
+): Promise<{ campaign: Campaign; scan: ScanRun; grid?: GridScanRun }> {
   return request(`/api/campaigns/${id}/scan`, {
     method: "POST",
     body: JSON.stringify(hideClientKeys ? { keywords } : { keywords, ...keys }),

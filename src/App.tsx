@@ -14,23 +14,11 @@ import { TrackPage } from "./components/TrackPage.tsx"
 import { SellPage } from "./components/SellPage.tsx"
 import { SettingsPanel } from "./components/SettingsPanel.tsx"
 import { loadRuntime, searchBusiness } from "./lib/api.ts"
-import { currentPath, type AppPath } from "./lib/nav.ts"
+import { allowedPath, clientIsDesktop, currentPath, type AppPath } from "./lib/nav.ts"
 import { loadHistory, loadKeys, pushHistory, saveKeys } from "./lib/storage.ts"
 import type { AuthUser, HistoryItem, HostedKeyStatus, LicenseStatus, SearchQuery, SearchResponse } from "./lib/types.ts"
 
 const emptyQuery = (): SearchQuery => ({ name: "", city: "", state: "" })
-
-function allowedPath(next: AppPath, access: { store: boolean; admin: boolean; user: AuthUser | null }): AppPath {
-  if (next === "/") return "/"
-  if (next === "/track") return "/track"
-  if (next === "/admin") return "/admin"
-  if (next === "/sell") return access.admin ? "/sell" : "/admin"
-  if (next === "/download" && (access.admin || access.store)) return "/download"
-  if (next === "/buy" && access.store) return "/buy"
-  if ((next === "/login" || next === "/join") && access.store) return access.user ? "/account" : next
-  if (next === "/account" && access.store) return access.user ? "/account" : "/login"
-  return "/"
-}
 
 export default function App() {
   const [path, setPath] = useState<AppPath>(currentPath)
@@ -44,10 +32,14 @@ export default function App() {
   const [hosted, setHosted] = useState<HostedKeyStatus | null>(null)
   const [seller, setSeller] = useState(false)
   const [store, setStore] = useState(true)
+  const [desktop, setDesktop] = useState(clientIsDesktop)
   const [admin, setAdmin] = useState(false)
   const [bootstrap, setBootstrap] = useState(false)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [license, setLicense] = useState<LicenseStatus | null>(null)
+  const [runtimeReady, setRuntimeReady] = useState(false)
+
+  const access = { desktop, store, admin, user }
 
   useEffect(() => {
     const onPop = () => setPath(currentPath())
@@ -58,15 +50,18 @@ export default function App() {
   useEffect(() => {
     void loadRuntime()
       .then((runtime) => {
+        const nextDesktop = Boolean(runtime.desktop || clientIsDesktop())
         setHosted(runtime.hosted)
         setSeller(runtime.seller)
-        setStore(runtime.store)
+        setDesktop(nextDesktop)
+        setStore(Boolean(runtime.store) && !nextDesktop)
         setAdmin(runtime.admin)
         setBootstrap(Boolean(runtime.bootstrap))
         setUser(runtime.user)
         setLicense(runtime.license)
         const dest = allowedPath(currentPath(), {
-          store: runtime.store,
+          desktop: nextDesktop,
+          store: Boolean(runtime.store) && !nextDesktop,
           admin: runtime.admin,
           user: runtime.user,
         })
@@ -75,20 +70,47 @@ export default function App() {
           setPath(dest)
         }
       })
-      .catch(() => setHosted(null))
+      .catch(() => {
+        setHosted(null)
+        setDesktop(clientIsDesktop())
+      })
+      .finally(() => setRuntimeReady(true))
   }, [])
 
   function go(next: AppPath) {
-    const dest = allowedPath(next, { store, admin, user })
+    const dest = allowedPath(next, access)
     window.history.pushState({}, "", dest)
     setPath(dest)
   }
 
+  async function refreshSession(nextUser: AuthUser, dest?: AppPath) {
+    setUser(nextUser)
+    if (nextUser.role === "admin") setAdmin(true)
+    try {
+      const runtime = await loadRuntime()
+      const nextDesktop = Boolean(runtime.desktop || clientIsDesktop())
+      setDesktop(nextDesktop)
+      setStore(Boolean(runtime.store) && !nextDesktop)
+      setAdmin(runtime.admin)
+      setLicense(runtime.license)
+      setUser(runtime.user ?? nextUser)
+      const next = dest ?? allowedPath(desktop || nextDesktop ? "/" : "/account", {
+        desktop: nextDesktop,
+        store: Boolean(runtime.store) && !nextDesktop,
+        admin: runtime.admin,
+        user: runtime.user ?? nextUser,
+      })
+      window.history.pushState({}, "", next)
+      setPath(next)
+    } catch {
+      const next = dest ?? (desktop ? "/" : "/account")
+      window.history.pushState({}, "", next)
+      setPath(next)
+    }
+  }
+
   function onAuthed(next: AuthUser) {
-    setUser(next)
-    if (next.role === "admin") setAdmin(true)
-    window.history.pushState({}, "", "/account")
-    setPath("/account")
+    void refreshSession(next, path === "/track" ? "/track" : desktop ? "/" : "/account")
   }
 
   function onAdminAuthed(next: AuthUser) {
@@ -102,11 +124,15 @@ export default function App() {
   const modeLabel = useMemo(() => {
     const dfs = Boolean((keys.dataforseoLogin && keys.dataforseoPassword) || hosted?.dataforseo)
     const scrappey = Boolean(keys.scrappeyKey || hosted?.scrappey)
-    const licensed = !store && license?.configured ? (license.valid ? "Licensed · " : "License needed · ") : ""
+    const licensed = desktop && license?.configured ? (license.valid ? "Licensed · " : "License needed · ") : ""
+    if (desktop) {
+      if (dfs || scrappey) return `${licensed}Maps search is ready`
+      return `${licensed}Maps search is not configured yet`
+    }
     if (dfs && scrappey) return `${licensed}${hosted?.included || store ? "Maps search is ready" : "Live Maps search"}`
     if (dfs || scrappey) return `${licensed}Live Maps search`
     return `${licensed}Sample preview`
-  }, [keys, hosted, license, store])
+  }, [keys, hosted, license, store, desktop])
 
   async function runSearch(next = query) {
     setLoading(true)
@@ -141,8 +167,12 @@ export default function App() {
     void runSearch(next)
   }
 
-  const lookupBlocked = Boolean(license?.required && !license.valid && !store)
-  const showSettings = admin || !store
+  const lookupBlocked = Boolean(license?.required && !license.valid && desktop)
+  const showSettings = admin || seller
+  const needsDesktopLogin = desktop && !user && path !== "/admin"
+  const needsTrackLogin = !desktop && path === "/track" && !user
+  const showLookup = path === "/" && !lookupBlocked && !needsDesktopLogin
+  const showTrack = path === "/track" && !lookupBlocked && Boolean(user)
 
   return (
     <div className="min-h-screen bg-ink">
@@ -150,11 +180,15 @@ export default function App() {
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-5 sm:px-6">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Windows desktop</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">
+              {desktop ? "Windows desktop" : "Maps listing software"}
+            </p>
             <h1 className="font-display text-3xl text-paper sm:text-4xl">PlaceFind</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <AppNav path={path} store={store} admin={admin} user={user} onGo={go} />
+            {runtimeReady && !needsDesktopLogin && (
+              <AppNav path={path} desktop={desktop} store={store} admin={admin} user={user} onGo={go} />
+            )}
             {path === "/" && result?.best && (
               <button
                 type="button"
@@ -165,7 +199,7 @@ export default function App() {
                 Export
               </button>
             )}
-            {showSettings && (path === "/" || path === "/track") && !lookupBlocked && (
+            {showSettings && (path === "/" || path === "/track") && !lookupBlocked && !needsDesktopLogin && (
               <button
                 type="button"
                 onClick={() => setSettingsOpen(true)}
@@ -181,39 +215,49 @@ export default function App() {
         {admin && path === "/sell" && <SellPage />}
         {path === "/admin" && admin && <AdminPage />}
         {path === "/admin" && !admin && <AdminLogin bootstrap={bootstrap} onAuthed={onAdminAuthed} />}
-        {(admin || store) && path === "/download" && <DownloadPage onTryScan={() => go("/")} />}
-        {store && path === "/buy" && <BuyPage user={user} onAuthed={onAuthed} onTryScan={() => go("/")} />}
-        {store && path === "/account" && user && (
+        {!desktop && (admin || store) && path === "/download" && <DownloadPage onTryScan={() => go("/")} />}
+        {!desktop && store && path === "/buy" && <BuyPage user={user} onAuthed={onAuthed} onTryScan={() => go("/")} />}
+        {path === "/account" && user && (
           <AccountPage
             user={user}
+            desktop={desktop}
             onLogout={() => {
               setUser(null)
               setAdmin(false)
               window.history.pushState({}, "", "/login")
               setPath("/login")
             }}
-            onBuy={() => go("/buy")}
+            onBuy={desktop ? undefined : () => go("/buy")}
           />
         )}
-        {store && (path === "/login" || path === "/join") && (
+        {(needsDesktopLogin || needsTrackLogin || (path === "/login" && !user)) && (
           <AuthPage
-            mode={path === "/join" ? "join" : "login"}
+            desktop={desktop}
+            title={needsTrackLogin ? "Sign in to track ranks" : undefined}
+            intro={
+              needsTrackLogin
+                ? "Grid tracking is for signed-in customers. Visitors can still run a public test scan."
+                : undefined
+            }
             onAuthed={onAuthed}
-            onGoJoin={() => go("/join")}
-            onGoLogin={() => go("/login")}
+            onGoBuy={desktop ? undefined : () => go("/buy")}
           />
         )}
-        {(path === "/" || path === "/track") && lookupBlocked && license && (
+        {(path === "/" || path === "/track") && lookupBlocked && license && user && (
           <LicenseGate license={license} onActivated={setLicense} />
         )}
-        {path === "/track" && !lookupBlocked && <TrackPage keys={keys} hosted={hosted} seller={seller} />}
-        {path === "/" && !lookupBlocked && (
+        {showTrack && <TrackPage keys={keys} hosted={hosted} seller={seller} desktop={desktop} />}
+        {showLookup && (
           <div className="grid flex-1 gap-6 lg:grid-cols-[20rem_1fr]">
             <aside className="rounded-2xl border border-line bg-panel p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Try PlaceFind</p>
-              <h2 className="mt-1 font-display text-2xl text-paper">Test scan</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">
+                {desktop ? "Lookup" : "Try PlaceFind"}
+              </p>
+              <h2 className="mt-1 font-display text-2xl text-paper">{desktop ? "Find a listing" : "Test scan"}</h2>
               <p className="mb-4 mt-2 text-sm leading-6 text-muted">
-                This preview shows what the Windows app does. Enter a business name, city, and state.
+                {desktop
+                  ? "Enter a business name, city, and state to pull the Google Maps listing."
+                  : "This preview shows what the Windows app does. Enter a business name, city, and state."}
               </p>
               <SearchForm
                 query={query}
@@ -222,7 +266,7 @@ export default function App() {
                 loading={loading}
                 history={history}
                 onHistory={useHistory}
-                submitLabel="Run test scan"
+                submitLabel={desktop ? "Find listing" : "Run test scan"}
               />
               <p className="mt-5 border-t border-line pt-4 text-xs text-muted">{modeLabel}</p>
             </aside>

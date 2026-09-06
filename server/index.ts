@@ -31,9 +31,11 @@ import {
 } from "./keygen.ts"
 import { mailStatus, readOutbox, sendMail, testResendConnection, welcomeEmail, writeMailConfig } from "./mail.ts"
 import { readProduct, writeProduct } from "./product.ts"
-import { isSellerMode } from "./runtime.ts"
+import { isDesktopRequest, isSellerMode } from "./runtime.ts"
 import {
+  ALLOWED_GRID_SIZES,
   CampaignError,
+  MAX_GRID_SIZE,
   MAX_KEYWORDS,
   createCampaign,
   deleteCampaign,
@@ -46,7 +48,7 @@ import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
 import { initStore } from "./store.ts"
 import { testScrappey } from "./scrappey.ts"
-import { checkout, issueAndDeliver, listOrders, ordersForUser, publicOrder, shopSummary } from "./shop.ts"
+import { attachUserLicense, checkout, issueAndDeliver, listOrders, ordersForUser, publicOrder, shopSummary } from "./shop.ts"
 import { US_STATES } from "./states.ts"
 import type { ApiKeys, SearchQuery } from "./types.ts"
 
@@ -98,6 +100,17 @@ async function start() {
     return false
   }
 
+  function requireUser(req: express.Request, res: express.Response) {
+    const user = actor(req)
+    if (user) return user
+    res.status(401).json({ error: "Sign in to continue." })
+    return null
+  }
+
+  function campaignMeta() {
+    return { maxKeywords: MAX_KEYWORDS, maxGridSize: MAX_GRID_SIZE, allowedGridSizes: ALLOWED_GRID_SIZES }
+  }
+
   app.get("/api/health", (_req, res) => {
     const hosted = hostedKeyStatus()
     res.json({ ok: true, name: "PlaceFind", seller: isSellerMode(), keysIncluded: hosted.included })
@@ -106,9 +119,12 @@ async function start() {
   app.get("/api/runtime", async (req, res) => {
     const hosted = hostedKeyStatus()
     const user = actor(req)
+    const desktop = isDesktopRequest(req)
+    const license = user ? await attachUserLicense(user) : await licenseStatus()
     res.json({
       seller: isSellerMode(),
-      store: storeOpen(),
+      store: storeOpen() && !desktop,
+      desktop,
       admin: canManage(req.headers.cookie),
       bootstrap: !hasAdminUser(),
       user,
@@ -120,7 +136,7 @@ async function start() {
         dataforseoHint: hosted.dataforseoHint,
         seller: hosted.seller,
       },
-      license: await licenseStatus(),
+      license,
       keygen: keygenPublicStatus(),
     })
   })
@@ -130,13 +146,18 @@ async function start() {
   })
 
   app.post("/api/search", async (req, res) => {
+    const desktop = isDesktopRequest(req)
+    if (desktop && !actor(req)) {
+      res.status(401).json({ error: "Sign in to look up listings." })
+      return
+    }
     const parsed = readQuery(req.body ?? {})
     if (parsed.error) {
       res.status(400).json({ error: parsed.error })
       return
     }
     const license = await licenseStatus()
-    if (license.required && !license.valid && !storeOpen()) {
+    if (license.required && !license.valid && (desktop || !storeOpen())) {
       res.status(402).json({
         error: license.detail || "Enter a valid PlaceFind license key to search.",
         license,
@@ -152,13 +173,17 @@ async function start() {
     }
   })
 
-  app.get("/api/campaigns", (_req, res) => {
-    res.json({ campaigns: readCampaigns(), maxKeywords: MAX_KEYWORDS })
+  app.get("/api/campaigns", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    res.json({ campaigns: readCampaigns(user.id), ...campaignMeta() })
   })
 
   app.post("/api/campaigns", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
     try {
-      res.status(201).json({ campaign: createCampaign(req.body ?? {}), maxKeywords: MAX_KEYWORDS })
+      res.status(201).json({ campaign: createCampaign(req.body ?? {}, user.id), ...campaignMeta() })
     } catch (error) {
       if (error instanceof CampaignError) {
         res.status(error.status).json({ error: error.message })
@@ -169,17 +194,21 @@ async function start() {
   })
 
   app.get("/api/campaigns/:id", (req, res) => {
-    const campaign = getCampaign(String(req.params.id ?? ""))
+    const user = requireUser(req, res)
+    if (!user) return
+    const campaign = getCampaign(String(req.params.id ?? ""), user.id)
     if (!campaign) {
       res.status(404).json({ error: "That campaign was not found." })
       return
     }
-    res.json({ campaign, maxKeywords: MAX_KEYWORDS })
+    res.json({ campaign, ...campaignMeta() })
   })
 
   app.patch("/api/campaigns/:id", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
     try {
-      res.json({ campaign: updateCampaign(String(req.params.id ?? ""), req.body ?? {}), maxKeywords: MAX_KEYWORDS })
+      res.json({ campaign: updateCampaign(String(req.params.id ?? ""), req.body ?? {}, user.id), ...campaignMeta() })
     } catch (error) {
       if (error instanceof CampaignError) {
         res.status(error.status).json({ error: error.message })
@@ -190,8 +219,10 @@ async function start() {
   })
 
   app.delete("/api/campaigns/:id", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
     try {
-      deleteCampaign(String(req.params.id ?? ""))
+      deleteCampaign(String(req.params.id ?? ""), user.id)
       res.json({ ok: true })
     } catch (error) {
       if (error instanceof CampaignError) {
@@ -203,19 +234,23 @@ async function start() {
   })
 
   app.post("/api/campaigns/:id/scan", async (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const desktop = isDesktopRequest(req)
     const license = await licenseStatus()
-    if (license.required && !license.valid) {
+    if (license.required && !license.valid && (desktop || !storeOpen())) {
       res.status(402).json({
         error: license.detail || "Enter a valid PlaceFind license key to scan ranks.",
         license,
       })
       return
     }
-    const body = (req.body ?? {}) as ApiKeys & { keywords?: string[] }
+    const body = (req.body ?? {}) as ApiKeys & { keywords?: string[]; keyword?: string }
     const keys = isSellerMode() ? body : {}
+    const requested = body.keyword ? [body.keyword] : body.keywords
     try {
-      const result = await scanCampaign(String(req.params.id ?? ""), keys, body.keywords)
-      res.json({ ...result, maxKeywords: MAX_KEYWORDS })
+      const result = await scanCampaign(String(req.params.id ?? ""), keys, requested, user.id)
+      res.json({ ...result, ...campaignMeta() })
     } catch (error) {
       if (error instanceof CampaignError) {
         res.status(error.status).json({ error: error.message })
@@ -370,6 +405,10 @@ async function start() {
   })
 
   app.post("/api/auth/signup", async (req, res) => {
+    if (isDesktopRequest(req)) {
+      res.status(403).json({ error: "Create your account when you buy PlaceFind on the website." })
+      return
+    }
     if (!store(req, res)) return
     const body = (req.body ?? {}) as { name?: string; email?: string; password?: string }
     const result = signup({ name: body.name ?? "", email: body.email ?? "", password: body.password ?? "" })
@@ -385,16 +424,16 @@ async function start() {
     res.json({ user: result.user })
   })
 
-  app.post("/api/auth/login", (req, res) => {
-    if (!store(req, res)) return
+  app.post("/api/auth/login", async (req, res) => {
     const body = (req.body ?? {}) as { email?: string; password?: string }
     const result = login({ email: body.email ?? "", password: body.password ?? "" })
     if (result.error || !result.user) {
       res.status(400).json({ error: result.error || "Could not sign in." })
       return
     }
+    const license = await attachUserLicense(result.user)
     res.setHeader("Set-Cookie", sessionCookie(createSession(result.user.id)))
-    res.json({ user: result.user })
+    res.json({ user: result.user, license })
   })
 
   app.post("/api/auth/logout", (req, res) => {
@@ -407,10 +446,12 @@ async function start() {
   })
 
   app.get("/api/auth/me", (req, res) => {
+    const desktop = isDesktopRequest(req)
     res.json({
       user: actor(req),
       admin: canManage(req.headers.cookie),
-      store: storeOpen(),
+      store: storeOpen() && !desktop,
+      desktop,
       bootstrap: !hasAdminUser(),
     })
   })
@@ -431,7 +472,6 @@ async function start() {
   })
 
   app.get("/api/account", (req, res) => {
-    if (!store(req, res)) return
     const user = actor(req)
     if (!user) {
       res.status(401).json({ error: "Sign in to see your licenses." })

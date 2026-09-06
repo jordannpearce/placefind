@@ -1,9 +1,17 @@
+import { chunkTasks, formatLocationCoordinate, mapsGridTask, type GridPoint } from "./grid.ts"
 import { mapsPlaceUrl } from "./match.ts"
 import { toStateAbbr, toStateName } from "./states.ts"
 import type { BusinessListing, HoursRow, KeyTestResult, SearchQuery } from "./types.ts"
 
+export { formatLocationCoordinate } from "./grid.ts"
+
 const LIVE_ENDPOINT = "https://api.dataforseo.com/v3/serp/google/maps/live/advanced"
+const TASK_POST_ENDPOINT = "https://api.dataforseo.com/v3/serp/google/maps/task_post"
+const TASK_GET_ENDPOINT = "https://api.dataforseo.com/v3/serp/google/maps/task_get/advanced"
 const USER_ENDPOINT = "https://api.dataforseo.com/v3/appendix/user_data"
+
+const TASK_PENDING = new Set([20100, 40601, 40602])
+const TASK_READY = 20000
 
 type Rating = {
   value?: number | null
@@ -25,10 +33,14 @@ type WorkHours = {
   timetable?: Record<string, Shift[] | null> | null
 }
 
-type MapsItem = {
+export type MapsItem = {
   type?: string
+  rank_group?: number | null
+  rank_absolute?: number | null
   title?: string | null
+  original_title?: string | null
   url?: string | null
+  domain?: string | null
   address?: string | null
   address_info?: AddressInfo | null
   place_id?: string | null
@@ -45,14 +57,18 @@ type MapsItem = {
   main_image?: string | null
 }
 
+type DfsTask = {
+  id?: string
+  status_code?: number
+  status_message?: string
+  data?: { tag?: string; location_coordinate?: string; keyword?: string }
+  result?: Array<{ items?: MapsItem[] | null } | null> | null
+}
+
 type DfsResponse = {
   status_code?: number
   status_message?: string
-  tasks?: Array<{
-    status_code?: number
-    status_message?: string
-    result?: Array<{ items?: MapsItem[] | null } | null> | null
-  }>
+  tasks?: DfsTask[]
 }
 
 const DAY_ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
@@ -147,49 +163,209 @@ function toListing(item: MapsItem, query: SearchQuery): BusinessListing | null {
   return listing
 }
 
+export type MapsCoordinate = {
+  lat: number
+  lng: number
+  zoom?: number
+}
+
+export type MapsSearchOptions = {
+  keyword?: string
+  coordinate?: MapsCoordinate
+  depth?: number
+  timeoutMs?: number
+  searchPlaces?: boolean
+}
+
+export type GridCellResult = {
+  point: GridPoint
+  items: MapsItem[]
+  error: string | null
+}
+
+function listingsFromItems(items: MapsItem[] | null | undefined, query: SearchQuery): BusinessListing[] {
+  return (items ?? [])
+    .filter((item) => item.type === "maps_search" || item.type === "maps_paid_item")
+    .map((item) => toListing(item, query))
+    .filter((item): item is BusinessListing => Boolean(item))
+}
+
+async function dfsJson(
+  url: string,
+  login: string,
+  password: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<{ payload: DfsResponse; httpStatus: number; error: string | null }> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(url, {
+      ...init,
+      headers: {
+        Authorization: basicAuth(login, password),
+        "Content-Type": "application/json",
+        ...(init.headers ?? {}),
+      },
+      signal: controller.signal,
+    })
+    const payload = (await response.json()) as DfsResponse
+    return { payload, httpStatus: response.status, error: dataForSeoErrorMessage(payload, response.status) }
+  } catch (error) {
+    const message = error instanceof Error && error.name === "AbortError" ? "DataForSEO timed out." : "Could not reach DataForSEO."
+    return { payload: {}, httpStatus: 0, error: message }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export async function searchDataForSeo(
   query: SearchQuery,
   login: string,
   password: string,
-  mapsKeyword?: string,
-): Promise<{ hits: BusinessListing[]; error: string | null }> {
+  mapsKeyword?: string | MapsSearchOptions,
+  coordinate?: MapsCoordinate,
+): Promise<{ hits: BusinessListing[]; items: MapsItem[]; error: string | null }> {
+  const options: MapsSearchOptions =
+    typeof mapsKeyword === "object" && mapsKeyword
+      ? mapsKeyword
+      : { keyword: mapsKeyword, coordinate }
   const location = [query.city, toStateName(query.state), "United States"].filter(Boolean).join(",")
-  const keyword = mapsKeyword?.trim() || [query.name, query.city, toStateName(query.state)].filter(Boolean).join(" ")
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 25_000)
-  try {
-    const response = await fetch(LIVE_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: basicAuth(login, password),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify([
-        {
-          language_code: "en",
-          location_name: location || "United States",
-          keyword,
-          depth: 20,
-          search_places: true,
-        },
-      ]),
-      signal: controller.signal,
-    })
-    const payload = (await response.json()) as DfsResponse
-    const error = dataForSeoErrorMessage(payload, response.status)
-    if (error) return { hits: [], error }
-    const items = payload.tasks?.[0]?.result?.[0]?.items ?? []
-    const hits = items
-      .filter((item) => item.type === "maps_search" || item.type === "maps_paid_item")
-      .map((item) => toListing(item, query))
-      .filter((item): item is BusinessListing => Boolean(item))
-    return { hits, error: null }
-  } catch (error) {
-    const message = error instanceof Error && error.name === "AbortError" ? "DataForSEO timed out." : "Could not reach DataForSEO."
-    return { hits: [], error: message }
-  } finally {
-    clearTimeout(timer)
+  const keyword = options.keyword?.trim() || [query.name, query.city, toStateName(query.state)].filter(Boolean).join(" ")
+  const point = options.coordinate
+  const task = {
+    language_code: "en",
+    keyword,
+    depth: options.depth ?? 20,
+    search_places: options.searchPlaces ?? !point,
+    ...(point
+      ? { location_coordinate: formatLocationCoordinate(point.lat, point.lng, point.zoom) }
+      : { location_name: location || "United States" }),
   }
+  const { payload, error } = await dfsJson(LIVE_ENDPOINT, login, password, {
+    method: "POST",
+    body: JSON.stringify([task]),
+  }, options.timeoutMs ?? 25_000)
+  if (error) return { hits: [], items: [], error }
+  const items = payload.tasks?.[0]?.result?.[0]?.items ?? []
+  return { hits: listingsFromItems(items, query), items, error: null }
+}
+
+async function postMapsTasks(
+  tasks: ReturnType<typeof mapsGridTask>[],
+  login: string,
+  password: string,
+): Promise<{ id: string; tag: string }[]> {
+  const posted: { id: string; tag: string }[] = []
+  for (const chunk of chunkTasks(tasks)) {
+    const { payload, error } = await dfsJson(TASK_POST_ENDPOINT, login, password, {
+      method: "POST",
+      body: JSON.stringify(chunk),
+    }, 30_000)
+    if (error) throw new Error(error)
+    for (const task of payload.tasks ?? []) {
+      const tag = task.data?.tag || ""
+      if (task.id && (!task.status_code || task.status_code < 40000)) {
+        posted.push({ id: task.id, tag })
+      }
+    }
+  }
+  return posted
+}
+
+async function getMapsTask(id: string, login: string, password: string): Promise<DfsTask | null> {
+  const { payload, error } = await dfsJson(`${TASK_GET_ENDPOINT}/${id}`, login, password, { method: "GET" }, 20_000)
+  if (error && !payload.tasks?.[0]) return null
+  return payload.tasks?.[0] ?? null
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function collectPostedTasks(
+  posted: { id: string; tag: string }[],
+  login: string,
+  password: string,
+  timeoutMs = 75_000,
+): Promise<Map<string, MapsItem[] | null>> {
+  const byTag = new Map<string, MapsItem[] | null>()
+  const pending = new Map(posted.map((row) => [row.id, row.tag]))
+  const started = Date.now()
+  let delay = 1500
+  while (pending.size > 0 && Date.now() - started < timeoutMs) {
+    for (const [id, tag] of [...pending]) {
+      const task = await getMapsTask(id, login, password)
+      const code = task?.status_code ?? 0
+      if (code === TASK_READY) {
+        byTag.set(tag, task?.result?.[0]?.items ?? [])
+        pending.delete(id)
+        continue
+      }
+      if (code && !TASK_PENDING.has(code) && code >= 40000) {
+        byTag.set(tag, null)
+        pending.delete(id)
+      }
+    }
+    if (pending.size === 0) break
+    await sleep(delay)
+    delay = Math.min(8000, Math.round(delay * 1.4))
+  }
+  return byTag
+}
+
+async function liveMapsAtCoordinate(
+  keyword: string,
+  point: GridPoint,
+  login: string,
+  password: string,
+): Promise<{ items: MapsItem[]; error: string | null }> {
+  const { payload, error } = await dfsJson(LIVE_ENDPOINT, login, password, {
+    method: "POST",
+    body: JSON.stringify([mapsGridTask(keyword, point.locationCoordinate, point.id)]),
+  }, 25_000)
+  if (error) return { items: [], error }
+  return { items: payload.tasks?.[0]?.result?.[0]?.items ?? [], error: null }
+}
+
+/** One Maps SERP task per grid cell. Prefers batched task_post (≤100/POST) then task_get; live/advanced fallback. */
+export async function scanMapsGrid(
+  points: GridPoint[],
+  keyword: string,
+  login: string,
+  password: string,
+): Promise<GridCellResult[]> {
+  const results = new Map<string, GridCellResult>()
+  const mark = (point: GridPoint, items: MapsItem[], error: string | null) => {
+    results.set(point.id, { point, items, error })
+  }
+
+  try {
+    const tasks = points.map((point) => mapsGridTask(keyword, point.locationCoordinate, point.id))
+    const posted = await postMapsTasks(tasks, login, password)
+    const collected = await collectPostedTasks(posted, login, password)
+    for (const point of points) {
+      if (collected.has(point.id)) {
+        const items = collected.get(point.id)
+        if (items) mark(point, items, null)
+      }
+    }
+  } catch {
+    // Fall through to live/advanced per remaining cell.
+  }
+
+  const remaining = points.filter((point) => !results.has(point.id))
+  const concurrency = 5
+  for (let index = 0; index < remaining.length; index += concurrency) {
+    const batch = remaining.slice(index, index + concurrency)
+    const settled = await Promise.all(batch.map((point) => liveMapsAtCoordinate(keyword, point, login, password)))
+    batch.forEach((point, offset) => {
+      const live = settled[offset]!
+      mark(point, live.items, live.error)
+    })
+  }
+
+  return points.map((point) => results.get(point.id) ?? { point, items: [], error: "Maps search did not return this grid point." })
 }
 
 export async function testDataForSeo(login: string, password: string): Promise<KeyTestResult> {

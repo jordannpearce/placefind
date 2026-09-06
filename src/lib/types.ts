@@ -158,12 +158,18 @@ export type MailStatus = {
 export type RuntimeInfo = {
   seller: boolean
   store: boolean
+  desktop: boolean
   admin: boolean
   bootstrap: boolean
   user: AuthUser | null
   hosted: HostedKeyStatus
   license: LicenseStatus
   keygen: KeygenStatus
+}
+
+export type GeoPoint = {
+  lat: number
+  lng: number
 }
 
 export type KeywordRank = {
@@ -177,6 +183,25 @@ export type KeywordRank = {
   error?: string
 }
 
+export type GridPointResult = {
+  row: number
+  col: number
+  lat: number
+  lng: number
+  locationCoordinate?: string
+  keyword: string
+  rank: number | null
+  listingTitle: string | null
+  rating: number | null
+  reviewCount?: number | null
+  address: string | null
+  domain?: string | null
+  placeId?: string | null
+  mapsUrl: string | null
+  scannedAt: string
+  error?: string
+}
+
 export type ScanRun = {
   id: string
   scannedAt: string
@@ -185,17 +210,39 @@ export type ScanRun = {
   results: KeywordRank[]
 }
 
+export type GridScanRun = {
+  id: string
+  scannedAt: string
+  keyword: string
+  gridSize: number
+  spacingMiles: number
+  zoom?: number
+  center: GeoPoint
+  placeId?: string | null
+  pointCount: number
+  foundCount: number
+  points: GridPointResult[]
+}
+
 export type Campaign = {
   id: string
+  userId?: string
   name: string
   businessName: string
   city: string
   state: string
+  placeId?: string
   keywords: string[]
+  gridSize: number
+  spacingMiles: number
+  zoom?: number
+  center: GeoPoint | null
   createdAt: string
   updatedAt: string
   lastScan: ScanRun | null
+  lastGridScan: GridScanRun | null
   recentScans: ScanRun[]
+  recentGridScans?: GridScanRun[]
 }
 
 export type CampaignInput = {
@@ -204,4 +251,9 @@ export type CampaignInput = {
   city?: string
   state?: string
   keywords?: string[]
+  placeId?: string
+  gridSize?: number
+  spacingMiles?: number
+  zoom?: number
+  center?: GeoPoint | null
 }

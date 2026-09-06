@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto"
 import type { PublicUser } from "./auth.ts"
 import { findUserByEmail } from "./auth.ts"
-import { createLicense, keygenPublicStatus, type IssuedLicense } from "./keygen.ts"
+import { activateLicense, createLicense, keygenPublicStatus, licenseStatus, type IssuedLicense } from "./keygen.ts"
 import { licenseEmail, pendingLicenseEmail, sendMail } from "./mail.ts"
 import { readProduct } from "./product.ts"
 import { readCollection, writeCollection } from "./store.ts"
@@ -137,4 +137,26 @@ export function shopSummary() {
     paidCount: orders.filter((order) => order.status === "paid").length,
     pendingCount: orders.filter((order) => order.status === "pending_license").length,
   }
+}
+
+export function licenseKeysFromOrders(orders: Order[]): string[] {
+  const seen = new Set<string>()
+  const keys: string[] = []
+  for (const order of orders) {
+    const key = order.licenseKey?.trim() ?? ""
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    keys.push(key)
+  }
+  return keys
+}
+
+export async function attachUserLicense(user: PublicUser) {
+  const status = await licenseStatus()
+  if (!status.configured || status.valid) return status
+  for (const key of licenseKeysFromOrders(ordersForUser(user.id))) {
+    const next = await activateLicense(key)
+    if (next.valid) return next
+  }
+  return licenseStatus()
 }

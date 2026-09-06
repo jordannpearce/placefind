@@ -40,7 +40,8 @@ export function BuyPage({ user, onAuthed, onTryScan }: Props) {
         <p className="mt-3 text-sm leading-6 text-muted">{product?.pitch}</p>
         <p className="mt-4 font-display text-3xl text-brass">${product?.price ?? "49"}</p>
         <p className="mt-1 text-xs text-muted">
-          One Windows license. After payment you get the key by email and on your account page.
+          One Windows license. Paying creates your account, emails the key, and unlocks the desktop app. There is no
+          separate Join step.
         </p>
         {onTryScan && (
           <button
@@ -132,10 +133,11 @@ export function BuyPage({ user, onAuthed, onTryScan }: Props) {
               disabled={busy}
               className="h-12 rounded-lg bg-brass font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
             >
-              {busy ? "Placing order…" : `Pay $${product?.price ?? "49"} and get a key`}
+              {busy ? "Placing order…" : user ? `Pay $${product?.price ?? "49"} and get a key` : `Pay $${product?.price ?? "49"} and create my account`}
             </button>
             <p className="text-xs text-muted">
-              After you pay, your license key appears here and on your account page. We also email it when email is set up.
+              Checkout creates your PlaceFind account if you do not have one yet. After you pay, the license key
+              appears here and on your account page.
             </p>
           </form>
         )}

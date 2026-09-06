@@ -1,30 +1,19 @@
 import type { AuthUser } from "../lib/types.ts"
-import type { AppPath } from "../lib/nav.ts"
+import { navLinks, type AppPath } from "../lib/nav.ts"
 
 type Props = {
   path: AppPath
+  desktop: boolean
   store: boolean
   admin: boolean
   user: AuthUser | null
   onGo: (path: AppPath) => void
 }
 
-export function AppNav({ path, store, admin, user, onGo }: Props) {
-  const links: { href: AppPath; label: string }[] = [
-    { href: "/", label: store ? "Test scan" : "Lookup" },
-    { href: "/track", label: "Track" },
-  ]
-  if (store) {
-    links.push({ href: "/buy", label: "Buy" }, { href: "/download", label: "Download" })
-    if (user) {
-      links.push({ href: "/account", label: "Account" })
-    } else {
-      links.push({ href: "/join", label: "Join" }, { href: "/login", label: "Sign in" })
-    }
-  }
-  if (admin) {
-    links.push({ href: "/sell", label: "Sell" }, { href: "/admin", label: "Admin" })
-  }
+export function AppNav({ path, desktop, store, admin, user, onGo }: Props) {
+  const links = navLinks({ desktop, store, admin, user })
+
+  if (links.length === 0) return null
 
   return (
     <nav className="flex flex-wrap items-center gap-1">

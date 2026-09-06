@@ -4,11 +4,12 @@ import type { AuthUser, OrderInfo, ProductInfo } from "../lib/types.ts"
 
 type Props = {
   user: AuthUser
+  desktop?: boolean
   onLogout: () => void
-  onBuy: () => void
+  onBuy?: () => void
 }
 
-export function AccountPage({ user, onLogout, onBuy }: Props) {
+export function AccountPage({ user, desktop, onLogout, onBuy }: Props) {
   const [orders, setOrders] = useState<OrderInfo[]>([])
   const [product, setProduct] = useState<ProductInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -29,9 +30,11 @@ export function AccountPage({ user, onLogout, onBuy }: Props) {
         <h2 className="mt-2 font-display text-3xl text-paper">{user.name}</h2>
         <p className="mt-1 text-sm text-muted">{user.email}</p>
         <div className="mt-5 flex flex-wrap gap-3">
-          <button type="button" onClick={onBuy} className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]">
-            Buy a license
-          </button>
+          {!desktop && onBuy && (
+            <button type="button" onClick={onBuy} className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]">
+              Buy a license
+            </button>
+          )}
           <button
             type="button"
             onClick={async () => {
@@ -49,7 +52,11 @@ export function AccountPage({ user, onLogout, onBuy }: Props) {
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">License keys</p>
         {error && <p className="mt-3 text-sm text-clay">{error}</p>}
         {orders.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">No licenses yet. Buy {product?.name ?? "PlaceFind"} to get a license key.</p>
+          <p className="mt-3 text-sm text-muted">
+            {desktop
+              ? "No license is attached to this account yet. Buy PlaceFind on the website, then sign in here again."
+              : `No licenses yet. Buy ${product?.name ?? "PlaceFind"} to get a license key.`}
+          </p>
         ) : (
           <ul className="mt-4 grid gap-3">
             {orders.map((order) => (

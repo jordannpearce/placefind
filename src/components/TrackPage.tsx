@@ -1,13 +1,17 @@
-import { ExternalLink, LoaderCircle, Plus, Star, Trash2 } from "lucide-react"
+import { LoaderCircle, Plus, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { createCampaign, deleteCampaign, loadCampaigns, scanCampaign, updateCampaign } from "../lib/api.ts"
+import { rankColor, rankLabel, rankTone } from "../lib/grid.ts"
+import { publicSearchMessage } from "../lib/public-copy.ts"
 import { US_STATES } from "../lib/states.ts"
-import type { ApiKeys, Campaign, CampaignInput, HostedKeyStatus, KeywordRank } from "../lib/types.ts"
+import type { ApiKeys, Campaign, CampaignInput, GridPointResult, HostedKeyStatus } from "../lib/types.ts"
+import { GridMap } from "./GridMap.tsx"
 
 type Props = {
   keys: ApiKeys
   hosted: HostedKeyStatus | null
   seller: boolean
+  desktop?: boolean
 }
 
 const emptyDraft = (): CampaignInput => ({
@@ -16,6 +20,8 @@ const emptyDraft = (): CampaignInput => ({
   city: "",
   state: "",
   keywords: [],
+  gridSize: 5,
+  spacingMiles: 1,
 })
 
 function formatWhen(value: string | null | undefined): string {
@@ -25,54 +31,67 @@ function formatWhen(value: string | null | undefined): string {
   return date.toLocaleString()
 }
 
-function rankLabel(row: KeywordRank | undefined): string {
-  if (!row) return "—"
-  if (row.error) return "Error"
-  if (row.rank == null) return "Not found"
-  return String(row.rank)
+function draftFrom(campaign: Campaign): CampaignInput {
+  return {
+    name: campaign.name,
+    businessName: campaign.businessName,
+    city: campaign.city,
+    state: campaign.state,
+    keywords: campaign.keywords,
+    gridSize: campaign.gridSize ?? 5,
+    spacingMiles: campaign.spacingMiles ?? 1,
+  }
 }
 
-function lastRankFor(campaign: Campaign, keyword: string): KeywordRank | undefined {
-  return campaign.lastScan?.results.find((row) => row.keyword.toLowerCase() === keyword.toLowerCase())
+function searchCount(gridSize: number) {
+  return gridSize * gridSize
 }
 
-export function TrackPage({ keys, hosted, seller }: Props) {
+export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [maxKeywords, setMaxKeywords] = useState(20)
+  const [allowedGridSizes, setAllowedGridSizes] = useState([3, 5, 7])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<CampaignInput>(emptyDraft)
   const [keywordDraft, setKeywordDraft] = useState("")
+  const [activeKeyword, setActiveKeyword] = useState("")
   const [creating, setCreating] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [scanning, setScanning] = useState<string | null>(null)
+  const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [selectedPoint, setSelectedPoint] = useState<GridPointResult | null>(null)
 
   const selected = useMemo(
     () => (campaigns ?? []).find((campaign) => campaign.id === selectedId) ?? null,
     [campaigns, selectedId],
   )
 
+  const grid = selected?.lastGridScan ?? null
+  const points = useMemo(() => {
+    if (!grid) return []
+    if (!activeKeyword) return grid.points
+    return grid.points.filter((point) => point.keyword.toLowerCase() === activeKeyword.toLowerCase())
+  }, [grid, activeKeyword])
+
   async function refresh(nextId?: string | null) {
     const payload = await loadCampaigns()
     const rows = payload.campaigns ?? []
     setCampaigns(rows)
     setMaxKeywords(payload.maxKeywords)
+    setAllowedGridSizes(payload.allowedGridSizes)
     const keep = nextId !== undefined ? nextId : selectedId
     const next = rows.find((campaign) => campaign.id === keep) ?? rows[0] ?? null
     setSelectedId(next?.id ?? null)
     if (next) {
-      setDraft({
-        name: next.name,
-        businessName: next.businessName,
-        city: next.city,
-        state: next.state,
-        keywords: next.keywords,
-      })
+      setDraft(draftFrom(next))
+      setActiveKeyword(next.lastGridScan?.keyword || next.keywords[0] || "")
     } else {
       setDraft(emptyDraft())
+      setActiveKeyword("")
     }
+    setSelectedPoint(null)
     return payload.campaigns
   }
 
@@ -83,16 +102,14 @@ export function TrackPage({ keys, hosted, seller }: Props) {
         if (!active) return
         setCampaigns(payload.campaigns ?? [])
         setMaxKeywords(payload.maxKeywords)
+        setAllowedGridSizes(payload.allowedGridSizes)
         const next = payload.campaigns[0] ?? null
         setSelectedId(next?.id ?? null)
         if (next) {
-          setDraft({
-            name: next.name,
-            businessName: next.businessName,
-            city: next.city,
-            state: next.state,
-            keywords: next.keywords,
-          })
+          setDraft(draftFrom(next))
+          setActiveKeyword(next.lastGridScan?.keyword || next.keywords[0] || "")
+        } else {
+          setCreating(true)
         }
       })
       .catch((err) => {
@@ -109,13 +126,8 @@ export function TrackPage({ keys, hosted, seller }: Props) {
   function replaceCampaign(next: Campaign) {
     setCampaigns((current) => current.map((row) => (row.id === next.id ? next : row)))
     if (selectedId === next.id) {
-      setDraft({
-        name: next.name,
-        businessName: next.businessName,
-        city: next.city,
-        state: next.state,
-        keywords: next.keywords,
-      })
+      setDraft(draftFrom(next))
+      if (next.lastGridScan?.keyword) setActiveKeyword(next.lastGridScan.keyword)
     }
   }
 
@@ -125,11 +137,15 @@ export function TrackPage({ keys, hosted, seller }: Props) {
     setError(null)
     setNotice(null)
     try {
-      const campaign = await createCampaign(draft)
+      const keywords = draft.keywords?.length ? draft.keywords : keywordDraft.trim() ? [keywordDraft.trim()] : []
+      const campaign = await createCampaign({ ...draft, keywords })
       setCreating(false)
       setKeywordDraft("")
       await refresh(campaign.id)
-      setNotice("Campaign saved. Add keywords, then scan Google Maps.")
+      setActiveKeyword(campaign.keywords[0] || "")
+      setNotice(
+        `Campaign saved. A ${campaign.gridSize}×${campaign.gridSize} scan runs ${searchCount(campaign.gridSize)} Maps searches.`,
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the campaign.")
     } finally {
@@ -149,9 +165,11 @@ export function TrackPage({ keys, hosted, seller }: Props) {
           businessName: draft.businessName,
           city: draft.city,
           state: draft.state,
+          gridSize: draft.gridSize,
+          spacingMiles: draft.spacingMiles,
         }),
       )
-      setNotice("Campaign details saved.")
+      setNotice("Campaign details saved. The next scan uses this grid.")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the campaign.")
     } finally {
@@ -173,6 +191,7 @@ export function TrackPage({ keys, hosted, seller }: Props) {
       const next = await updateCampaign(selected.id, { keywords: [...selected.keywords, keyword] })
       replaceCampaign(next)
       setKeywordDraft("")
+      if (!activeKeyword) setActiveKeyword(keyword)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add that keyword.")
     } finally {
@@ -185,7 +204,9 @@ export function TrackPage({ keys, hosted, seller }: Props) {
     setSaving(true)
     setError(null)
     try {
-      replaceCampaign(await updateCampaign(selected.id, { keywords: selected.keywords.filter((row) => row !== keyword) }))
+      const next = await updateCampaign(selected.id, { keywords: selected.keywords.filter((row) => row !== keyword) })
+      replaceCampaign(next)
+      if (activeKeyword.toLowerCase() === keyword.toLowerCase()) setActiveKeyword(next.keywords[0] || "")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not remove that keyword.")
     } finally {
@@ -195,14 +216,14 @@ export function TrackPage({ keys, hosted, seller }: Props) {
 
   async function onDelete() {
     if (!selected) return
-    if (!window.confirm(`Delete “${selected.name}”? This removes the campaign and its scan history.`)) return
+    if (!window.confirm(`Delete “${selected.name}”? This removes the campaign and its grid scans.`)) return
     setSaving(true)
     setError(null)
     setNotice(null)
     try {
       await deleteCampaign(selected.id)
       await refresh(null)
-      setCreating(false)
+      setCreating(true)
       setNotice("Campaign deleted.")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete the campaign.")
@@ -211,25 +232,30 @@ export function TrackPage({ keys, hosted, seller }: Props) {
     }
   }
 
-  async function onScan(keywords?: string[]) {
+  async function onScan(keyword?: string) {
     if (!selected) return
-    setScanning(keywords?.[0] ?? "all")
+    const target = (keyword || activeKeyword || selected.keywords[0] || "").trim()
+    if (!target) {
+      setError("Add a keyword before running a grid scan.")
+      return
+    }
+    setScanning(true)
     setError(null)
     setNotice(null)
+    setSelectedPoint(null)
     try {
-      const payload = await scanCampaign(selected.id, keys, Boolean(hosted?.included && !seller), keywords)
+      const payload = await scanCampaign(selected.id, keys, Boolean(hosted?.included && !seller), [target])
       replaceCampaign(payload.campaign)
-      const found = payload.scan.foundCount
-      const total = payload.scan.keywordCount
+      setActiveKeyword(payload.grid?.keyword || target)
+      const found = payload.grid?.foundCount ?? 0
+      const total = payload.grid?.pointCount ?? 0
       setNotice(
-        found === total
-          ? `Scan finished. Found the business for ${found} of ${total} keywords.`
-          : `Scan finished. Found the business for ${found} of ${total} keywords. Missing ranks mean it was not in the Maps results.`,
+        `Scan finished. ${selected.businessName} appeared at ${found} of ${total} grid points for “${target}”.`,
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not scan Google Maps.")
     } finally {
-      setScanning(null)
+      setScanning(false)
     }
   }
 
@@ -238,6 +264,8 @@ export function TrackPage({ keys, hosted, seller }: Props) {
     setSelectedId(null)
     setDraft(emptyDraft())
     setKeywordDraft("")
+    setActiveKeyword("")
+    setSelectedPoint(null)
     setError(null)
     setNotice(null)
   }
@@ -245,40 +273,34 @@ export function TrackPage({ keys, hosted, seller }: Props) {
   function selectCampaign(campaign: Campaign) {
     setCreating(false)
     setSelectedId(campaign.id)
-    setDraft({
-      name: campaign.name,
-      businessName: campaign.businessName,
-      city: campaign.city,
-      state: campaign.state,
-      keywords: campaign.keywords,
-    })
+    setDraft(draftFrom(campaign))
     setKeywordDraft("")
+    setActiveKeyword(campaign.lastGridScan?.keyword || campaign.keywords[0] || "")
+    setSelectedPoint(null)
     setError(null)
     setNotice(null)
   }
 
-  const results = selected
-    ? selected.keywords.map((keyword) => lastRankFor(selected, keyword)).filter((row): row is KeywordRank => Boolean(row))
-    : []
   const mapsReady = Boolean((keys.dataforseoLogin && keys.dataforseoPassword) || hosted?.dataforseo)
   const busy = Boolean(saving || scanning)
+  const gridSize = Number(draft.gridSize || selected?.gridSize || 5)
 
   if (loading) {
     return (
       <section className="rounded-2xl border border-line bg-panel p-8">
-        <p className="font-display text-2xl text-paper">Loading campaigns</p>
-        <p className="mt-2 text-sm text-muted">Reading saved rank-tracking campaigns from this computer.</p>
+        <p className="font-display text-2xl text-paper">Loading tracker</p>
+        <p className="mt-2 text-sm text-muted">Reading saved grid campaigns.</p>
       </section>
     )
   }
 
   return (
-    <div className="grid flex-1 gap-6 lg:grid-cols-[18.5rem_1fr]">
+    <div className="grid flex-1 gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
       <aside className="rounded-2xl border border-line bg-panel p-5">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Campaigns</p>
-            <h2 className="font-display text-2xl text-paper">Track ranks</h2>
+            <h2 className="font-display text-2xl text-paper">Grid tracker</h2>
           </div>
           <button
             type="button"
@@ -290,11 +312,11 @@ export function TrackPage({ keys, hosted, seller }: Props) {
           </button>
         </div>
         <p className="mb-4 text-sm leading-6 text-muted">
-          Watch where a Google Maps listing appears for the keywords people search in that city.
+          Drop a grid around a listing and see where it ranks on Google Maps from each point.
         </p>
         {campaigns.length === 0 ? (
           <p className="rounded-xl border border-dashed border-line px-3 py-4 text-sm text-muted">
-            No campaigns yet. Create one with a business name, city, and the keywords you want to rank.
+            No campaigns yet. Create one with a business, a keyword, and a 3×3, 5×5, or 7×7 grid.
           </p>
         ) : (
           <ul className="grid gap-1">
@@ -312,9 +334,9 @@ export function TrackPage({ keys, hosted, seller }: Props) {
                       {campaign.businessName} · {campaign.city}, {campaign.state}
                     </span>
                     <span className="block text-xs text-muted">
-                      {campaign.keywords.length} keyword{campaign.keywords.length === 1 ? "" : "s"}
-                      {campaign.lastScan
-                        ? ` · ${campaign.lastScan.foundCount} found ${formatWhen(campaign.lastScan.scannedAt)}`
+                      {campaign.gridSize ?? 5}×{campaign.gridSize ?? 5}
+                      {campaign.lastGridScan
+                        ? ` · ${campaign.lastGridScan.foundCount}/${campaign.lastGridScan.pointCount} found`
                         : " · not scanned"}
                     </span>
                   </button>
@@ -325,24 +347,33 @@ export function TrackPage({ keys, hosted, seller }: Props) {
         )}
       </aside>
 
-      <main className="grid gap-4">
-        {error && (
-          <p className="rounded-xl border border-clay/40 bg-panel px-4 py-3 text-sm text-clay">{error}</p>
-        )}
-        {notice && (
-          <p className="rounded-xl border border-brass/30 bg-brass/10 px-4 py-3 text-sm text-brass">{notice}</p>
-        )}
+      <main className="grid min-w-0 gap-4">
+        {error && <p className="rounded-xl border border-clay/40 bg-panel px-4 py-3 text-sm text-clay">{error}</p>}
+        {notice && <p className="rounded-xl border border-brass/30 bg-brass/10 px-4 py-3 text-sm text-brass">{notice}</p>}
 
         {creating || !selected ? (
           <section className="rounded-2xl border border-dashed border-line bg-panel/60 p-6 sm:p-8">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">New campaign</p>
-            <h3 className="mt-2 font-display text-3xl text-paper">Track a Google Maps listing</h3>
+            <h3 className="mt-2 font-display text-3xl text-paper">Track ranks on a map grid</h3>
             <p className="mt-3 max-w-xl text-sm leading-6 text-muted">
-              PlaceFind searches each keyword on Google Maps in that city, then records the rank of the listing that
-              matches your business name. A campaign can hold up to {maxKeywords} keywords.
+              PlaceFind looks up the listing, then searches your keyword from every grid point around it. A 5×5 grid
+              is 25 Maps searches. 7×7 is 49 — that costs more.
             </p>
             <form className="mt-6 grid gap-4" onSubmit={(event) => void onCreate(event)}>
-              <CampaignFields draft={draft} onChange={setDraft} />
+              <CampaignFields draft={draft} onChange={setDraft} allowedGridSizes={allowedGridSizes} />
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">First keyword</span>
+                <input
+                  value={keywordDraft}
+                  onChange={(event) => setKeywordDraft(event.target.value)}
+                  placeholder="barbecue"
+                  autoComplete="off"
+                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none placeholder:text-muted/50 focus:border-brass"
+                />
+              </label>
+              <p className="text-xs text-muted">
+                A {gridSize}×{gridSize} grid runs {searchCount(gridSize)} Maps searches on each scan.
+              </p>
               <button
                 type="submit"
                 disabled={saving}
@@ -375,7 +406,7 @@ export function TrackPage({ keys, hosted, seller }: Props) {
                 </button>
               </div>
               <div className="mt-5 grid gap-4">
-                <CampaignFields draft={draft} onChange={setDraft} />
+                <CampaignFields draft={draft} onChange={setDraft} allowedGridSizes={allowedGridSizes} />
                 <button
                   type="button"
                   onClick={() => void onSave()}
@@ -393,7 +424,7 @@ export function TrackPage({ keys, hosted, seller }: Props) {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Keywords</p>
                   <h4 className="font-display text-2xl text-paper">What people search</h4>
                   <p className="mt-1 text-sm text-muted">
-                    {selected.keywords.length} of {maxKeywords} keywords. Each scan looks up that keyword on Google Maps.
+                    Scan one keyword at a time. Each point on the grid is its own Maps search.
                   </p>
                 </div>
                 <button
@@ -402,15 +433,23 @@ export function TrackPage({ keys, hosted, seller }: Props) {
                   disabled={busy || selected.keywords.length === 0}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
                 >
-                  {scanning === "all" && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                  {scanning === "all" ? "Scanning Maps…" : "Scan keywords"}
+                  {scanning && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                  {scanning ? "Scanning the grid…" : `Scan ${draft.gridSize ?? selected.gridSize}×${draft.gridSize ?? selected.gridSize} grid`}
                 </button>
               </div>
               {!mapsReady && (
                 <p className="mt-4 rounded-xl border border-clay/40 px-4 py-3 text-sm text-clay">
                   {seller
                     ? "Rank scans need live Maps search. Add keys in Settings, or seal them on Sell."
-                    : "Maps rank tracking is not ready on this preview yet."}
+                    : "Maps rank tracking is not ready on this copy yet."}
+                </p>
+              )}
+              {mapsReady && (
+                <p className="mt-4 rounded-xl border border-brass/25 bg-brass/5 px-4 py-3 text-sm text-paper/80">
+                  A {draft.gridSize || selected.gridSize}×{draft.gridSize || selected.gridSize} scan runs{" "}
+                  {searchCount(Number(draft.gridSize || selected.gridSize))} paid Maps searches — one for each grid
+                  point, from that point’s coordinates. A 7×7 scan is 49 paid searches.
+                  {desktop ? " Larger grids take a few minutes." : ""}
                 </p>
               )}
               <form
@@ -440,120 +479,164 @@ export function TrackPage({ keys, hosted, seller }: Props) {
               {selected.keywords.length === 0 ? (
                 <p className="mt-4 text-sm text-muted">Add a keyword such as “barbecue” or “best pizza” to start tracking.</p>
               ) : (
-                <ul className="mt-4 flex flex-wrap gap-2">
-                  {selected.keywords.map((keyword) => (
-                    <li
-                      key={keyword}
-                      className="inline-flex items-center gap-2 rounded-full border border-line bg-ink px-3 py-1.5 text-sm text-paper"
-                    >
-                      {keyword}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {selected.keywords.map((keyword) => {
+                    const active = keyword.toLowerCase() === activeKeyword.toLowerCase()
+                    return (
                       <button
+                        key={keyword}
                         type="button"
-                        onClick={() => void onRemoveKeyword(keyword)}
-                        disabled={busy}
-                        className="text-muted hover:text-clay"
-                        aria-label={`Remove ${keyword}`}
+                        onClick={() => setActiveKeyword(keyword)}
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${active ? "border-brass bg-brass/10 text-brass" : "border-line bg-ink text-paper"}`}
                       >
-                        ×
+                        {keyword}
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void onRemoveKeyword(keyword)
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              void onRemoveKeyword(keyword)
+                            }
+                          }}
+                          className="text-muted hover:text-clay"
+                          aria-label={`Remove ${keyword}`}
+                        >
+                          ×
+                        </span>
                       </button>
-                    </li>
-                  ))}
-                </ul>
+                    )
+                  })}
+                </div>
               )}
             </section>
 
             <section className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Latest ranks</p>
-              <h4 className="font-display text-2xl text-paper">Where the listing appears</h4>
-              {selected.keywords.length === 0 ? (
-                <p className="mt-3 text-sm text-muted">Add keywords, then run a scan to see ranks.</p>
-              ) : results.length === 0 ? (
-                <p className="mt-3 text-sm text-muted">
-                  No scan yet. Click Scan keywords to ask Google Maps where {selected.businessName} ranks.
-                </p>
-              ) : (
-                <>
-                  <div className="mt-4 hidden overflow-x-auto md:block">
-                    <table className="w-full min-w-[44rem] text-left text-sm">
-                      <thead className="text-[11px] uppercase tracking-[0.12em] text-muted">
-                        <tr>
-                          <th className="pb-3 pr-3 font-semibold">Keyword</th>
-                          <th className="pb-3 pr-3 font-semibold">Rank</th>
-                          <th className="pb-3 pr-3 font-semibold">Listing</th>
-                          <th className="pb-3 pr-3 font-semibold">Rating</th>
-                          <th className="pb-3 pr-3 font-semibold">Address</th>
-                          <th className="pb-3 pr-3 font-semibold">Scanned</th>
-                          <th className="pb-3 font-semibold" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selected.keywords.map((keyword) => {
-                          const row = lastRankFor(selected, keyword)
-                          return (
-                            <tr key={keyword} className="border-t border-line">
-                              <td className="py-3 pr-3 text-paper">{keyword}</td>
-                              <td className="py-3 pr-3 text-brass">{rankLabel(row)}</td>
-                              <td className="py-3 pr-3 text-paper/80">{row?.listingTitle || "—"}</td>
-                              <td className="py-3 pr-3 text-paper/80">
-                                {row?.rating != null ? (
-                                  <span className="inline-flex items-center gap-1">
-                                    <Star className="h-3.5 w-3.5 fill-current text-brass" />
-                                    {row.rating.toFixed(1)}
-                                  </span>
-                                ) : (
-                                  "—"
-                                )}
-                              </td>
-                              <td className="max-w-[16rem] truncate py-3 pr-3 text-muted">{row?.address || "—"}</td>
-                              <td className="py-3 pr-3 text-muted">{row ? formatWhen(row.scannedAt) : "—"}</td>
-                              <td className="py-3 text-right">
-                                <ResultActions
-                                  row={row}
-                                  scanning={scanning === keyword}
-                                  disabled={busy}
-                                  onScan={() => void onScan([keyword])}
-                                />
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Map grid</p>
+                  <h4 className="font-display text-2xl text-paper">Where the listing ranks</h4>
+                  <p className="mt-1 text-sm text-muted">
+                    Green is ranks 1–3, brass is 4–10, clay is 11+ or not found. Click a point for details.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3 text-xs text-muted">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-moss" />
+                    1–3
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-brass" />
+                    4–10
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-clay" />
+                    11+ / missing
+                  </span>
+                </div>
+              </div>
+
+              {scanning ? (
+                <div className="flex h-[22rem] items-center justify-center rounded-2xl border border-dashed border-line lg:h-[32rem]">
+                  <div className="grid justify-items-center gap-3 text-center">
+                    <LoaderCircle className="h-6 w-6 animate-spin text-brass" />
+                    <p className="text-sm text-paper">Scanning {searchCount(selected.gridSize)} map points…</p>
+                    <p className="max-w-sm text-xs text-muted">
+                      Each point is a live Maps search. A larger grid takes longer and costs more.
+                    </p>
                   </div>
-                  <ul className="mt-4 grid gap-3 md:hidden">
-                    {selected.keywords.map((keyword) => {
-                      const row = lastRankFor(selected, keyword)
-                      return (
-                        <li key={keyword} className="rounded-xl border border-line bg-ink p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm text-paper">{keyword}</p>
-                              <p className="mt-1 text-lg text-brass">{rankLabel(row)}</p>
-                            </div>
-                            <ResultActions
-                              row={row}
-                              scanning={scanning === keyword}
-                              disabled={busy}
-                              onScan={() => void onScan([keyword])}
-                            />
-                          </div>
-                          <p className="mt-2 text-sm text-paper/80">{row?.listingTitle || "No matching listing yet"}</p>
-                          {row?.address && <p className="mt-1 text-sm text-muted">{row.address}</p>}
-                          <p className="mt-2 text-xs text-muted">{row ? formatWhen(row.scannedAt) : "Not scanned yet"}</p>
-                          {row?.error && <p className="mt-2 text-sm text-clay">{row.error}</p>}
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </>
+                </div>
+              ) : !grid ? (
+                <div className="flex h-[22rem] items-center justify-center rounded-2xl border border-dashed border-line lg:h-[32rem]">
+                  <p className="max-w-md px-6 text-center text-sm leading-6 text-muted">
+                    No grid yet. Add a keyword, then scan to plot ranks around {selected.businessName}.
+                  </p>
+                </div>
+              ) : (
+                <GridMap
+                  center={grid.center || selected.center}
+                  points={points}
+                  selected={selectedPoint}
+                  onSelect={setSelectedPoint}
+                />
               )}
-              {selected.recentScans.length > 0 && (
+
+              {selectedPoint && (
+                <div className="mt-4 rounded-xl border border-line bg-ink px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Selected point</p>
+                  <p className="mt-1 text-sm text-paper">
+                    {selectedPoint.keyword} · {rankLabel(selectedPoint.rank, selectedPoint.error)}
+                    {selectedPoint.rating != null ? ` · ${selectedPoint.rating.toFixed(1)}` : ""}
+                    {selectedPoint.reviewCount != null ? ` (${selectedPoint.reviewCount} reviews)` : ""}
+                  </p>
+                  <p className="mt-1 text-sm text-paper/80">{selectedPoint.listingTitle || "No matching listing at this point"}</p>
+                  {selectedPoint.address && <p className="mt-1 text-sm text-muted">{selectedPoint.address}</p>}
+                  {selectedPoint.domain && <p className="mt-1 text-sm text-muted">{selectedPoint.domain}</p>}
+                  {selectedPoint.placeId && <p className="mt-1 text-xs text-muted">Place ID {selectedPoint.placeId}</p>}
+                  <p className="mt-1 text-xs text-muted">
+                    {selectedPoint.locationCoordinate || `${selectedPoint.lat.toFixed(5)},${selectedPoint.lng.toFixed(5)}`}
+                    {" · "}
+                    {formatWhen(selectedPoint.scannedAt)}
+                  </p>
+                  {selectedPoint.error && (
+                    <p className="mt-2 text-sm text-clay">{publicSearchMessage(selectedPoint.error)}</p>
+                  )}
+                </div>
+              )}
+
+              {grid && !scanning && (
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[36rem] text-left text-sm">
+                    <thead className="text-[11px] uppercase tracking-[0.12em] text-muted">
+                      <tr>
+                        <th className="pb-3 pr-3 font-semibold">Point</th>
+                        <th className="pb-3 pr-3 font-semibold">Rank</th>
+                        <th className="pb-3 pr-3 font-semibold">Listing</th>
+                        <th className="pb-3 font-semibold">Address</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {points.map((point) => (
+                        <tr
+                          key={`${point.row}-${point.col}-${point.keyword}`}
+                          className="cursor-pointer border-t border-line hover:bg-raised/60"
+                          onClick={() => setSelectedPoint(point)}
+                        >
+                          <td className="py-2.5 pr-3 text-muted">
+                            R{point.row + 1} C{point.col + 1}
+                          </td>
+                          <td className="py-2.5 pr-3">
+                            <span className="inline-flex items-center gap-2">
+                              <span
+                                className="h-2.5 w-2.5 rounded-full"
+                                style={{ background: rankColor(point.rank) }}
+                              />
+                              <span className={rankTone(point.rank) === "red" ? "text-clay" : "text-brass"}>
+                                {rankLabel(point.rank, point.error)}
+                              </span>
+                            </span>
+                          </td>
+                          <td className="py-2.5 pr-3 text-paper/80">{point.listingTitle || "—"}</td>
+                          <td className="max-w-[18rem] truncate py-2.5 text-muted">{point.address || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {selected.recentGridScans && selected.recentGridScans.length > 0 && (
                 <div className="mt-6 border-t border-line pt-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Recent scans</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Recent grid scans</p>
                   <ul className="mt-2 grid gap-1 text-sm text-muted">
-                    {selected.recentScans.slice(0, 5).map((run) => (
+                    {selected.recentGridScans.slice(0, 5).map((run) => (
                       <li key={run.id}>
-                        {formatWhen(run.scannedAt)} · {run.foundCount} of {run.keywordCount} found
+                        {formatWhen(run.scannedAt)} · {run.keyword} · {run.foundCount} of {run.pointCount} found
                       </li>
                     ))}
                   </ul>
@@ -570,9 +653,11 @@ export function TrackPage({ keys, hosted, seller }: Props) {
 function CampaignFields({
   draft,
   onChange,
+  allowedGridSizes,
 }: {
   draft: CampaignInput
   onChange: (draft: CampaignInput) => void
+  allowedGridSizes: number[]
 }) {
   return (
     <div className="grid gap-3">
@@ -623,42 +708,34 @@ function CampaignFields({
           </select>
         </label>
       </div>
-    </div>
-  )
-}
-
-function ResultActions({
-  row,
-  scanning,
-  disabled,
-  onScan,
-}: {
-  row?: KeywordRank
-  scanning: boolean
-  disabled: boolean
-  onScan: () => void
-}) {
-  return (
-    <div className="inline-flex items-center gap-2">
-      {row?.mapsUrl && (
-        <a
-          href={row.mapsUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-paper/80 hover:text-brass"
-        >
-          Maps
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      )}
-      <button
-        type="button"
-        onClick={onScan}
-        disabled={disabled}
-        className="rounded-md border border-line px-2.5 py-1 text-xs text-paper/80 hover:border-brass disabled:opacity-60"
-      >
-        {scanning ? "Scanning…" : "Scan"}
-      </button>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Grid size</span>
+          <select
+            value={draft.gridSize ?? 5}
+            onChange={(event) => onChange({ ...draft, gridSize: Number(event.target.value) })}
+            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+          >
+            {allowedGridSizes.map((size) => (
+              <option key={size} value={size}>
+                {size}×{size} · {size * size} searches
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Miles between points</span>
+          <input
+            type="number"
+            min={0.25}
+            max={10}
+            step={0.25}
+            value={draft.spacingMiles ?? 1}
+            onChange={(event) => onChange({ ...draft, spacingMiles: Number(event.target.value) })}
+            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+          />
+        </label>
+      </div>
     </div>
   )
 }

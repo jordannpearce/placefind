@@ -1,14 +1,25 @@
 import assert from "node:assert/strict"
-import { describe, it } from "node:test"
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { after, describe, it } from "node:test"
 import {
   MAX_KEYWORDS,
+  MAX_GRID_SIZE,
+  bestGridRank,
+  buildGridPoints,
+  createCampaign,
   mergeKeywordRanks,
+  normalizeGridSize,
   normalizeKeywords,
+  rankColor,
+  readCampaigns,
   selectScanKeywords,
   validateCampaign,
   type Campaign,
   type KeywordRank,
 } from "./campaigns.ts"
+import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
 
 function rank(keyword: string, position: number | null): KeywordRank {
   return {
@@ -76,6 +87,131 @@ describe("validateCampaign", () => {
       keywords,
     })
     assert.equal(parsed.value?.keywords.length, MAX_KEYWORDS)
+  })
+
+  it("defaults to a 5×5 grid and one-mile spacing", () => {
+    const parsed = validateCampaign({
+      name: "Austin BBQ",
+      businessName: "Franklin Barbecue",
+      city: "Austin",
+      state: "TX",
+    })
+    assert.equal(parsed.value?.gridSize, 5)
+    assert.equal(parsed.value?.spacingMiles, 1)
+  })
+
+  it("rejects a grid larger than 7×7", () => {
+    const parsed = validateCampaign({
+      name: "Austin BBQ",
+      businessName: "Franklin Barbecue",
+      city: "Austin",
+      state: "TX",
+      gridSize: MAX_GRID_SIZE + 2,
+    })
+    assert.match(parsed.error || "", /at most 7/)
+  })
+
+  it("rejects even grid sizes", () => {
+    assert.equal(normalizeGridSize(4).error, "Choose a 3×3, 5×5, or 7×7 grid.")
+  })
+})
+
+describe("buildGridPoints", () => {
+  const center = { lat: 30.27, lng: -97.74 }
+
+  it("builds a north-up 3×3 grid around the listing", () => {
+    const points = buildGridPoints(center, 3, 1)
+    assert.equal(points.length, 9)
+    const middle = points.find((point) => point.row === 1 && point.col === 1)
+    assert.ok(middle)
+    assert.ok(Math.abs(middle.lat - center.lat) < 1e-9)
+    assert.ok(Math.abs(middle.lng - center.lng) < 1e-9)
+    const north = points.find((point) => point.row === 0 && point.col === 1)
+    const south = points.find((point) => point.row === 2 && point.col === 1)
+    assert.ok(north && south)
+    assert.ok(north.lat > center.lat)
+    assert.ok(south.lat < center.lat)
+  })
+
+  it("caps a 7×7 grid at 49 points", () => {
+    assert.equal(buildGridPoints(center, 7, 0.5).length, 49)
+  })
+
+  it("labels each cell with a lat,lng,zoom coordinate (max 7 decimals)", () => {
+    const points = buildGridPoints({ lat: 40.689199, lng: -73.975035 }, 3, 1, 17)
+    const centerPoint = points.find((point) => point.row === 1 && point.col === 1)
+    assert.equal(centerPoint?.locationCoordinate, "40.689199,-73.975035,17z")
+    assert.ok(points.every((point) => /^[-.\d]+,[-.\d]+,17z$/.test(point.locationCoordinate || "")))
+    assert.ok(
+      points.every((point) => {
+        const [lat, lng] = (point.locationCoordinate || "").split(",")
+        return (lat.split(".")[1] ?? "").length <= 7 && (lng.split(".")[1] ?? "").length <= 7
+      }),
+    )
+  })
+})
+
+describe("rankColor and bestGridRank", () => {
+  it("colors ranks for the map points", () => {
+    assert.equal(rankColor(1), "green")
+    assert.equal(rankColor(3), "green")
+    assert.equal(rankColor(4), "yellow")
+    assert.equal(rankColor(10), "yellow")
+    assert.equal(rankColor(11), "red")
+    assert.equal(rankColor(null), "red")
+  })
+
+  it("uses the best found rank and stays null when every point missed", () => {
+    assert.equal(
+      bestGridRank([
+        { row: 0, col: 0, lat: 0, lng: 0, keyword: "bbq", rank: 8, listingTitle: null, rating: null, address: null, mapsUrl: null, scannedAt: "" },
+        { row: 0, col: 1, lat: 0, lng: 0, keyword: "bbq", rank: 2, listingTitle: null, rating: null, address: null, mapsUrl: null, scannedAt: "" },
+      ]),
+      2,
+    )
+    assert.equal(
+      bestGridRank([{ row: 0, col: 0, lat: 0, lng: 0, keyword: "bbq", rank: null, listingTitle: null, rating: null, address: null, mapsUrl: null, scannedAt: "" }]),
+      null,
+    )
+  })
+})
+
+describe("campaign store", () => {
+  after(() => {
+    delete process.env.PLACEFIND_DATA_DIR
+    reloadStoreFromDisk()
+  })
+
+  it("keeps campaigns per account and stores grid settings", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-campaigns-")))
+    const mine = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue"],
+        gridSize: 7,
+        spacingMiles: 1.5,
+      },
+      "user-a",
+    )
+    createCampaign(
+      {
+        name: "NY Pizza",
+        businessName: "Joe's Pizza",
+        city: "New York",
+        state: "NY",
+        keywords: ["pizza"],
+      },
+      "user-b",
+    )
+    assert.equal(mine.gridSize, 7)
+    assert.equal(mine.spacingMiles, 1.5)
+    assert.equal(mine.userId, "user-a")
+    assert.equal(readCampaigns("user-a").length, 1)
+    assert.equal(readCampaigns("user-b").length, 1)
+    assert.equal(readCampaigns("user-a")[0]?.name, "Austin BBQ")
   })
 })
 
