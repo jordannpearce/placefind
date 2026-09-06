@@ -47,11 +47,20 @@ textarea {
   color: #17140f;
 }
 
-.leaflet-container {
+.leaflet-container,
+.leaflet-host {
   background: #17140f;
   font: inherit;
-  height: 100%;
   width: 100%;
+  min-height: 420px;
+  height: 420px;
+}
+
+@media (min-width: 1024px) {
+  .leaflet-container,
+  .leaflet-host {
+    height: 32rem;
+  }
 }
 
 .leaflet-control-attribution {

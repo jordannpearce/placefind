@@ -133,7 +133,7 @@ export function GridMap({ center, points, selected, onSelect }: Props) {
   return (
     <div
       ref={hostRef}
-      className="leaflet-host h-[26.25rem] w-full min-h-[420px] overflow-hidden rounded-none border-y border-line sm:rounded-2xl sm:border lg:h-[32rem]"
+      className="leaflet-host w-full overflow-hidden rounded-none border-y border-line sm:rounded-2xl sm:border"
     />
   )
 }
