@@ -87,7 +87,7 @@ import { startScheduler } from "./scheduler.ts"
 import { getCampaignTraffic, recoverStaleTrafficJobs, startCampaignTraffic, stopCampaignTraffic } from "./traffic.ts"
 import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
-import { exampleSearchResponse, requestIp, runWebsiteSearch, VisitorSearchUsedError } from "./search-limit.ts"
+import { requestIp, runWebsiteSearch, VisitorSearchUsedError } from "./search-limit.ts"
 import { readSearchQuery } from "./search-query.ts"
 import { initStore } from "./store.ts"
 import { testScrappey } from "./scrappey.ts"
@@ -230,7 +230,7 @@ async function start() {
       res.json(result)
     } catch (error) {
       if (error instanceof VisitorSearchUsedError) {
-        res.json(exampleSearchResponse(parsed.query))
+        res.status(409).json({ error: error.message })
         return
       }
       res.status(500).json({ error: "Search failed unexpectedly." })
