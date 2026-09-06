@@ -4,7 +4,8 @@ import markerIcon from "leaflet/dist/images/marker-icon.png"
 import markerShadow from "leaflet/dist/images/marker-shadow.png"
 import { useEffect, useRef } from "react"
 import "leaflet/dist/leaflet.css"
-import { gridPinId, pinColor, rankLabel } from "../lib/grid.ts"
+import { gridPinId, gridPinLabel, pinColor } from "../lib/grid.ts"
+import { buildPinPopupHtml, pinPopupMaxWidth, popupRankText } from "../lib/pin-popup.ts"
 import type { GeoPoint, GridPointResult } from "../lib/types.ts"
 
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: string })._getIconUrl
@@ -20,18 +21,10 @@ type Props = {
   selected: GridPointResult | null
   selectedPinIds?: string[]
   pinSelectable?: boolean
+  targetName?: string
+  gridSize?: number
   onSelect: (point: GridPointResult) => void
   onTogglePin?: (point: GridPointResult) => void
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (ch) => {
-    if (ch === "&") return "&amp;"
-    if (ch === "<") return "&lt;"
-    if (ch === ">") return "&gt;"
-    if (ch === '"') return "&quot;"
-    return "&#39;"
-  })
 }
 
 function pinIcon(color: string, selected: boolean) {
@@ -45,16 +38,9 @@ function pinIcon(color: string, selected: boolean) {
   })
 }
 
-function popupHtml(point: GridPointResult): string {
-  const rank = rankLabel(point.rank, point.error, point.scannedAt, point.status)
-  const listing = point.listingTitle?.trim()
-  const address = point.address?.trim()
-  return `<div class="pf-popup">
-    <p class="pf-popup-coords">${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}</p>
-    <p class="pf-popup-rank">${escapeHtml(rank)}</p>
-    ${listing ? `<p class="pf-popup-listing">${escapeHtml(listing)}</p>` : ""}
-    ${address ? `<p class="pf-popup-address">${escapeHtml(address)}</p>` : ""}
-  </div>`
+function inferredGridSize(points: GridPointResult[]): number {
+  if (points.length === 0) return 3
+  return Math.max(...points.map((point) => Math.max(point.row, point.col))) + 1
 }
 
 export function GridMap({
@@ -63,6 +49,8 @@ export function GridMap({
   selected,
   selectedPinIds = [],
   pinSelectable = false,
+  targetName = "",
+  gridSize,
   onSelect,
   onTogglePin,
 }: Props) {
@@ -116,26 +104,38 @@ export function GridMap({
     if (!map || !layer) return
     layer.clearLayers()
     const selectedIds = new Set(selectedPinIds)
+    const size = gridSize ?? inferredGridSize(points)
+    const popupWidth = pinPopupMaxWidth(typeof window !== "undefined" ? window.innerWidth : 360)
     const markers = points.map((point) => {
       const pinId = gridPinId(point)
       const trafficSelected = selectedIds.has(pinId)
       const detailSelected = Boolean(selected && selected.row === point.row && selected.col === point.col)
       const color = pinColor(point)
+      const pin = gridPinLabel(point, size)
+      const rank = popupRankText(point.rank, point.error, point.scannedAt, point.status)
       const marker = L.marker([point.lat, point.lng], {
         icon: pinIcon(color, trafficSelected || detailSelected),
         keyboard: true,
-        title: `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`,
+        title: `${pin} · ${rank}`,
       })
-      marker.bindTooltip(`${rankLabel(point.rank, point.error, point.scannedAt, point.status)} · ${point.lat.toFixed(4)}, ${point.lng.toFixed(4)}`, {
+      marker.bindTooltip(`${pin} · ${rank}`, {
         direction: "top",
       })
-      marker.bindPopup(popupHtml(point), { closeButton: true })
+      marker.bindPopup(buildPinPopupHtml({ point, gridSize: size, targetName }), {
+        closeButton: true,
+        autoPan: true,
+        autoPanPadding: [20, 36],
+        keepInView: true,
+        maxWidth: popupWidth,
+        minWidth: Math.min(200, popupWidth),
+        className: "pf-popup-wrap",
+      })
       marker.on("click", () => {
         onSelectRef.current(point)
         if (pinSelectableRef.current) onTogglePinRef.current?.(point)
       })
       layer.addLayer(marker)
-      return marker
+      return { marker, detailSelected }
     })
     if (center && points.length === 0) {
       L.marker([center.lat, center.lng], {
@@ -154,13 +154,15 @@ export function GridMap({
     } else if (center) {
       map.setView([center.lat, center.lng], 12)
     }
+    const selectedMarker = markers.find((row) => row.detailSelected)?.marker
     const ready = window.setTimeout(() => {
       if (mapRef.current !== map) return
       if (!map.getPane("mapPane")) return
       map.invalidateSize()
+      selectedMarker?.openPopup()
     }, 40)
     return () => window.clearTimeout(ready)
-  }, [center, points, selected, selectedPinIds])
+  }, [center, points, selected, selectedPinIds, targetName, gridSize])
 
   return (
     <div

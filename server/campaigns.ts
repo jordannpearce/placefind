@@ -517,7 +517,7 @@ function normalizeStoredScanRun(row: GridScanRun): GridScanRun {
     placeId: row.placeId ?? null,
     pointCount: row.pointCount ?? row.points?.length ?? 0,
     foundCount: row.foundCount ?? 0,
-    points: Array.isArray(row.points) ? row.points : [],
+    points: Array.isArray(row.points) ? row.points.map(normalizeStoredGridPoint) : [],
     status: row.status === "running" || row.status === "ok" || row.status === "error" ? row.status : undefined,
     pinSource: normalizePinSource(row.pinSource),
     usedCityGps: Boolean(row.usedCityGps),
@@ -532,6 +532,13 @@ function normalizeGeoFlags(row: Partial<GeoNameFlags> | null | undefined): GeoNa
     geoCities: Array.isArray(row?.geoCities) ? row.geoCities.map((city) => String(city)).filter(Boolean) : [],
     usesStateName: Boolean(row?.usesStateName),
     usesStateAbbr: Boolean(row?.usesStateAbbr),
+  }
+}
+
+function normalizeStoredGridPoint(row: GridPointResult): GridPointResult {
+  return {
+    ...row,
+    competitors: normalizeCompetitors(row.competitors),
   }
 }
 
@@ -711,9 +718,11 @@ function normalizeStoredCampaign(row: Campaign): Campaign {
     createdAt: row.createdAt || new Date().toISOString(),
     updatedAt: row.updatedAt || row.createdAt || new Date().toISOString(),
     lastScan: row.lastScan ?? null,
-    lastGridScan: row.lastGridScan ?? null,
+    lastGridScan: row.lastGridScan ? normalizeStoredScanRun(row.lastGridScan) : null,
     recentScans: Array.isArray(row.recentScans) ? row.recentScans.slice(0, MAX_RECENT_SCANS) : [],
-    recentGridScans: Array.isArray(row.recentGridScans) ? row.recentGridScans.slice(0, MAX_RECENT_SCANS) : [],
+    recentGridScans: Array.isArray(row.recentGridScans)
+      ? row.recentGridScans.map(normalizeStoredScanRun).slice(0, MAX_RECENT_SCANS)
+      : [],
     lastTrafficJob: normalizeStoredTrafficJob(row.lastTrafficJob),
     scanSchedule: normalizeScanSchedule(row.scanSchedule).value ?? defaultScanSchedule(),
     trafficSchedule: normalizeTrafficSchedule(row.trafficSchedule).value ?? defaultTrafficSchedule(),

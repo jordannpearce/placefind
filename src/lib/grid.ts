@@ -10,6 +10,16 @@ export function gridPinId(point: Pick<GridPoint, "row" | "col">): string {
   return `${point.row}:${point.col}`
 }
 
+/** 1-based pin number, row-major (3×3 is #1–#9). */
+export function gridPinNumber(point: Pick<GridPoint, "row" | "col">, gridSize: number): number {
+  const size = Number.isFinite(gridSize) && gridSize > 0 ? Math.round(gridSize) : DEFAULT_GRID_SIZE
+  return point.row * size + point.col + 1
+}
+
+export function gridPinLabel(point: Pick<GridPoint, "row" | "col">, gridSize: number): string {
+  return `#${gridPinNumber(point, gridSize)}`
+}
+
 export function normalizeGridSize(raw: unknown): number {
   const size = Number(raw)
   if ((ALLOWED_GRID_SIZES as readonly number[]).includes(size)) return size

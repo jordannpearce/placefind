@@ -98,11 +98,22 @@ textarea {
 }
 
 .leaflet-popup-content {
-  margin: 10px 12px;
+  margin: 10px 12px 12px;
+  max-height: min(52vh, 320px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .leaflet-popup-close-button {
   color: #b4a793 !important;
+}
+
+.pf-popup-wrap {
+  max-width: min(280px, calc(100vw - 32px));
+}
+
+.pf-popup-wrap .leaflet-popup-content-wrapper {
+  max-width: min(280px, calc(100vw - 32px));
 }
 
 .pf-pin {
@@ -143,14 +154,26 @@ textarea {
 }
 
 .pf-popup-coords,
+.pf-popup-pin,
 .pf-popup-rank,
 .pf-popup-listing,
-.pf-popup-address {
+.pf-popup-address,
+.pf-popup-meta,
+.pf-popup-match,
+.pf-popup-empty,
+.pf-popup-competitors-head {
   margin: 0;
 }
 
-.pf-popup-coords {
+.pf-popup {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pf-popup-coords,
+.pf-popup-pin {
   font-size: 12px;
+  font-weight: 600;
   color: #b4a793;
 }
 
@@ -163,10 +186,84 @@ textarea {
 .pf-popup-listing {
   margin-top: 4px;
   color: #f3ead8;
+  font-weight: 600;
 }
 
+.pf-popup-meta,
+.pf-popup-match,
 .pf-popup-address {
   margin-top: 2px;
   font-size: 12px;
   color: #b4a793;
+}
+
+.pf-popup-competitors {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #3d362c;
+}
+
+.pf-popup-competitors-head {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #e0b15b;
+}
+
+.pf-popup-empty {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #b4a793;
+}
+
+.pf-popup-comp-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pf-popup-comp {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 6px;
+}
+
+.pf-popup-comp-rank {
+  flex: 0 0 auto;
+  min-width: 1.6rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e0b15b;
+}
+
+.pf-popup-comp-body {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+}
+
+.pf-popup-comp-name {
+  color: #f3ead8;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.pf-popup-comp-rating {
+  font-size: 12px;
+  color: #b4a793;
+}
+
+.pf-popup-comp-geo {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  background: rgba(224, 177, 91, 0.14);
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #e0b15b;
 }

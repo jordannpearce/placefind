@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { buildGridPoints, buildPreviewPoints, gridPinId, pinColor, rankColor, rankLabel, rankTone } from "./grid.ts"
+import { buildGridPoints, buildPreviewPoints, gridPinId, gridPinLabel, gridPinNumber, pinColor, rankColor, rankLabel, rankTone } from "./grid.ts"
 
 describe("buildGridPoints", () => {
   const center = { lat: 30.27, lng: -97.74 }
@@ -38,6 +38,13 @@ describe("buildGridPoints", () => {
   it("uses row and column as the stable pin id", () => {
     assert.equal(gridPinId({ row: 0, col: 1 }), "0:1")
     assert.equal(gridPinId({ row: 2, col: 4 }), "2:4")
+  })
+
+  it("labels pins #1–#9 on a 3×3 grid", () => {
+    assert.equal(gridPinNumber({ row: 0, col: 0 }, 3), 1)
+    assert.equal(gridPinLabel({ row: 0, col: 1 }, 3), "#2")
+    assert.equal(gridPinLabel({ row: 2, col: 2 }, 3), "#9")
+    assert.equal(gridPinLabel({ row: 6, col: 6 }, 7), "#49")
   })
 
   it("marks preview points as unscanned", () => {

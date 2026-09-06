@@ -52,8 +52,8 @@ describe("normalizeKeywords", () => {
     assert.deepEqual(normalizeKeywords(["  barbecue ", "", "BBQ", "barbecue", "bbq"]), ["barbecue", "BBQ"])
   })
 
-  it("returns an empty list for non-arrays", () => {
-    assert.deepEqual(normalizeKeywords("barbecue"), [])
+  it("splits a typed keyword string", () => {
+    assert.deepEqual(normalizeKeywords("barbecue"), ["barbecue"])
   })
 })
 
@@ -445,6 +445,18 @@ describe("campaign store", () => {
             address: "900 E 11th St",
             mapsUrl: "https://maps.example.test/franklin",
             scannedAt: "2026-09-06T08:05:00.000Z",
+            competitors: [
+              {
+                title: "Austin Barbecue",
+                rank: 1,
+                rating: 4.4,
+                address: "100 Main",
+                placeId: "austin-bbq",
+                geoCities: ["Austin"],
+                usesStateName: false,
+                usesStateAbbr: false,
+              },
+            ],
           },
         ],
       },
@@ -453,6 +465,8 @@ describe("campaign store", () => {
     assert.equal(rows.length, 1)
     assert.equal(rows[0]?.id, "scan-old")
     assert.equal(rows[0]?.keyword, "barbecue")
+    assert.equal(rows[0]?.points[0]?.competitors?.[0]?.title, "Austin Barbecue")
+    assert.deepEqual(rows[0]?.points[0]?.competitors?.[0]?.geoCities, ["Austin"])
     const again = listCampaignScans(campaign.id, "user-a")
     assert.equal(again.length, 1)
   })

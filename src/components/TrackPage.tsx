@@ -17,7 +17,7 @@ import {
   stopCampaignTraffic,
   updateCampaign,
 } from "../lib/api.ts"
-import { buildPreviewPoints, gridPinId, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
+import { buildPreviewPoints, gridPinId, gridPinLabel, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
 import { pointsWithCompare, rankChangeColor, rankChangeLabel } from "../lib/scan-compare.ts"
 import { mapsKeysMissingAdminMessage, publicPinScanMessage, publicSearchMessage, usingCityGpsBackupNote } from "../lib/public-copy.ts"
 import { CityStateFields } from "./CityStateFields.tsx"
@@ -1483,6 +1483,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             selected={selectedPoint}
             selectedPinIds={selectedPinIds}
             pinSelectable={pinsSelectable}
+            targetName={confirmed?.title || selected?.listingTitle || selected?.businessName || ""}
+            gridSize={grid?.gridSize || gridSize}
             onSelect={setSelectedPoint}
             onTogglePin={togglePin}
           />
@@ -1500,7 +1502,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             <div className="mx-5 mt-4 rounded-xl border border-line bg-ink px-4 py-3 sm:mx-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Selected pin</p>
               <p className="mt-1 text-sm text-paper">
-                {selectedPoint.lat.toFixed(5)}, {selectedPoint.lng.toFixed(5)}
+                {gridPinLabel(selectedPoint, grid?.gridSize || gridSize)} · {selectedPoint.lat.toFixed(5)},{" "}
+                {selectedPoint.lng.toFixed(5)}
               </p>
               <p className="mt-1 text-sm text-paper">
                 {selectedPoint.keyword ? `${selectedPoint.keyword} · ` : ""}
@@ -1887,7 +1890,7 @@ function ScanHistoryPanel({
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Scan history</p>
           <h5 className="font-display text-xl text-paper">Saved grid scans</h5>
-          <p className="mt-1 text-sm text-muted">Every finished scan is kept. Rerun uses the same keyword, grid, and center.</p>
+          <p className="mt-1 text-sm text-muted">Every finished scan is kept. Rerun uses the same keywords, grid, and center.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1918,7 +1921,7 @@ function ScanHistoryPanel({
         <ul className="mt-3 grid gap-1 text-sm text-muted" data-testid="scan-history-list">
           {scans.map((run) => (
             <li key={run.id}>
-              {scanWhen(run)} · {run.keyword} · {run.gridSize}×{run.gridSize} · {run.foundCount} of {run.pointCount} found
+              {scanWhen(run)} · {scanKeywordsLabel(run)} · {run.gridSize}×{run.gridSize} · {run.foundCount} of {run.pointCount} found
             </li>
           ))}
         </ul>
@@ -1935,7 +1938,7 @@ function ScanHistoryPanel({
             >
               {scans.map((run) => (
                 <option key={run.id} value={run.id}>
-                  {scanWhen(run)} · {run.keyword}
+                  {scanWhen(run)} · {scanKeywordsLabel(run)}
                 </option>
               ))}
             </select>
@@ -1949,7 +1952,7 @@ function ScanHistoryPanel({
             >
               {scans.map((run) => (
                 <option key={run.id} value={run.id}>
-                  {scanWhen(run)} · {run.keyword}
+                  {scanWhen(run)} · {scanKeywordsLabel(run)}
                 </option>
               ))}
             </select>
@@ -2160,7 +2163,7 @@ function SchedulePanel({
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ScheduleFieldset
           title="Scan schedule"
-          detail="Rerun the latest keyword and grid at this time."
+          detail="Rerun the latest keywords and grid at this time."
           schedule={scanSchedule}
           onChange={onScanChange}
         />
