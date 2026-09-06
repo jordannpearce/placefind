@@ -105,8 +105,11 @@ describe("public website copy", () => {
     ] as const) {
       assert.match(text, /Rank tracker/, rel)
       assert.match(text, /Traffic/, rel)
-      assert.match(text, /\/track/, rel)
     }
+    assert.match(desk, /\/track/)
+    assert.match(account, /\/track/)
+    assert.match(nav, /\/track/)
+    assert.match(dashboard, /OwnerDeskTools/)
   })
 
   it("does not mention download, Windows, or license keys on the public site", () => {
