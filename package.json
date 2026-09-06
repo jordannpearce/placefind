@@ -44,8 +44,10 @@
   "build": {
     "appId": "com.placefind.desktop",
     "productName": "PlaceFind",
+    "copyright": "Copyright © PlaceFind",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
@@ -53,10 +55,22 @@
       "electron/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "dist",
+        "to": "ui"
+      },
+      {
+        "from": "dist-server",
+        "to": "server"
+      }
+    ],
     "extraMetadata": {
       "main": "electron/main.cjs"
     },
     "win": {
+      "icon": "public/icon.png",
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "nsis",
@@ -66,14 +80,24 @@
           "target": "portable",
           "arch": ["x64"]
         }
-      ],
-      "icon": "public/icon.png"
+      ]
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
       "createDesktopShortcut": true,
-      "shortcutName": "PlaceFind"
+      "createStartMenuShortcut": true,
+      "shortcutName": "PlaceFind",
+      "uninstallDisplayName": "PlaceFind",
+      "license": "build/license.txt",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
     }
   }
 }

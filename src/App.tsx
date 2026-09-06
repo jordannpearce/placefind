@@ -1,15 +1,20 @@
 import { Download, Settings } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { AppNav } from "./components/AppNav.tsx"
+import { DownloadPage } from "./components/DownloadPage.tsx"
 import { ResultPanel } from "./components/ResultPanel.tsx"
 import { SearchForm } from "./components/SearchForm.tsx"
+import { SellPage } from "./components/SellPage.tsx"
 import { SettingsPanel } from "./components/SettingsPanel.tsx"
 import { searchBusiness } from "./lib/api.ts"
+import { currentPath, type AppPath } from "./lib/nav.ts"
 import { loadHistory, loadKeys, pushHistory, saveKeys } from "./lib/storage.ts"
 import type { HistoryItem, SearchQuery, SearchResponse } from "./lib/types.ts"
 
 const emptyQuery = (): SearchQuery => ({ name: "", city: "", state: "" })
 
 export default function App() {
+  const [path, setPath] = useState<AppPath>(currentPath)
   const [query, setQuery] = useState<SearchQuery>(emptyQuery)
   const [keys, setKeys] = useState(loadKeys)
   const [history, setHistory] = useState(loadHistory)
@@ -17,6 +22,17 @@ export default function App() {
   const [result, setResult] = useState<SearchResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  useEffect(() => {
+    const onPop = () => setPath(currentPath())
+    window.addEventListener("popstate", onPop)
+    return () => window.removeEventListener("popstate", onPop)
+  }, [])
+
+  function go(next: AppPath) {
+    window.history.pushState({}, "", next)
+    setPath(next)
+  }
 
   const modeLabel = useMemo(() => {
     const dfs = Boolean(keys.dataforseoLogin && keys.dataforseoPassword)
@@ -64,13 +80,14 @@ export default function App() {
     <div className="min-h-screen bg-ink">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(224,177,91,0.08),transparent_28%),radial-gradient(circle_at_80%_0%,rgba(111,154,120,0.08),transparent_24%)]" />
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-5 sm:px-6">
-        <header className="mb-6 flex items-center justify-between gap-4">
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Windows desktop</p>
             <h1 className="font-display text-3xl text-paper sm:text-4xl">PlaceFind</h1>
           </div>
-          <div className="flex items-center gap-2">
-            {result?.best && (
+          <div className="flex flex-wrap items-center gap-2">
+            <AppNav path={path} onGo={go} />
+            {path === "/" && result?.best && (
               <button
                 type="button"
                 onClick={exportJson}
@@ -80,34 +97,40 @@ export default function App() {
                 Export
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
-              className="inline-flex h-10 items-center gap-2 rounded-lg border border-line px-3 text-sm text-paper/80 hover:border-brass"
-            >
-              <Settings className="h-4 w-4" />
-              Settings
-            </button>
+            {path === "/" && (
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-line px-3 text-sm text-paper/80 hover:border-brass"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </button>
+            )}
           </div>
         </header>
 
-        <div className="grid flex-1 gap-6 lg:grid-cols-[20rem_1fr]">
-          <aside className="rounded-2xl border border-line bg-panel p-5">
-            <p className="mb-4 text-sm text-muted">Search a business on Google Maps by name and city.</p>
-            <SearchForm
-              query={query}
-              onChange={setQuery}
-              onSearch={() => void runSearch()}
-              loading={loading}
-              history={history}
-              onHistory={useHistory}
-            />
-            <p className="mt-5 border-t border-line pt-4 text-xs text-muted">{modeLabel}</p>
-          </aside>
-          <main>
-            <ResultPanel loading={loading} result={result} error={error && !result?.best ? error : null} />
-          </main>
-        </div>
+        {path === "/sell" && <SellPage />}
+        {path === "/download" && <DownloadPage />}
+        {path === "/" && (
+          <div className="grid flex-1 gap-6 lg:grid-cols-[20rem_1fr]">
+            <aside className="rounded-2xl border border-line bg-panel p-5">
+              <p className="mb-4 text-sm text-muted">Search a business on Google Maps by name and city.</p>
+              <SearchForm
+                query={query}
+                onChange={setQuery}
+                onSearch={() => void runSearch()}
+                loading={loading}
+                history={history}
+                onHistory={useHistory}
+              />
+              <p className="mt-5 border-t border-line pt-4 text-xs text-muted">{modeLabel}</p>
+            </aside>
+            <main>
+              <ResultPanel loading={loading} result={result} error={error && !result?.best ? error : null} />
+            </main>
+          </div>
+        )}
       </div>
 
       <SettingsPanel

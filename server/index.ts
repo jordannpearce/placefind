@@ -4,6 +4,8 @@ import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { testDataForSeo } from "./dataforseo.ts"
+import { getInstallerStatus, installerPath, startInstallerBuild } from "./installer.ts"
+import { readProduct, writeProduct } from "./product.ts"
 import { searchBusiness } from "./search.ts"
 import { testScrappey } from "./scrappey.ts"
 import { US_STATES } from "./states.ts"
@@ -79,9 +81,36 @@ async function start() {
     res.json({ results })
   })
 
+  app.get("/api/product", (_req, res) => {
+    res.json({ product: readProduct(), installer: getInstallerStatus() })
+  })
+
+  app.post("/api/product", (req, res) => {
+    const body = (req.body ?? {}) as { price?: string; pitch?: string }
+    res.json({ product: writeProduct(body) })
+  })
+
+  app.get("/api/installer", (_req, res) => {
+    res.json(getInstallerStatus())
+  })
+
+  app.post("/api/installer/build", (_req, res) => {
+    res.json(startInstallerBuild())
+  })
+
+  app.get("/api/installer/download/:name", (req, res) => {
+    const name = String(req.params.name ?? "")
+    const full = installerPath(name)
+    if (!full) {
+      res.status(404).json({ error: "That installer is not on this computer yet." })
+      return
+    }
+    res.download(full, name)
+  })
+
   const isProd = process.env.NODE_ENV === "production" || Boolean(process.env.PLACEFIND_STATIC)
   if (isProd) {
-    const dist = path.resolve(dirname, "../dist")
+    const dist = process.env.PLACEFIND_UI_DIR || path.resolve(dirname, "../dist")
     app.use(express.static(dist))
     app.get(/.*/, (_req, res) => {
       res.sendFile(path.join(dist, "index.html"))

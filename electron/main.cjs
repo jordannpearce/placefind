@@ -1,5 +1,6 @@
 const { app, BrowserWindow, shell } = require("electron")
 const { spawn } = require("node:child_process")
+const fs = require("node:fs")
 const path = require("node:path")
 
 const PORT = process.env.PORT || "43141"
@@ -7,17 +8,30 @@ const APP_URL = `http://127.0.0.1:${PORT}`
 
 let serverProcess = null
 
+function packagedServerEntry() {
+  const fromResources = path.join(process.resourcesPath, "server", "index.js")
+  const fromAsar = path.join(process.resourcesPath, "app.asar.unpacked", "dist-server", "index.js")
+  const fromApp = path.join(__dirname, "..", "dist-server", "index.js")
+  if (fs.existsSync(fromResources)) return fromResources
+  if (fs.existsSync(fromAsar)) return fromAsar
+  return fromApp
+}
+
+function packagedUiDir() {
+  const fromResources = path.join(process.resourcesPath, "ui")
+  const fromApp = path.join(__dirname, "..", "dist")
+  return fs.existsSync(fromResources) ? fromResources : fromApp
+}
+
 function startPackagedServer() {
   if (!app.isPackaged) return
-  const serverEntry = path.join(process.resourcesPath, "app.asar.unpacked", "dist-server", "index.js")
-  const fallback = path.join(__dirname, "..", "dist-server", "index.js")
-  const entry = require("node:fs").existsSync(serverEntry) ? serverEntry : fallback
-  serverProcess = spawn(process.execPath, [entry], {
+  serverProcess = spawn(process.execPath, [packagedServerEntry()], {
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
       NODE_ENV: "production",
       PLACEFIND_STATIC: "1",
+      PLACEFIND_UI_DIR: packagedUiDir(),
       PORT,
     },
     stdio: "inherit",

@@ -65,3 +65,26 @@ export type KeyTestResult = {
   service: "dataforseo" | "scrappey"
   message: string
 }
+
+export type InstallerFile = {
+  name: string
+  size: number
+  kind: "setup" | "portable" | "other"
+  url: string
+}
+
+export type InstallerStatus = {
+  status: "idle" | "running" | "ok" | "error"
+  log: string
+  error?: string
+  startedAt?: string
+  finishedAt?: string
+  files: InstallerFile[]
+}
+
+export type ProductInfo = {
+  name: string
+  version: string
+  price: string
+  pitch: string
+}

@@ -1,0 +1,1 @@
+PlaceFind is a Windows desktop application for looking up a Google Maps business listing.

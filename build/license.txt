@@ -1,0 +1,15 @@
+PlaceFind End User License Agreement
+
+This software is licensed, not sold, to the person or business that purchased it.
+
+You may install PlaceFind on Windows computers used by your business.
+You may not resell, sublicense, or redistribute the installer unless you are the original seller.
+
+PlaceFind looks up public Google Maps listings using API keys that you provide
+(DataForSEO and Scrappey). Those services bill your own accounts. PlaceFind does
+not include those API keys and is not affiliated with Google, DataForSEO, or Scrappey.
+
+The software is provided as-is, without warranty. The seller is not responsible
+for search results, API costs, or downtime of third-party services.
+
+Uninstall PlaceFind from Windows Settings → Apps when you no longer need it.
