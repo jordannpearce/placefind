@@ -13,6 +13,10 @@ describe("listing copy", () => {
       listingLocation({ street: "907 N Franklin St", city: "Tampa", state: "FL", zip: "33602" }),
       "907 N Franklin St, Tampa, FL 33602",
     )
+    assert.equal(
+      listingLocation({ city: "Portland", state: "ME", mapsAddress: "18 Exchange St, Portland, ME 04101" }),
+      "18 Exchange St, Portland, ME 04101",
+    )
     const text = [mapsStatusLabel("found"), mapsStatusDetail({ mapsStatus: "found", mapsTitle: "Harbor & Oak", mapsAddress: "18 Exchange St" })].join(" ")
     assert.equal(/download|windows|desktop|license key|setup\.exe/i.test(text), false)
   })

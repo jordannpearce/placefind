@@ -26,14 +26,14 @@ export function listingPath(id: string): string {
 export function listingLocation(
   listing: Pick<DirectoryListing, "city" | "state"> & { street?: string; zip?: string; mapsAddress?: string },
 ): string {
-  return (
-    formatStreetAddress({
-      street: listing.street,
-      city: listing.city,
-      state: listing.state,
-      zip: listing.zip,
-    }) ||
-    listing.mapsAddress?.trim() ||
-    [listing.city, listing.state].filter(Boolean).join(", ")
-  )
+  const formatted = formatStreetAddress({
+    street: listing.street,
+    city: listing.city,
+    state: listing.state,
+    zip: listing.zip,
+  })
+  const maps = listing.mapsAddress?.trim() ?? ""
+  if (listing.street?.trim() && formatted) return formatted
+  if (maps) return maps
+  return formatted || [listing.city, listing.state].filter(Boolean).join(", ")
 }
