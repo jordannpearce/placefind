@@ -25,6 +25,7 @@ describe("pinScanStatus", () => {
     assert.equal(pinScanStatus(3), "rank")
     assert.equal(pinScanStatus(null), "not_found")
     assert.equal(pinScanStatus(null, "Maps search timed out."), "error")
+    assert.equal(pinScanStatus(null, "No Search Results."), "not_found")
   })
 })
 

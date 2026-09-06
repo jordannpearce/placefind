@@ -89,12 +89,18 @@ export function GridMap({
     }).addTo(map)
     layerRef.current = L.layerGroup().addTo(map)
     mapRef.current = map
-    const onResize = () => map.invalidateSize()
+    let cancelled = false
+    const onResize = () => {
+      if (cancelled || mapRef.current !== map) return
+      if (!map.getPane("mapPane")) return
+      map.invalidateSize()
+    }
     const observer = new ResizeObserver(onResize)
     observer.observe(hostRef.current)
     window.addEventListener("resize", onResize)
     const ready = window.setTimeout(onResize, 80)
     return () => {
+      cancelled = true
       window.clearTimeout(ready)
       window.removeEventListener("resize", onResize)
       observer.disconnect()
@@ -148,7 +154,12 @@ export function GridMap({
     } else if (center) {
       map.setView([center.lat, center.lng], 12)
     }
-    window.setTimeout(() => map.invalidateSize(), 40)
+    const ready = window.setTimeout(() => {
+      if (mapRef.current !== map) return
+      if (!map.getPane("mapPane")) return
+      map.invalidateSize()
+    }, 40)
+    return () => window.clearTimeout(ready)
   }, [center, points, selected, selectedPinIds])
 
   return (

@@ -233,6 +233,7 @@ export type ScanMapsGridOptions = {
   client?: MapsGridClient
   pollTimeoutMs?: number
   sleep?: (ms: number) => Promise<void>
+  onCell?: (cell: GridCellResult, done: number, total: number) => void | Promise<void>
 }
 
 export function gridPollTimeoutMs(pointCount: number): number {
@@ -319,10 +320,22 @@ async function runPool<T>(items: T[], concurrency: number, worker: (item: T) => 
     while (index < items.length) {
       const current = index
       index += 1
-      await worker(items[current]!)
+      try {
+        await worker(items[current]!)
+      } catch {
+        // One pin must not abort the rest of the grid.
+      }
     }
   })
   await Promise.all(runners)
+}
+
+async function settle<T>(work: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await work()
+  } catch {
+    return fallback
+  }
 }
 
 export function postedTasksFromResponse(
@@ -408,7 +421,7 @@ export async function collectPostedTasks(
     await runPool(ids, TASK_GET_CONCURRENCY, async (id) => {
       const tag = pending.get(id)
       if (tag == null) return
-      const task = await getTask(id)
+      const task = await settle(() => getTask(id), null)
       const code = task?.status_code ?? 0
       if (code === TASK_READY || isEmptySerpMessage(task?.status_message)) {
         byTag.set(tag, { items: task?.result?.[0]?.items ?? [], error: null })
@@ -441,7 +454,7 @@ async function retryFailedGets(
   })
   if (failed.length === 0) return
   await runPool(failed, TASK_GET_CONCURRENCY, async (row) => {
-    const task = await getTask(row.id)
+    const task = await settle(() => getTask(row.id), null)
     const code = task?.status_code ?? 0
     if (code === TASK_READY || isEmptySerpMessage(task?.status_message)) {
       collected.set(row.tag, { items: task?.result?.[0]?.items ?? [], error: null })
@@ -475,9 +488,9 @@ async function liveWithRetry(
   point: GridPoint,
   liveAtCoordinate: MapsGridClient["liveAtCoordinate"],
 ): Promise<{ items: MapsItem[]; error: string | null }> {
-  const first = await liveAtCoordinate(keyword, point)
+  const first = await settle(() => liveAtCoordinate(keyword, point), { items: [], error: "Could not reach Maps." })
   if (!first.error) return first
-  return liveAtCoordinate(keyword, point)
+  return settle(() => liveAtCoordinate(keyword, point), { items: [], error: first.error || "Could not reach Maps." })
 }
 
 export function defaultMapsGridClient(login: string, password: string): MapsGridClient {
@@ -507,32 +520,38 @@ export async function scanMapsGrid(
   const client = options?.client ?? defaultMapsGridClient(login, password)
   const wait = options?.sleep ?? sleep
   const results = new Map<string, GridCellResult>()
-  const mark = (point: GridPoint, items: MapsItem[], error: string | null) => {
-    results.set(point.id, { point, items, error })
+  const mark = async (point: GridPoint, items: MapsItem[], error: string | null) => {
+    const cell = { point, items: items ?? [], error }
+    results.set(point.id, cell)
+    try {
+      await options?.onCell?.(cell, results.size, points.length)
+    } catch {
+      // Progress updates must not abort remaining pins.
+    }
   }
 
-  try {
-    const tasks = points.map((point) => mapsGridTask(keyword, point.locationCoordinate, point.id))
-    const posted = await client.postTasks(tasks)
-    const collected = await collectPostedTasks(
-      posted,
-      (id) => client.getTask(id),
-      options?.pollTimeoutMs ?? gridPollTimeoutMs(points.length),
-      wait,
-    )
-    await retryFailedGets(posted, collected, (id) => client.getTask(id))
-    for (const point of points) {
-      const entry = collected.get(point.id)
-      if (entry && entry.items != null) mark(point, entry.items, null)
-    }
-  } catch {
-    // Fall through to live/advanced per remaining cell.
+  const tasks = points.map((point) => mapsGridTask(keyword, point.locationCoordinate, point.id))
+  const posted = await settle(() => client.postTasks(tasks), [])
+  const collected = await settle(
+    () =>
+      collectPostedTasks(
+        posted,
+        (id) => client.getTask(id),
+        options?.pollTimeoutMs ?? gridPollTimeoutMs(points.length),
+        wait,
+      ),
+    new Map<string, CollectedCell>(),
+  )
+  await settle(() => retryFailedGets(posted, collected, (id) => client.getTask(id)), undefined)
+  for (const point of points) {
+    const entry = collected.get(point.id)
+    if (entry && entry.items != null) await mark(point, entry.items, null)
   }
 
   const remaining = points.filter((point) => !results.has(point.id))
   await runPool(remaining, LIVE_FALLBACK_CONCURRENCY, async (point) => {
     const live = await liveWithRetry(keyword, point, client.liveAtCoordinate)
-    mark(point, live.items, live.error)
+    await mark(point, live.items, live.error)
   })
 
   return finalizeGridCells(points, results)

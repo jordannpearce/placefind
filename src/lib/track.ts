@@ -66,7 +66,28 @@ export function scanBusinessEnabled(listing: ConfirmedListing | null): boolean {
 }
 
 export function campaignScanFinished(campaign: Campaign | null | undefined): boolean {
-  return Boolean(campaign?.lastGridScan || campaign?.lastScan)
+  const grid = campaign?.lastGridScan
+  if (grid?.status === "running") return false
+  return Boolean(grid || campaign?.lastScan)
+}
+
+export function countFinishedScanPins(points: Array<{ status?: string }> | null | undefined): number {
+  return (points ?? []).filter((point) => point.status === "rank" || point.status === "not_found" || point.status === "error").length
+}
+
+export function scanLiveStatus(done: number, total: number): string {
+  if (total <= 0) return "Scanning…"
+  if (done >= total) return `Scanned ${total} of ${total} pins`
+  return `Scanning pin ${Math.min(total, done + 1)} of ${total}…`
+}
+
+export function scanGridPageError(points: Array<{ status?: string; error?: string }> | null | undefined): string | null {
+  const rows = points ?? []
+  if (rows.length === 0) return null
+  if (rows.every((point) => point.status === "error")) {
+    return rows[0]?.error || "Maps search could not finish this grid."
+  }
+  return null
 }
 
 export function startTrafficVisible(listing: ConfirmedListing | null): boolean {

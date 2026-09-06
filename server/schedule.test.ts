@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { nextRunAt, scheduleDue, type ScheduleLike } from "./schedule.ts"
+import { nextRunAt, normalizeTrafficSchedule, scheduleDue, type ScheduleLike } from "./schedule.ts"
 
 function dailyUtc(partial: Partial<ScheduleLike> = {}): ScheduleLike {
   return {
@@ -57,6 +57,24 @@ describe("scheduleDue", () => {
     }
     assert.equal(scheduleDue(schedule, new Date("2026-09-06T14:00:10.000Z")), true)
     assert.equal(scheduleDue(schedule, new Date("2026-09-06T09:00:10.000Z")), false)
+  })
+})
+
+describe("normalizeTrafficSchedule", () => {
+  it("keeps a last search count between 1 and 50", () => {
+    const saved = normalizeTrafficSchedule({
+      enabled: false,
+      cadence: "daily",
+      hour: 9,
+      minute: 0,
+      timeZone: "utc",
+      lastSelectedPinIds: ["0:0"],
+      lastSelectedKeywords: ["barbecue"],
+      lastSearchCount: 4,
+    })
+    assert.equal(saved.value?.lastSearchCount, 4)
+    assert.equal(normalizeTrafficSchedule({ lastSearchCount: 99 }).value?.lastSearchCount, 50)
+    assert.equal(normalizeTrafficSchedule({}).value?.lastSearchCount, 3)
   })
 })
 

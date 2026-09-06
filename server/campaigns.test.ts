@@ -30,6 +30,7 @@ import {
   type Campaign,
   type KeywordRank,
 } from "./campaigns.ts"
+import type { MapsGridClient, MapsItem } from "./dataforseo.ts"
 import { emptyApiKeys, resetHostedKeysCacheForTests } from "./hosted-keys.ts"
 import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
 
@@ -591,5 +592,56 @@ describe("rank scan Maps keys", () => {
         return true
       },
     )
+  })
+
+  it("does not abort the grid when one pin fails", async () => {
+    isolateKeys()
+    process.env.DATAFORSEO_LOGIN = "maps-login@example.test"
+    process.env.DATAFORSEO_PASSWORD = "maps-password-test"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-scan-pin-fail-")))
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        placeId: "sample-franklin",
+        listingTitle: "Franklin Barbecue",
+        listingAddress: "900 E 11th St, Austin, TX 78702",
+        keywords: ["barbecue"],
+        gridSize: 3,
+        center: { lat: 30.2701, lng: -97.7313 },
+      },
+      "user-a",
+    )
+    const item: MapsItem = {
+      type: "maps_search",
+      rank_group: 2,
+      title: "Franklin Barbecue",
+      place_id: "sample-franklin",
+      address: "900 E 11th St, Austin, TX 78702",
+    }
+    const client: MapsGridClient = {
+      postTasks: async (tasks) => tasks.map((task) => ({ id: `task-${task.tag}`, tag: task.tag || "" })),
+      getTask: async (id) => {
+        if (id === "task-0:0") throw new Error("task_get failed")
+        return { id, status_code: 20000, result: [{ items: [item] }] }
+      },
+      liveAtCoordinate: async (_keyword, point) => {
+        if (point.id === "0:0") throw new Error("live failed")
+        return { items: [item], error: null }
+      },
+    }
+    const result = await scanCampaign(campaign.id, emptyApiKeys(), ["barbecue"], "user-a", {
+      client,
+      pollTimeoutMs: 20,
+      sleep: async () => {},
+    })
+    assert.equal(result.grid.points.length, 9)
+    assert.equal(result.grid.status, "ok")
+    assert.equal(result.grid.points.filter((point) => point.status === "error").length, 1)
+    assert.ok(result.grid.points.filter((point) => point.status === "rank").length >= 7)
+    assert.equal(result.grid.points.find((point) => point.row === 0 && point.col === 0)?.status, "error")
+    assert.match(result.grid.points.find((point) => point.row === 0 && point.col === 0)?.error || "", /Could not reach Maps|timed out|could not finish/i)
   })
 })

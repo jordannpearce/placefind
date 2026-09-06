@@ -3,6 +3,7 @@ import {
   CampaignError,
   getCampaign,
   mapsPlaceUrlFromCampaign,
+  readCampaigns,
   saveCampaign,
   type Campaign,
   type GridPointResult,
@@ -10,18 +11,26 @@ import {
   type TrafficLogLine,
   type TrafficPinResult,
 } from "./campaigns.ts"
+import {
+  DEFAULT_TRAFFIC_SEARCHES,
+  MAX_TRAFFIC_SEARCHES,
+  normalizeTrafficSearches,
+  planTrafficPairs,
+} from "../src/lib/traffic-plan.ts"
 import { parseLocationCoordinate } from "./grid.ts"
+import { defaultTrafficSchedule } from "./schedule.ts"
 import { mergeHostedKeys, trafficRunnerConfigured } from "./hosted-keys.ts"
 import { publicTrafficMessage } from "./public-copy.ts"
 import { isSellerMode } from "./runtime.ts"
 import { runMapsTrafficSession, type TrafficSessionResult } from "./scrappey-runner.ts"
 import type { ApiKeys } from "./types.ts"
 
-export const DEFAULT_TRAFFIC_SESSIONS = 3
-export const MAX_TRAFFIC_SESSIONS = 49
+export const DEFAULT_TRAFFIC_SESSIONS = DEFAULT_TRAFFIC_SEARCHES
+export const MAX_TRAFFIC_SESSIONS = MAX_TRAFFIC_SEARCHES
 export const TRAFFIC_REQUESTS_PER_SESSION = 2
 export const TRAFFIC_CONCURRENCY = 2
 export const MAX_TRAFFIC_LOG_LINES = 200
+export { DEFAULT_TRAFFIC_SEARCHES, MAX_TRAFFIC_SEARCHES, normalizeTrafficSearches, planTrafficPairs }
 
 type RunningHandle = {
   jobId: string
@@ -82,10 +91,7 @@ export function mapsKeywordAtPinUrl(
 }
 
 export function normalizeTrafficSessions(raw: unknown): number {
-  if (raw == null || raw === "") return DEFAULT_TRAFFIC_SESSIONS
-  const value = Number(raw)
-  if (!Number.isInteger(value) || value < 1) return DEFAULT_TRAFFIC_SESSIONS
-  return Math.min(MAX_TRAFFIC_SESSIONS, value)
+  return normalizeTrafficSearches(raw)
 }
 
 export function normalizePinIds(raw: unknown): string[] {
@@ -105,6 +111,8 @@ export type TrafficStartInput = {
   pinIds?: unknown
   keywords?: unknown
   keywordIds?: unknown
+  searches?: unknown
+  sessions?: unknown
 }
 
 export function parseTrafficStartInput(raw: unknown): TrafficStartInput {
@@ -115,7 +123,13 @@ export function parseTrafficStartInput(raw: unknown): TrafficStartInput {
     pinIds: body.pinIds,
     keywords: body.keywords,
     keywordIds: body.keywordIds,
+    searches: body.searches,
+    sessions: body.sessions,
   }
+}
+
+export function requestedTrafficSearches(input: TrafficStartInput, fallback?: unknown): number {
+  return normalizeTrafficSearches(input.searches ?? input.sessions ?? fallback)
 }
 
 export function campaignKeywordId(keyword: string, index: number): string {
@@ -307,7 +321,7 @@ export function normalizeTrafficJob(job: TrafficJob | null | undefined): Traffic
 export function appendTrafficLog(job: TrafficJob, message: string, pinId?: string, keyword?: string): TrafficJob {
   const line: TrafficLogLine = {
     at: new Date().toISOString(),
-    message,
+    message: publicTrafficMessage(message),
     ...(pinId ? { pinId } : {}),
     ...(keyword ? { keyword } : {}),
   }
@@ -458,24 +472,29 @@ async function executeTrafficJob(input: {
   listing: { title: string; mapsUrl: string }
   pins: TrafficOrigin[]
   keywords: string[]
+  pairs: TrafficPair[]
+  availablePairCount: number
   signal: AbortSignal
 }) {
-  const pairs = pairsForTraffic(input.pins, input.keywords)
+  const pairs = input.pairs
   const sessionResults: Array<TrafficSessionResult | undefined> = Array.from({ length: pairs.length })
   const pinResults = createPendingResults(pairs)
 
   persistJob(input.campaignId, input.jobId, (job) =>
     appendTrafficLog(
       job,
-      `Traffic started for ${input.pins.length} selected pin${input.pins.length === 1 ? "" : "s"} × ${input.keywords.length} keyword${input.keywords.length === 1 ? "" : "s"}. Each pin searches keywords in listed order, then opens the confirmed listing.`,
+      input.availablePairCount > input.pairs.length
+        ? `Traffic started: ${input.pairs.length} of ${input.availablePairCount} searches (${input.pins.length} pin${input.pins.length === 1 ? "" : "s"} × ${input.keywords.length} keyword${input.keywords.length === 1 ? "" : "s"}, first pairs in listed order). Stop cancels remaining searches.`
+        : `Traffic started for ${input.pins.length} selected pin${input.pins.length === 1 ? "" : "s"} × ${input.keywords.length} keyword${input.keywords.length === 1 ? "" : "s"}. Each pin searches keywords in listed order, then opens the confirmed listing.`,
     ),
   )
 
-  await runPool(input.pins, TRAFFIC_CONCURRENCY, async (pin, pinIndex) => {
-    for (let keywordIndex = 0; keywordIndex < input.keywords.length; keywordIndex += 1) {
-      const keyword = input.keywords[keywordIndex]!
-      const index = pinIndex * input.keywords.length + keywordIndex
-      const pair = pairs[index]!
+  await runPool(input.pins, TRAFFIC_CONCURRENCY, async (pin) => {
+    const pinPairs = input.pairs
+      .map((pair, index) => ({ pair, index }))
+      .filter((row) => row.pair.pinId === pin.pinId)
+    for (const { pair, index } of pinPairs) {
+      const keyword = pair.keyword
       const label = trafficPairLabel(keyword, pin)
       const handle = handleFor(input.campaignId, input.jobId)
       if (handle?.stopRequested || input.signal.aborted) {
@@ -590,7 +609,9 @@ export function startCampaignTraffic(
     throw new CampaignError(trafficAlreadyRunningMessage(), 409)
   }
 
-  const pairs = pairsForTraffic(pins, keywords)
+  const searches = requestedTrafficSearches(startInput, campaign.trafficSchedule?.lastSearchCount)
+  const availablePairs = pairsForTraffic(pins, keywords)
+  const pairs = planTrafficPairs(availablePairs, searches)
   const startedAt = new Date().toISOString()
   const job: TrafficJob = {
     id: newId(),
@@ -609,13 +630,12 @@ export function startCampaignTraffic(
     log: [],
     results: createPendingResults(pairs),
   }
-  const trafficSchedule = campaign.trafficSchedule
-    ? {
-        ...campaign.trafficSchedule,
-        lastSelectedPinIds: pins.map((pin) => pin.pinId),
-        lastSelectedKeywords: keywords,
-      }
-    : campaign.trafficSchedule
+  const trafficSchedule = {
+    ...(campaign.trafficSchedule ?? defaultTrafficSchedule()),
+    lastSelectedPinIds: pins.map((pin) => pin.pinId),
+    lastSelectedKeywords: keywords,
+    lastSearchCount: searches,
+  }
   const next = saveCampaign({ ...campaign, lastTrafficJob: job, trafficSchedule, updatedAt: startedAt })
 
   const abort = new AbortController()
@@ -632,6 +652,8 @@ export function startCampaignTraffic(
     listing,
     pins,
     keywords,
+    pairs,
+    availablePairCount: availablePairs.length,
     signal: abort.signal,
   }).catch((error) => {
     persistJob(next.id, job.id, (currentJob) =>
@@ -667,6 +689,34 @@ export async function runCampaignTraffic(
   const campaign = getCampaign(id, userId)
   if (!campaign?.lastTrafficJob) return started
   return { campaign, traffic: normalizeTrafficJob(campaign.lastTrafficJob)! }
+}
+
+export function recoverStaleTrafficJobs(): number {
+  let recovered = 0
+  for (const campaign of readCampaigns()) {
+    const job = normalizeTrafficJob(campaign.lastTrafficJob)
+    if (!job || job.status !== "running") continue
+    if (runningJobs.has(campaign.id)) continue
+    const now = new Date().toISOString()
+    persistJob(campaign.id, job.id, (current) =>
+      appendTrafficLog(
+        {
+          ...current,
+          status: "error",
+          finishedAt: now,
+          lastError: "Traffic stopped because the server restarted. Start again if you still want those searches.",
+          results: (current.results ?? []).map((row) =>
+            row.status === "pending" || row.status === "running"
+              ? { ...row, status: "cancelled" as const, finishedAt: row.finishedAt || now }
+              : row,
+          ),
+        },
+        "Traffic stopped because the server restarted. Remaining searches were cancelled.",
+      ),
+    )
+    recovered += 1
+  }
+  return recovered
 }
 
 export async function resetTrafficRuntimeForTests() {

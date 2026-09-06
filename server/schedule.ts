@@ -1,3 +1,5 @@
+import { normalizeTrafficSearches } from "../src/lib/traffic-plan.ts"
+
 export type ScheduleCadence = "daily" | "weekly"
 export type ScheduleTimeZone = "local" | "utc"
 export type TrafficPinMode = "selected" | "all_found"
@@ -20,6 +22,7 @@ export type TrafficSchedule = ScheduleLike & {
   pinMode: TrafficPinMode
   lastSelectedPinIds: string[]
   lastSelectedKeywords: string[]
+  lastSearchCount?: number
 }
 
 export function defaultScanSchedule(): ScanSchedule {
@@ -40,6 +43,7 @@ export function defaultTrafficSchedule(): TrafficSchedule {
     pinMode: "selected",
     lastSelectedPinIds: [],
     lastSelectedKeywords: [],
+    lastSearchCount: normalizeTrafficSearches(undefined),
   }
 }
 
@@ -220,12 +224,14 @@ export function normalizeTrafficSchedule(raw: unknown): { value?: TrafficSchedul
   const keywords = Array.isArray(input.lastSelectedKeywords)
     ? [...new Set(input.lastSelectedKeywords.map((keyword) => String(keyword ?? "").trim()).filter(Boolean))]
     : []
+  const searches = Number(input.lastSearchCount)
   return {
     value: {
       ...base.value,
       pinMode: normalizePinMode(input.pinMode),
       lastSelectedPinIds: pinIds,
       lastSelectedKeywords: keywords,
+      lastSearchCount: normalizeTrafficSearches(Number.isInteger(searches) ? searches : undefined),
     },
   }
 }

@@ -4,6 +4,7 @@ import {
   compareCampaignScans,
   createCampaign,
   deleteCampaign,
+  loadCampaign,
   loadCampaignGrid,
   loadCampaignScans,
   loadCampaigns,
@@ -17,7 +18,7 @@ import {
 } from "../lib/api.ts"
 import { buildPreviewPoints, gridPinId, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
 import { pointsWithCompare, rankChangeColor, rankChangeLabel } from "../lib/scan-compare.ts"
-import { publicSearchMessage } from "../lib/public-copy.ts"
+import { mapsKeysMissingAdminMessage, publicPinScanMessage, publicSearchMessage } from "../lib/public-copy.ts"
 import { US_STATES } from "../lib/states.ts"
 import {
   campaignInputFromListing,
@@ -25,10 +26,13 @@ import {
   confirmedListingFromSearch,
   listingsFromSearch,
   campaignScanFinished,
+  countFinishedScanPins,
   listedTrafficKeywords,
   noKeywordsSelectedMessage,
   noPinsSelectedMessage,
   scanBusinessEnabled,
+  scanGridPageError,
+  scanLiveStatus,
   selectedKeywordsInListedOrder,
   trafficKeywordHelpCopy,
   searchChanged,
@@ -41,6 +45,13 @@ import {
   trafficLogLoadingCopy,
   trafficPinStatusLabel,
 } from "../lib/track.ts"
+import {
+  DEFAULT_TRAFFIC_SEARCHES,
+  MAX_TRAFFIC_SEARCHES,
+  normalizeTrafficSearches,
+  plannedTrafficSearchCount,
+  trafficSearchHelpCopy,
+} from "../lib/traffic-plan.ts"
 import type {
   ApiKeys,
   BusinessListing,
@@ -77,7 +88,7 @@ function formatWhen(value: string | null | undefined): string {
   return date.toLocaleString()
 }
 
-function searchCount(gridSize: number) {
+function gridSearchCount(gridSize: number) {
   return gridSize * gridSize
 }
 
@@ -88,7 +99,13 @@ function emptyScanSchedule(): ScanSchedule {
 }
 
 function emptyTrafficSchedule(): TrafficSchedule {
-  return { ...emptyScanSchedule(), pinMode: "selected", lastSelectedPinIds: [], lastSelectedKeywords: [] }
+  return {
+    ...emptyScanSchedule(),
+    pinMode: "selected",
+    lastSelectedPinIds: [],
+    lastSelectedKeywords: [],
+    lastSearchCount: DEFAULT_TRAFFIC_SEARCHES,
+  }
 }
 
 function scanWhen(run: { finishedAt?: string; scannedAt?: string; startedAt?: string }) {
@@ -120,6 +137,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [selectedPoint, setSelectedPoint] = useState<GridPointResult | null>(null)
   const [selectedPinIds, setSelectedPinIds] = useState<string[]>([])
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([])
+  const [searchCount, setSearchCount] = useState(DEFAULT_TRAFFIC_SEARCHES)
   const [previewCenter, setPreviewCenter] = useState<GeoPoint | null>(null)
   const [scans, setScans] = useState<GridScanRun[]>([])
   const [compareFromId, setCompareFromId] = useState("")
@@ -174,6 +192,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setPreviewCenter(null)
       setSelectedPinIds([])
       setSelectedKeywords([])
+      setSearchCount(DEFAULT_TRAFFIC_SEARCHES)
       setScanScheduleDraft(emptyScanSchedule())
       setTrafficScheduleDraft(emptyTrafficSchedule())
       return
@@ -189,6 +208,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     const listed = listedTrafficKeywords(campaign)
     const remembered = campaign.trafficSchedule?.lastSelectedKeywords ?? []
     setSelectedKeywords(remembered.length ? selectedKeywordsInListedOrder(listed, remembered) : listed)
+    setSearchCount(normalizeTrafficSearches(campaign.trafficSchedule?.lastSearchCount))
     setScanScheduleDraft(campaign.scanSchedule ?? emptyScanSchedule())
     setTrafficScheduleDraft(campaign.trafficSchedule ?? emptyTrafficSchedule())
   }
@@ -300,6 +320,28 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       return next
     })
   }, [selected?.id, selected?.keywords, selected?.lastGridScan?.keyword, selected?.businessName])
+
+  useEffect(() => {
+    if (!scanning || !selectedId) return
+    let active = true
+    const poll = async () => {
+      try {
+        const payload = await loadCampaign(selectedId)
+        if (!active) return
+        replaceCampaign(payload.campaign)
+      } catch {
+        // Keep the in-progress pin statuses if a poll fails.
+      }
+    }
+    const timer = window.setInterval(() => {
+      void poll()
+    }, 1200)
+    void poll()
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [scanning, selectedId])
 
   useEffect(() => {
     if (!selected?.id || selected.lastTrafficJob?.status !== "running") return
@@ -416,6 +458,23 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       .catch((err) => setError(err instanceof Error ? err.message : "Could not save the grid."))
   }
 
+  async function persistSearchCount(raw: number) {
+    const value = normalizeTrafficSearches(raw)
+    setSearchCount(value)
+    setTrafficScheduleDraft((current) => ({ ...current, lastSearchCount: value }))
+    if (!selected || creating) return
+    void updateCampaign(selected.id, {
+      trafficSchedule: {
+        ...trafficScheduleDraft,
+        lastSelectedPinIds: selectedPinIds,
+        lastSelectedKeywords: selectedKeywordsInListedOrder(listedTrafficKeywords(selected), selectedKeywords),
+        lastSearchCount: value,
+      },
+    })
+      .then(replaceCampaign)
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not save the search count."))
+  }
+
   async function onAddKeyword() {
     if (!selected) return
     const keyword = keywordDraft.trim()
@@ -489,6 +548,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setNotice(null)
     setSelectedPoint(null)
     setSelectedPinIds([])
+    setCompare(null)
     try {
       const hideKeys = Boolean(hosted?.included && !seller)
       let campaign = selected
@@ -513,17 +573,68 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
         )
         replaceCampaign(campaign)
       }
-      const payload = await scanCampaign(campaign.id, keys, hideKeys, [target])
+      replaceCampaign({
+        ...campaign,
+        lastGridScan: {
+          id: campaign.lastGridScan?.id || "running",
+          campaignId: campaign.id,
+          startedAt: new Date().toISOString(),
+          scannedAt: new Date().toISOString(),
+          keyword: target,
+          gridSize,
+          spacingMiles,
+          center: { lat: confirmed.lat, lng: confirmed.lng },
+          placeId: confirmed.placeId,
+          pointCount: gridSearchCount(gridSize),
+          foundCount: 0,
+          points: buildPreviewPoints({ lat: confirmed.lat, lng: confirmed.lng }, gridSize, spacingMiles, target).map(
+            (point) => ({ ...point, status: "pending" as const }),
+          ),
+          status: "running",
+        },
+      })
+      let payload: Awaited<ReturnType<typeof scanCampaign>> | null = null
+      try {
+        payload = await scanCampaign(campaign.id, keys, hideKeys, [target])
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Could not scan Maps."
+        try {
+          const latest = await loadCampaign(campaign.id)
+          replaceCampaign(latest.campaign)
+          const points = latest.campaign.lastGridScan?.points ?? []
+          const pageError = scanGridPageError(points)
+          if (pageError) {
+            setError(publicPinScanMessage(pageError))
+            return
+          }
+          if (points.some((point) => point.status === "rank" || point.status === "not_found")) {
+            const found = latest.campaign.lastGridScan?.foundCount ?? 0
+            const total = latest.campaign.lastGridScan?.pointCount ?? points.length
+            setNotice(`Scan finished. ${confirmed.title} appeared at ${found} of ${total} grid points for “${target}”.`)
+            return
+          }
+        } catch {
+          // Fall through to the setup/request error.
+        }
+        setError(publicSearchMessage(message) || message)
+        return
+      }
       replaceCampaign(payload.campaign)
       setActiveKeyword(payload.grid?.keyword || target)
       setKeywordDraft("")
       await refreshScans(campaign.id)
       setCompare(null)
+      const finishedPoints = payload.grid?.points ?? []
+      const pageError = scanGridPageError(finishedPoints)
+      if (pageError) {
+        setError(publicPinScanMessage(pageError))
+        return
+      }
       const found = payload.grid?.foundCount ?? 0
       const total = payload.grid?.pointCount ?? 0
       setNotice(`Scan finished and saved. ${confirmed.title} appeared at ${found} of ${total} grid points for “${target}”.`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not scan Maps.")
+      setError(err instanceof Error ? publicSearchMessage(err.message) || err.message : "Could not scan Maps.")
     } finally {
       setScanning(false)
     }
@@ -559,6 +670,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const trafficRunning = trafficJob?.status === "running"
   const busy = Boolean(saving || scanning || searching || startingTraffic || stoppingTraffic || rerunning || comparing)
   const scanFinished = campaignScanFinished(selected)
+  const liveScanLabel = scanLiveStatus(countFinishedScanPins(points), gridSearchCount(gridSize))
   const pinsSelectable = Boolean(scanFinished && points.length > 0 && !scanning)
   const showStartTraffic = startTrafficVisible(confirmed)
   const showStopTraffic = stopTrafficVisible(trafficJob)
@@ -936,7 +1048,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-end gap-2">
                 <button
                   type="button"
                   onClick={() => void onScan()}
@@ -944,8 +1056,32 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
                 >
                   {scanning && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                  {scanning ? "Scanning the grid…" : "Scan business"}
+                  {scanning ? liveScanLabel : "Scan business"}
                 </button>
+                {showStartTraffic && (
+                  <label className="grid gap-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Searches</span>
+                    <input
+                      type="number"
+                      data-testid="traffic-searches"
+                      min={1}
+                      max={MAX_TRAFFIC_SEARCHES}
+                      step={1}
+                      value={searchCount}
+                      onChange={(event) => {
+                        const next = Number(event.target.value)
+                        if (!Number.isInteger(next)) return
+                        const value = Math.min(MAX_TRAFFIC_SEARCHES, Math.max(1, next))
+                        setSearchCount(value)
+                        setTrafficScheduleDraft((current) => ({ ...current, lastSearchCount: value }))
+                      }}
+                      onBlur={() => void persistSearchCount(searchCount)}
+                      disabled={busy}
+                      className="h-11 w-20 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+                      aria-describedby="traffic-searches-help"
+                    />
+                  </label>
+                )}
                 {showStartTraffic && (
                   <button
                     type="button"
@@ -973,14 +1109,22 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               </div>
             </div>
 
+            {showStartTraffic && (
+              <p id="traffic-searches-help" className="mt-3 text-sm text-muted">
+                {trafficSearchHelpCopy()}{" "}
+                {selectedKeywordsInListedOrder(trafficKeywords, selectedKeywords).length > 0 && selectedPinIds.length > 0
+                  ? `This run will do ${plannedTrafficSearchCount(selectedPinIds.length * selectedKeywordsInListedOrder(trafficKeywords, selectedKeywords).length, searchCount)} of ${selectedPinIds.length * selectedKeywordsInListedOrder(trafficKeywords, selectedKeywords).length} pin/keyword pairs.`
+                  : "Select pins and keywords first."}
+              </p>
+            )}
             {!mapsReady && (
               <p className="mt-4 rounded-xl border border-clay/40 px-4 py-3 text-sm text-clay">
-                Maps rank tracking is not ready on this copy yet.
+                {seller ? mapsKeysMissingAdminMessage() : "Maps rank tracking is not ready on this copy yet."}
               </p>
             )}
             {mapsReady && (
               <p className="mt-4 rounded-xl border border-brass/25 bg-brass/5 px-4 py-3 text-sm text-paper/80">
-                A {gridSize}×{gridSize} scan runs {searchCount(gridSize)} paid Maps searches — one for each grid point,
+                A {gridSize}×{gridSize} scan runs {gridSearchCount(gridSize)} paid Maps searches — one for each grid point,
                 from that point’s coordinates. A 7×7 scan is 49 paid searches.
                 {desktop ? " Larger grids take a few minutes." : ""}
               </p>
@@ -1204,7 +1348,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
           {scanning && (
             <div className="mx-5 mb-3 flex items-center gap-2 rounded-xl border border-brass/25 bg-brass/5 px-4 py-2 text-sm text-paper/80 sm:mx-0">
               <LoaderCircle className="h-4 w-4 animate-spin text-brass" />
-              Scanning {searchCount(gridSize)} map points…
+              {liveScanLabel}
             </div>
           )}
 
@@ -1290,12 +1434,12 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 {formatWhen(selectedPoint.scannedAt)}
               </p>
               {selectedPoint.error && (
-                <p className="mt-2 text-sm text-clay">{publicSearchMessage(selectedPoint.error)}</p>
+                <p className="mt-2 text-sm text-clay">{publicPinScanMessage(selectedPoint.error)}</p>
               )}
             </div>
           )}
 
-          {points.length > 0 && !scanning && (
+          {points.length > 0 && (
             <div className="mt-4 overflow-x-auto px-5 sm:px-0">
               <table className="w-full min-w-[36rem] text-left text-sm">
                 <thead className="text-[11px] uppercase tracking-[0.12em] text-muted">
@@ -1767,7 +1911,7 @@ function SchedulePanel({
         />
         <ScheduleFieldset
           title="Traffic schedule"
-          detail="Start traffic from selected pins or every pin where the listing was found."
+          detail="Start traffic using the last Searches count, selected keywords, and selected pins or every pin where the listing was found."
           schedule={trafficSchedule}
           onChange={(next) => onTrafficChange({ ...trafficSchedule, ...next })}
           extra={

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { buildGridPoints, buildPreviewPoints, gridPinId, pinColor, rankColor, rankTone } from "./grid.ts"
+import { buildGridPoints, buildPreviewPoints, gridPinId, pinColor, rankColor, rankLabel, rankTone } from "./grid.ts"
 
 describe("buildGridPoints", () => {
   const center = { lat: 30.27, lng: -97.74 }
@@ -88,6 +88,10 @@ describe("rankColor", () => {
     assert.notEqual(rankColor(15), rankColor(16))
   })
 
+  it("labels a live pin as Scanning… while the grid is running", () => {
+    assert.equal(rankLabel(null, undefined, "", "pending"), "Scanning…")
+  })
+
   it("uses muted ink for unscanned pins and rank color after a scan", () => {
     assert.equal(pinColor({ rank: null, scannedAt: "", error: undefined }), "#b4a793")
     assert.equal(pinColor({ rank: 1, scannedAt: "2026-01-01", error: undefined }), rankColor(1))
@@ -105,5 +109,9 @@ describe("rankColor", () => {
     assert.equal(rankTone(15), "orange-red")
     assert.equal(rankTone(16), "red")
     assert.equal(rankTone(null), "red")
+  })
+
+  it("labels empty Maps SERPs as not found", () => {
+    assert.equal(rankLabel(null, "No Search Results."), "Not found")
   })
 })

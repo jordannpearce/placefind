@@ -119,6 +119,8 @@ export function rankLabel(
   scannedAt?: string,
   status?: GridPointResult["status"],
 ): string {
+  if (error && /no search results/i.test(error)) return "Not found"
+  if (status === "pending") return "Scanning…"
   if (status === "error" || (error && rank == null && status !== "not_found")) return "Error"
   if (status === "not_found") return "Not found"
   if (status === "rank" && rank != null) return `#${rank}`

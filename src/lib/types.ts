@@ -268,6 +268,7 @@ export type GridScanRun = {
   pointCount: number
   foundCount: number
   points: GridPointResult[]
+  status?: "running" | "ok" | "error"
 }
 
 export type ScanComparePin = {
@@ -311,6 +312,7 @@ export type TrafficSchedule = ScanSchedule & {
   pinMode: TrafficPinMode
   lastSelectedPinIds: string[]
   lastSelectedKeywords?: string[]
+  lastSearchCount?: number
 }
 
 export type Campaign = {

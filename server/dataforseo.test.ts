@@ -140,6 +140,60 @@ describe("scanMapsGrid", () => {
     assert.ok(cells.every((cell) => cell.items.length > 0 && !cell.error))
   })
 
+  it("marks No Search Results as a completed empty SERP", async () => {
+    const points = [gridPoint("0:1", 0, 1)]
+    const client: MapsGridClient = {
+      postTasks: async () => [{ id: "empty-1", tag: "0:1" }],
+      getTask: async () => ({
+        id: "empty-1",
+        status_code: 40102,
+        status_message: "No Search Results.",
+        result: [{ items: [] }],
+      }),
+      liveAtCoordinate: async () => {
+        throw new Error("live fallback should not run for an empty SERP")
+      },
+    }
+    const cells = await scanMapsGrid(points, "barbecue", "login", "password", {
+      client,
+      pollTimeoutMs: 20,
+      sleep: async () => {},
+    })
+    assert.equal(cells[0]?.error, null)
+    assert.deepEqual(cells[0]?.items, [])
+  })
+
+  it("keeps scanning when one pin throws", async () => {
+    const points = ninePoints()
+    const client: MapsGridClient = {
+      postTasks: async () => points.map((point) => ({ id: `task-${point.id}`, tag: point.id })),
+      getTask: async (id) => {
+        if (id === "task-0:0") throw new Error("task_get failed")
+        return {
+          id,
+          status_code: 20000,
+          result: [{ items: [mapsItem("Franklin Barbecue", "ChIJ-franklin", 2)] }],
+        }
+      },
+      liveAtCoordinate: async (_keyword, point) => {
+        if (point.id === "0:0") throw new Error("live failed")
+        return { items: [mapsItem("Franklin Barbecue", "ChIJ-franklin", 4)], error: null }
+      },
+    }
+    const cells = await scanMapsGrid(points, "barbecue", "login", "password", {
+      client,
+      pollTimeoutMs: 20,
+      sleep: async () => {},
+    })
+    assert.equal(cells.length, 9)
+    const failed = cells.filter((cell) => cell.error)
+    const ok = cells.filter((cell) => !cell.error)
+    assert.equal(failed.length, 1)
+    assert.equal(failed[0]?.point.id, "0:0")
+    assert.match(failed[0]?.error || "", /Could not reach Maps/)
+    assert.equal(ok.length, 8)
+  })
+
   it("retries a failed live pin once", async () => {
     const points = [gridPoint("0:0", 0, 0)]
     let liveCalls = 0

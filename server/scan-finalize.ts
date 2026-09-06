@@ -8,6 +8,7 @@ export type FinalizePin = {
 }
 
 export function pinScanStatus(rank: number | null | undefined, error?: string | null): PinScanStatus {
+  if (error && /no search results/i.test(error)) return "not_found"
   if (error && (rank == null || !Number.isFinite(rank))) return "error"
   if (rank != null && Number.isFinite(rank) && rank >= 1) return "rank"
   return "not_found"

@@ -402,6 +402,10 @@ export async function geocodePlace(city: string, state: string): Promise<GeoPoin
   return payload.center
 }
 
+export async function loadCampaign(id: string): Promise<{ campaign: Campaign }> {
+  return request(`/api/campaigns/${id}`)
+}
+
 export async function scanCampaign(
   id: string,
   keys: ApiKeys,
@@ -447,7 +451,7 @@ export async function startCampaignTraffic(
   id: string,
   keys: ApiKeys,
   hideClientKeys = false,
-  input?: { pinIds?: string[]; keywordIds?: string[]; keywords?: string[] } | string[],
+  input?: { pinIds?: string[]; keywordIds?: string[]; keywords?: string[]; searches?: number; sessions?: number } | string[],
 ): Promise<{ campaign: Campaign; traffic: TrafficJob }> {
   const selection = Array.isArray(input) ? { pinIds: input } : input ?? {}
   return request(`/api/campaigns/${id}/traffic`, {

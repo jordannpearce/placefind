@@ -3,6 +3,7 @@ import { describe, it } from "node:test"
 import {
   campaignInputFromListing,
   campaignScanFinished,
+  countFinishedScanPins,
   confirmedListingFromCampaign,
   confirmedListingFromSearch,
   listingsFromSearch,
@@ -11,6 +12,8 @@ import {
   listedTrafficKeywords,
   noKeywordsSelectedMessage,
   noPinsSelectedMessage,
+  scanGridPageError,
+  scanLiveStatus,
   selectedKeywordsInListedOrder,
   startTrafficEnabled,
   startTrafficLabel,
@@ -181,6 +184,54 @@ describe("start traffic button", () => {
       "smoked meats",
     ])
     assert.deepEqual(selectedKeywordsInListedOrder(listed, []), [])
+  })
+})
+
+describe("live scan status", () => {
+  it("counts finished pins and names the current pin", () => {
+    assert.equal(scanLiveStatus(0, 9), "Scanning pin 1 of 9…")
+    assert.equal(scanLiveStatus(3, 9), "Scanning pin 4 of 9…")
+    assert.equal(scanLiveStatus(9, 9), "Scanned 9 of 9 pins")
+    assert.equal(
+      countFinishedScanPins([
+        { status: "rank" },
+        { status: "not_found" },
+        { status: "error" },
+        { status: "pending" },
+        { status: "unset" },
+      ]),
+      3,
+    )
+  })
+
+  it("only treats a finished grid as an error when every pin failed", () => {
+    assert.equal(scanGridPageError([{ status: "rank" }, { status: "error", error: "Maps search timed out." }]), null)
+    assert.equal(
+      scanGridPageError([
+        { status: "error", error: "Could not reach Maps." },
+        { status: "error", error: "Could not reach Maps." },
+      ]),
+      "Could not reach Maps.",
+    )
+    assert.equal(
+      campaignScanFinished(
+        campaign({
+          lastGridScan: {
+            id: "g1",
+            scannedAt: "2026-09-06T00:00:00.000Z",
+            keyword: "barbecue",
+            gridSize: 3,
+            spacingMiles: 1,
+            center: { lat: 30.2701, lng: -97.7313 },
+            pointCount: 9,
+            foundCount: 0,
+            points: [],
+            status: "running",
+          },
+        }),
+      ),
+      false,
+    )
   })
 })
 

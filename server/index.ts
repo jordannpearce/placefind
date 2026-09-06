@@ -74,7 +74,7 @@ import {
   updateCampaign,
 } from "./campaigns.ts"
 import { startScheduler } from "./scheduler.ts"
-import { getCampaignTraffic, startCampaignTraffic, stopCampaignTraffic } from "./traffic.ts"
+import { getCampaignTraffic, recoverStaleTrafficJobs, startCampaignTraffic, stopCampaignTraffic } from "./traffic.ts"
 import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
 import { initStore } from "./store.ts"
@@ -112,6 +112,7 @@ function readQuery(body: Partial<SearchQuery>): { query: SearchQuery; error?: st
 async function start() {
   await initStore()
   await hydrateHostedKeys()
+  recoverStaleTrafficJobs()
   const app = express()
   app.use(cors({ origin: true, credentials: true }))
   app.use(express.json({ limit: "1mb" }))
@@ -422,6 +423,7 @@ async function start() {
       pinIds?: string[]
       keywordIds?: string[]
       keywords?: string[]
+      searches?: number
       sessions?: number
     }
     const keys = isSellerMode() ? body : {}
@@ -429,7 +431,12 @@ async function start() {
       const result = startCampaignTraffic(
         String(req.params.id ?? ""),
         keys,
-        { pinIds: body.pinIds, keywordIds: body.keywordIds, keywords: body.keywords },
+        {
+          pinIds: body.pinIds,
+          keywordIds: body.keywordIds,
+          keywords: body.keywords,
+          searches: body.searches ?? body.sessions,
+        },
         user.id,
       )
       res.json({ ...result, ...campaignMeta() })
