@@ -1,8 +1,8 @@
 # PlaceFind
 
-Windows desktop software that looks up a Google Maps listing from a business name, city, and state.
+Windows desktop software that looks up a Google Maps listing from a business name, city, and state, and tracks where that listing ranks for keywords on Google Maps.
 
-It uses DataForSEO for live Google Maps search and Scrappey to open the listing page. You can bake your keys into the Windows installer so buyers search without pasting keys. Your API accounts are billed for those searches.
+PlaceFind searches Google Maps in that city and opens the listing page for extra details. You can bake your keys into the Windows installer so buyers search without pasting keys. Your API accounts are billed for those searches.
 
 Without keys, PlaceFind still runs in sample mode.
 
@@ -82,9 +82,20 @@ KEYGEN_TOKEN=
 ## How a search works
 
 1. Type a business name, city, and state.
-2. DataForSEO searches Google Maps for that name in that city.
+2. Search Google Maps in that city.
 3. PlaceFind scores the results and picks the best listing match.
-4. If Scrappey is enabled, it opens that listing page and merges missing details.
+4. Open the listing page for extra details.
+
+## Track Maps ranks
+
+1. Open **Track**.
+2. Create a campaign with a name, the business to watch, its city and state, then add up to 20 keywords people would type on Google Maps.
+3. Click **Scan keywords** (or **Scan** on one keyword). Search Google Maps in that city and record the rank of the listing that matches your business name.
+4. The results table shows keyword, rank (or not found), listing title, rating, address, Maps URL, and when it was scanned. The latest scan stays on the campaign, with recent runs underneath.
+
+Rank scans use the same Maps search as Lookup. If Maps search is not set up, the scan returns an error instead of inventing ranks. Buyer copies still need a valid license to run a scan, the same way Lookup is gated.
+
+Keygen and Resend on **Admin** / **Sell** are separate: they issue and email Windows licenses. They are not required to create a campaign, but a buyer copy still needs a valid license key before a scan will run.
 
 ## Sample searches (no keys)
 

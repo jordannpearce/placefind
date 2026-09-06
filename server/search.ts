@@ -1,5 +1,6 @@
 import { searchDataForSeo } from "./dataforseo.ts"
 import { mergeHostedKeys } from "./hosted-keys.ts"
+import { publicSearchMessage } from "./public-copy.ts"
 import { rankListings } from "./match.ts"
 import { searchMockBusinesses } from "./mock.ts"
 import { enrichWithScrappey, searchScrappey } from "./scrappey.ts"
@@ -15,6 +16,10 @@ function hasScrappey(keys: ApiKeys): boolean {
 
 function envKeys(keys: ApiKeys): ApiKeys {
   return mergeHostedKeys(keys)
+}
+
+function publicCopy(text: string): string {
+  return text.replace(/DataForSEO/gi, "Maps search").replace(/Scrappey/gi, "the listing page")
 }
 
 function finalize(query: SearchQuery, listings: BusinessListing[], extras: Omit<SearchResponse, "query" | "best" | "others" | "elapsedMs">, started: number): SearchResponse {
@@ -45,8 +50,8 @@ export async function searchBusiness(query: SearchQuery, rawKeys: ApiKeys): Prom
         sources: { dataforseo: false, scrappey: false },
         warning:
           sample.length === 0
-            ? "No API keys yet, and no sample listing matches that search. Try Franklin Barbecue in Austin, TX, or add keys in Settings."
-            : "Sample listing. Add your Maps keys in Settings to search live Google Maps.",
+            ? "No listing matched that search. Try Franklin Barbecue in Austin, TX."
+            : "This is a sample listing so you can see how PlaceFind presents a match.",
       },
       started,
     )
@@ -57,19 +62,19 @@ export async function searchBusiness(query: SearchQuery, rawKeys: ApiKeys): Prom
   if (dfsReady) {
     const live = await searchDataForSeo(query, keys.dataforseoLogin!, keys.dataforseoPassword!)
     hits = live.hits
-    if (live.error) warnings.push(live.error)
+    if (live.error) warnings.push(publicCopy(live.error))
   }
 
   if (hits.length === 0 && scrappeyReady) {
     const scraped = await searchScrappey(query, keys.scrappeyKey!)
     hits = scraped.hits
-    if (scraped.error) warnings.push(scraped.error)
+    if (scraped.error) warnings.push(publicCopy(scraped.error))
   } else if (hits.length > 0 && scrappeyReady && keys.enrichWithScrappey !== false) {
     const ranked = rankListings(hits, query)
     const top = ranked[0]
     if (top) {
       const enriched = await enrichWithScrappey(keys.scrappeyKey!, top)
-      if (enriched.error) warnings.push(`Listing page: ${enriched.error}`)
+      if (enriched.error) warnings.push(publicCopy(`Listing page: ${enriched.error}`))
       hits = [enriched.listing, ...ranked.slice(1)]
     }
   }
@@ -81,8 +86,8 @@ export async function searchBusiness(query: SearchQuery, rawKeys: ApiKeys): Prom
       {
         mode: dfsReady || scrappeyReady ? "live" : "sample",
         sources: { dataforseo: dfsReady, scrappey: scrappeyReady },
-        error: warnings[0] || "No Google Maps listings matched that name in this city.",
-        warning: warnings.slice(1).join(" "),
+        error: publicSearchMessage(warnings[0]) || "No Google Maps listings matched that name in this city.",
+        warning: publicSearchMessage(warnings.slice(1).join(" ")),
       },
       started,
     )
@@ -94,7 +99,7 @@ export async function searchBusiness(query: SearchQuery, rawKeys: ApiKeys): Prom
     {
       mode: dfsReady && scrappeyReady ? "live" : "partial",
       sources: { dataforseo: dfsReady, scrappey: scrappeyReady },
-      warning: warnings.join(" ") || undefined,
+      warning: publicSearchMessage(warnings.join(" ")) || undefined,
     },
     started,
   )

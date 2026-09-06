@@ -45,7 +45,7 @@ export function SettingsPanel({ open, keys, hosted, seller, license, onChange, o
           )}
           {keysHidden ? (
             <p className="text-sm leading-6 text-muted">
-              Maps search is ready on this copy. You do not need to enter API keys.
+              Maps search is ready on this copy.
             </p>
           ) : (
             <>

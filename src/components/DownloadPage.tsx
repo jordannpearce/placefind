@@ -3,7 +3,11 @@ import { useEffect, useState } from "react"
 import { formatBytes, loadStore } from "../lib/api.ts"
 import type { InstallerFile, ProductInfo } from "../lib/types.ts"
 
-export function DownloadPage() {
+type Props = {
+  onTryScan?: () => void
+}
+
+export function DownloadPage({ onTryScan }: Props) {
   const [product, setProduct] = useState<ProductInfo | null>(null)
   const [setup, setSetup] = useState<InstallerFile | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -25,22 +29,32 @@ export function DownloadPage() {
         <p className="mt-3 text-sm leading-6 text-muted">{product?.pitch}</p>
         <p className="mt-4 font-display text-3xl text-brass">${product?.price ?? "49"}</p>
         <p className="mt-1 text-xs text-muted">
-          One-time Windows app. After they pay, send the Setup file and a Keygen license key. Your API keys stay hidden.
+          One-time Windows app. After you buy, download Setup and enter the license key from your account page.
         </p>
-
-        {setup ? (
-          <a
-            href={setup.url}
-            className="mt-6 inline-flex h-12 items-center gap-2 rounded-lg bg-brass px-5 font-semibold text-ink hover:bg-[#ecc77a]"
-          >
-            <Download className="h-4 w-4" />
-            Download Windows setup
-          </a>
-        ) : (
-          <p className="mt-6 rounded-xl border border-line bg-ink px-4 py-3 text-sm text-muted">
-            The setup file is not built yet. Open Sell and click Create Windows setup, then come back here.
-          </p>
-        )}
+        <div className="mt-6 flex flex-wrap gap-3">
+          {setup ? (
+            <a
+              href={setup.url}
+              className="inline-flex h-12 items-center gap-2 rounded-lg bg-brass px-5 font-semibold text-ink hover:bg-[#ecc77a]"
+            >
+              <Download className="h-4 w-4" />
+              Download Windows setup
+            </a>
+          ) : (
+            <p className="rounded-xl border border-line bg-ink px-4 py-3 text-sm text-muted">
+              The Windows setup will appear here when it is ready.
+            </p>
+          )}
+          {onTryScan && (
+            <button
+              type="button"
+              onClick={onTryScan}
+              className="inline-flex h-12 items-center rounded-lg border border-line px-5 text-sm text-paper hover:border-brass"
+            >
+              Run a test scan
+            </button>
+          )}
+        </div>
         {setup && (
           <p className="mt-3 text-xs text-muted">
             {setup.name} · {formatBytes(setup.size)}
@@ -57,8 +71,8 @@ export function DownloadPage() {
         <ol className="mt-4 grid gap-3 text-sm leading-6 text-paper/80">
           <li>1. Run the Setup file on Windows 10 or 11 (64-bit).</li>
           <li>2. Choose an install folder. A desktop shortcut is created for you.</li>
-          <li>3. Open PlaceFind and enter the license key the seller sent you.</li>
-          <li>4. Search a business by name, city, and state. Maps keys stay hidden.</li>
+          <li>3. Open PlaceFind and enter the license key from your purchase.</li>
+          <li>4. Search a business by name, city, and state — the same lookup as the test scan.</li>
         </ol>
       </section>
     </div>

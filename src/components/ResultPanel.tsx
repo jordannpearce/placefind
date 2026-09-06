@@ -1,16 +1,7 @@
 import { Check, Copy, ExternalLink, MapPin, Phone, Star } from "lucide-react"
 import { useState } from "react"
+import { publicListingSource, publicSearchMessage } from "../lib/public-copy.ts"
 import type { BusinessListing, SearchResponse } from "../lib/types.ts"
-
-function sourceLabel(source: BusinessListing["source"]) {
-  if (source === "dataforseo") return "Maps"
-  if (source === "scrappey") return "Listing page"
-  return "Sample"
-}
-
-function publicText(text: string) {
-  return text.replaceAll("DataForSEO", "Maps").replaceAll("Scrappey", "the listing page")
-}
 
 async function copyText(value: string) {
   await navigator.clipboard.writeText(value)
@@ -35,6 +26,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 }
 
 function ListingCard({ listing, featured }: { listing: BusinessListing; featured?: boolean }) {
+  const source = publicListingSource(listing.source)
   return (
     <article className={`rounded-2xl border p-5 ${featured ? "border-brass/50 bg-raised" : "border-line bg-panel"}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -48,9 +40,11 @@ function ListingCard({ listing, featured }: { listing: BusinessListing; featured
             {listing.address}
           </p>
         </div>
-        <span className="rounded-full border border-line px-2 py-1 text-[11px] uppercase tracking-wide text-muted">
-          {sourceLabel(listing.source)}
-        </span>
+        {source && (
+          <span className="rounded-full border border-line px-2 py-1 text-[11px] uppercase tracking-wide text-muted">
+            {source}
+          </span>
+        )}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
@@ -134,11 +128,11 @@ export function ResultPanel({ loading, result, error }: Props) {
         <ol className="mt-5 space-y-3 text-sm text-muted">
           <li className="flex gap-3">
             <span className="mt-1 h-2 w-2 rounded-full bg-brass" />
-            Searching Google Maps for results in that city
+            Search Google Maps in that city
           </li>
           <li className="flex gap-3">
             <span className="mt-1 h-2 w-2 animate-pulse rounded-full bg-brass/50" />
-            Opening the listing page to fill in extra details
+            Open the listing page for extra details
           </li>
         </ol>
       </div>
@@ -148,8 +142,8 @@ export function ResultPanel({ loading, result, error }: Props) {
   if (error) {
     return (
       <div className="rounded-2xl border border-clay/40 bg-panel p-8">
-        <p className="font-display text-2xl text-paper">Search did not finish</p>
-        <p className="mt-2 text-sm text-muted">{publicText(error)}</p>
+        <p className="font-display text-2xl text-paper">The test scan did not finish</p>
+        <p className="mt-2 text-sm text-muted">{publicSearchMessage(error)}</p>
       </div>
     )
   }
@@ -157,10 +151,10 @@ export function ResultPanel({ loading, result, error }: Props) {
   if (!result) {
     return (
       <div className="rounded-2xl border border-dashed border-line bg-panel/60 p-8">
-        <p className="font-display text-3xl text-paper">Find a Google Maps listing</p>
+        <p className="font-display text-3xl text-paper">See what PlaceFind does</p>
         <p className="mt-3 max-w-md text-sm leading-6 text-muted">
-          Type the business name, city, and state. PlaceFind finds the matching Google Maps listing and fills in extra
-          details.
+          This is a preview of PlaceFind on Windows. Enter a business name, city, and state to look up a Google Maps
+          listing — name, address, phone, rating, and a Maps link.
         </p>
       </div>
     )
@@ -171,7 +165,7 @@ export function ResultPanel({ loading, result, error }: Props) {
       <div className="rounded-2xl border border-line bg-panel p-8">
         <p className="font-display text-2xl text-paper">No listing matched</p>
         <p className="mt-2 text-sm text-muted">
-          {publicText(result.error || result.warning || "Check the spelling, or try a closer city name.")}
+          {publicSearchMessage(result.error || result.warning) || "Check the spelling, or try a closer city name."}
         </p>
       </div>
     )
@@ -180,7 +174,9 @@ export function ResultPanel({ loading, result, error }: Props) {
   return (
     <div className="grid gap-4">
       {result.warning && (
-        <p className="rounded-xl border border-brass/30 bg-brass/10 px-4 py-3 text-sm text-brass">{publicText(result.warning)}</p>
+        <p className="rounded-xl border border-brass/30 bg-brass/10 px-4 py-3 text-sm text-brass">
+          {publicSearchMessage(result.warning)}
+        </p>
       )}
       <ListingCard listing={result.best} featured />
       {result.others.length > 0 && (
