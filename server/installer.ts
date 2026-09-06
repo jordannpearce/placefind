@@ -148,5 +148,5 @@ export function startInstallerBuild(): InstallerStatus {
 }
 
 export function startSetupRepack(): InstallerStatus {
-  return runBuild("npx", ["tsx", "scripts/make-windows-setup.ts"], "Putting your API keys into the Windows setup file…\n")
+  return runBuild("npx", ["tsx", "scripts/make-windows-setup.ts"], "Updating the Windows setup file…\n")
 }

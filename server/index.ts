@@ -3,13 +3,37 @@ import express from "express"
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import {
+  canManage,
+  clearSession,
+  createSession,
+  login,
+  publicUser,
+  readUsers,
+  sessionCookie,
+  signup,
+  storeOpen,
+  userFromCookie,
+} from "./auth.ts"
 import { testDataForSeo } from "./dataforseo.ts"
 import { hostedKeyStatus, readHostedKeys, writeHostedKeys } from "./hosted-keys.ts"
 import { getInstallerStatus, installerPath, startInstallerBuild, startSetupRepack } from "./installer.ts"
+import {
+  activateLicense,
+  createLicense,
+  keygenPublicStatus,
+  licenseStatus,
+  readIssuedLicenses,
+  readKeygenConfig,
+  testKeygenConnection,
+  writeKeygenConfig,
+} from "./keygen.ts"
+import { mailStatus, readOutbox, sendMail, testResendConnection, welcomeEmail, writeMailConfig } from "./mail.ts"
 import { readProduct, writeProduct } from "./product.ts"
 import { isSellerMode } from "./runtime.ts"
 import { searchBusiness } from "./search.ts"
 import { testScrappey } from "./scrappey.ts"
+import { checkout, issueAndDeliver, listOrders, ordersForUser, publicOrder, shopSummary } from "./shop.ts"
 import { US_STATES } from "./states.ts"
 import type { ApiKeys, SearchQuery } from "./types.ts"
 
@@ -41,18 +65,38 @@ function readQuery(body: Partial<SearchQuery>): { query: SearchQuery; error?: st
 
 async function start() {
   const app = express()
-  app.use(cors())
+  app.use(cors({ origin: true, credentials: true }))
   app.use(express.json({ limit: "1mb" }))
+
+  function actor(req: express.Request) {
+    return userFromCookie(req.headers.cookie)
+  }
+
+  function manage(req: express.Request, res: express.Response) {
+    if (canManage(req.headers.cookie)) return true
+    res.status(403).json({ error: "Admin access is required." })
+    return false
+  }
+
+  function store(req: express.Request, res: express.Response) {
+    if (storeOpen()) return true
+    res.status(403).json({ error: "The license store is not available in this copy." })
+    return false
+  }
 
   app.get("/api/health", (_req, res) => {
     const hosted = hostedKeyStatus()
     res.json({ ok: true, name: "PlaceFind", seller: isSellerMode(), keysIncluded: hosted.included })
   })
 
-  app.get("/api/runtime", (_req, res) => {
+  app.get("/api/runtime", async (req, res) => {
     const hosted = hostedKeyStatus()
+    const user = actor(req)
     res.json({
       seller: isSellerMode(),
+      store: storeOpen(),
+      admin: canManage(req.headers.cookie),
+      user,
       hosted: {
         included: hosted.included,
         scrappey: hosted.scrappey,
@@ -61,6 +105,8 @@ async function start() {
         dataforseoHint: hosted.dataforseoHint,
         seller: hosted.seller,
       },
+      license: await licenseStatus(),
+      keygen: keygenPublicStatus(),
     })
   })
 
@@ -72,6 +118,14 @@ async function start() {
     const parsed = readQuery(req.body ?? {})
     if (parsed.error) {
       res.status(400).json({ error: parsed.error })
+      return
+    }
+    const license = await licenseStatus()
+    if (license.required && !license.valid) {
+      res.status(402).json({
+        error: license.detail || "Enter a valid PlaceFind license key to search.",
+        license,
+      })
       return
     }
     const keys = isSellerMode() ? ((req.body ?? {}) as ApiKeys) : {}
@@ -99,12 +153,99 @@ async function start() {
     res.json({ results })
   })
 
-  app.get("/api/product", (_req, res) => {
+  app.get("/api/product", async (req, res) => {
     res.json({
       product: readProduct(),
-      installer: isSellerMode() ? getInstallerStatus() : { status: "idle", log: "", files: [], folder: "", setupPath: "" },
+      installer: storeOpen() ? getInstallerStatus() : { status: "idle", log: "", files: [], folder: "", setupPath: "" },
       hosted: hostedKeyStatus(),
+      keygen: keygenPublicStatus(),
+      issued: canManage(req.headers.cookie) ? readIssuedLicenses() : [],
+      license: await licenseStatus(),
     })
+  })
+
+  app.get("/api/keygen", (req, res) => {
+    if (!manage(req, res)) return
+    const config = readKeygenConfig()
+    res.json({
+      keygen: keygenPublicStatus(),
+      issued: readIssuedLicenses(),
+      accountId: config.accountId,
+      productId: config.productId,
+      policyId: config.policyId,
+    })
+  })
+
+  app.post("/api/keygen", (req, res) => {
+    if (!manage(req, res)) return
+    const body = (req.body ?? {}) as {
+      accountId?: string
+      productId?: string
+      policyId?: string
+      token?: string
+      rebuild?: boolean
+    }
+    const current = readKeygenConfig()
+    const accountId = body.accountId?.trim() || current.accountId
+    const productId = body.productId?.trim() || current.productId
+    const policyId = body.policyId?.trim() || current.policyId
+    const token = body.token?.trim() || current.token
+    if (!accountId || !productId || !policyId || !token) {
+      res.status(400).json({ error: "Account ID, product ID, policy ID, and token are required." })
+      return
+    }
+    writeKeygenConfig({ accountId, productId, policyId, token })
+    const unpacked = existsSync(path.join(process.cwd(), "release", "win-unpacked", "PlaceFind.exe"))
+    const installer = unpacked && body.rebuild !== false ? startSetupRepack() : getInstallerStatus()
+    res.json({
+      keygen: keygenPublicStatus(),
+      issued: readIssuedLicenses(),
+      installer,
+    })
+  })
+
+  app.post("/api/keygen/test", async (req, res) => {
+    if (!manage(req, res)) return
+    const body = (req.body ?? {}) as { accountId?: string; productId?: string; policyId?: string; token?: string }
+    res.json(await testKeygenConnection(body))
+  })
+
+  app.post("/api/keygen/licenses", async (req, res) => {
+    if (!manage(req, res)) return
+    const body = (req.body ?? {}) as { name?: string; email?: string; sendEmail?: boolean }
+    if (body.sendEmail) {
+      const delivered = await issueAndDeliver({ name: body.name ?? "", email: body.email ?? "", sendEmail: true })
+      if (delivered.error || !delivered.license) {
+        res.status(400).json({ error: delivered.error || "Could not assign a license." })
+        return
+      }
+      res.json({ license: delivered.license, order: delivered.order ? publicOrder(delivered.order) : null, issued: readIssuedLicenses() })
+      return
+    }
+    const result = await createLicense(body)
+    if (result.error || !result.license) {
+      res.status(400).json({ error: result.error || "Could not assign a license." })
+      return
+    }
+    res.json({ license: result.license, issued: readIssuedLicenses() })
+  })
+
+  app.get("/api/license", async (_req, res) => {
+    res.json({ license: await licenseStatus(), seller: isSellerMode() })
+  })
+
+  app.post("/api/license/activate", async (req, res) => {
+    const key = String((req.body ?? {}).key ?? "")
+    if (!key.trim()) {
+      res.status(400).json({ error: "Enter a license key." })
+      return
+    }
+    const license = await activateLicense(key)
+    if (!license.valid) {
+      res.status(400).json({ error: license.detail || "That license key is not valid.", license })
+      return
+    }
+    res.json({ license })
   })
 
   app.get("/api/hosted-keys", (_req, res) => {
@@ -112,10 +253,7 @@ async function start() {
   })
 
   app.post("/api/hosted-keys", (req, res) => {
-    if (!isSellerMode()) {
-      res.status(403).json({ error: "API keys are managed by the seller." })
-      return
-    }
+    if (!manage(req, res)) return
     const body = (req.body ?? {}) as {
       scrappeyKey?: string
       dataforseoLogin?: string
@@ -129,6 +267,7 @@ async function start() {
   })
 
   app.post("/api/product", (req, res) => {
+    if (!manage(req, res)) return
     const body = (req.body ?? {}) as { price?: string; pitch?: string }
     res.json({ product: writeProduct(body) })
   })
@@ -137,12 +276,132 @@ async function start() {
     res.json(getInstallerStatus())
   })
 
-  app.post("/api/installer/build", (_req, res) => {
-    if (!isSellerMode()) {
-      res.status(403).json({ error: "The Windows setup is created by the seller." })
+  app.post("/api/installer/build", (req, res) => {
+    if (!manage(req, res)) return
+    res.json(startInstallerBuild())
+  })
+
+  app.post("/api/auth/signup", async (req, res) => {
+    if (!store(req, res)) return
+    const body = (req.body ?? {}) as { name?: string; email?: string; password?: string }
+    const result = signup({ name: body.name ?? "", email: body.email ?? "", password: body.password ?? "" })
+    if (result.error || !result.user) {
+      res.status(400).json({ error: result.error || "Could not create the account." })
       return
     }
-    res.json(startInstallerBuild())
+    const token = createSession(result.user.id)
+    const product = readProduct()
+    const welcome = welcomeEmail({ name: result.user.name, product: product.name, price: product.price })
+    await sendMail({ ...welcome, to: result.user.email })
+    res.setHeader("Set-Cookie", sessionCookie(token))
+    res.json({ user: result.user })
+  })
+
+  app.post("/api/auth/login", (req, res) => {
+    if (!store(req, res)) return
+    const body = (req.body ?? {}) as { email?: string; password?: string }
+    const result = login({ email: body.email ?? "", password: body.password ?? "" })
+    if (result.error || !result.user) {
+      res.status(400).json({ error: result.error || "Could not sign in." })
+      return
+    }
+    res.setHeader("Set-Cookie", sessionCookie(createSession(result.user.id)))
+    res.json({ user: result.user })
+  })
+
+  app.post("/api/auth/logout", (req, res) => {
+    const token = (req.headers.cookie || "").includes("pf_session=")
+      ? (req.headers.cookie || "").split("pf_session=")[1]?.split(";")[0]
+      : ""
+    if (token) clearSession(decodeURIComponent(token))
+    res.setHeader("Set-Cookie", sessionCookie("", true))
+    res.json({ ok: true })
+  })
+
+  app.get("/api/auth/me", (req, res) => {
+    res.json({ user: actor(req), admin: canManage(req.headers.cookie), store: storeOpen() })
+  })
+
+  app.post("/api/shop/checkout", async (req, res) => {
+    if (!store(req, res)) return
+    const user = actor(req)
+    if (!user) {
+      res.status(401).json({ error: "Sign in to buy a license." })
+      return
+    }
+    const result = await checkout(user)
+    res.json({
+      order: publicOrder(result.order),
+      license: result.license ?? null,
+      warning: result.error,
+    })
+  })
+
+  app.get("/api/account", (req, res) => {
+    if (!store(req, res)) return
+    const user = actor(req)
+    if (!user) {
+      res.status(401).json({ error: "Sign in to see your licenses." })
+      return
+    }
+    res.json({
+      user,
+      orders: ordersForUser(user.id).map(publicOrder),
+      product: readProduct(),
+    })
+  })
+
+  app.get("/api/admin", (req, res) => {
+    if (!manage(req, res)) return
+    res.json({
+      product: readProduct(),
+      keygen: keygenPublicStatus(),
+      mail: mailStatus(),
+      shop: shopSummary(),
+      users: readUsers().map(publicUser),
+      orders: listOrders().map(publicOrder),
+      issued: readIssuedLicenses(),
+      outbox: readOutbox().map((row) => ({
+        id: row.id,
+        to: row.to,
+        subject: row.subject,
+        createdAt: row.createdAt,
+        delivered: row.delivered,
+        detail: row.detail,
+      })),
+    })
+  })
+
+  app.post("/api/admin/licenses", async (req, res) => {
+    if (!manage(req, res)) return
+    const body = (req.body ?? {}) as { name?: string; email?: string; sendEmail?: boolean }
+    const result = await issueAndDeliver({
+      name: body.name ?? "",
+      email: body.email ?? "",
+      sendEmail: body.sendEmail !== false,
+    })
+    if (result.error || !result.license) {
+      res.status(400).json({ error: result.error || "Could not issue a license." })
+      return
+    }
+    res.json({
+      license: result.license,
+      order: result.order ? publicOrder(result.order) : null,
+      issued: readIssuedLicenses(),
+    })
+  })
+
+  app.post("/api/admin/mail", (req, res) => {
+    if (!manage(req, res)) return
+    const body = (req.body ?? {}) as { resendApiKey?: string; fromEmail?: string; fromName?: string }
+    writeMailConfig(body)
+    res.json({ mail: mailStatus() })
+  })
+
+  app.post("/api/admin/mail/test", async (req, res) => {
+    if (!manage(req, res)) return
+    const body = (req.body ?? {}) as { resendApiKey?: string; fromEmail?: string; fromName?: string }
+    res.json(await testResendConnection(body))
   })
 
   app.get("/api/installer/download/:name", (req, res) => {

@@ -1,18 +1,19 @@
 import { X } from "lucide-react"
 import { useState } from "react"
 import { testKeys } from "../lib/api.ts"
-import type { ApiKeys, HostedKeyStatus, KeyTestResult } from "../lib/types.ts"
+import type { ApiKeys, HostedKeyStatus, KeyTestResult, LicenseStatus } from "../lib/types.ts"
 
 type Props = {
   open: boolean
   keys: ApiKeys
   hosted: HostedKeyStatus | null
   seller: boolean
+  license: LicenseStatus | null
   onChange: (keys: ApiKeys) => void
   onClose: () => void
 }
 
-export function SettingsPanel({ open, keys, hosted, seller, onChange, onClose }: Props) {
+export function SettingsPanel({ open, keys, hosted, seller, license, onChange, onClose }: Props) {
   const [testing, setTesting] = useState(false)
   const [results, setResults] = useState<KeyTestResult[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -35,6 +36,13 @@ export function SettingsPanel({ open, keys, hosted, seller, onChange, onClose }:
         </div>
 
         <div className="grid gap-4 overflow-y-auto pr-1">
+          {license?.configured && (
+            <p className={`text-sm ${license.valid ? "text-moss" : "text-clay"}`}>
+              {license.valid
+                ? `License active${license.keyHint ? ` · ${license.keyHint}` : ""}${license.expiry ? ` · expires ${new Date(license.expiry).toLocaleDateString()}` : ""}`
+                : license.detail || "This copy needs a valid license key."}
+            </p>
+          )}
           {keysHidden ? (
             <p className="text-sm leading-6 text-muted">
               Maps search is ready on this copy. You do not need to enter API keys.

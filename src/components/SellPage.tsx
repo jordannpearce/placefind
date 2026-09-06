@@ -1,7 +1,8 @@
 import { Download, Folder, LoaderCircle, Package } from "lucide-react"
 import { useEffect, useState } from "react"
 import { formatBytes, loadInstaller, loadStore, saveHostedKeys, saveProduct, startInstallerBuild } from "../lib/api.ts"
-import type { HostedKeyStatus, InstallerStatus, ProductInfo } from "../lib/types.ts"
+import type { HostedKeyStatus, InstallerStatus, IssuedLicense, KeygenStatus, ProductInfo } from "../lib/types.ts"
+import { KeygenPanel } from "./KeygenPanel.tsx"
 
 function statusCopy(status: InstallerStatus["status"]) {
   if (status === "running") return "Updating the Windows setup file. This can take a few minutes."
@@ -14,6 +15,8 @@ export function SellPage() {
   const [product, setProduct] = useState<ProductInfo | null>(null)
   const [installer, setInstaller] = useState<InstallerStatus | null>(null)
   const [hosted, setHosted] = useState<HostedKeyStatus | null>(null)
+  const [keygen, setKeygen] = useState<KeygenStatus | null>(null)
+  const [issued, setIssued] = useState<IssuedLicense[]>([])
   const [price, setPrice] = useState("49")
   const [pitch, setPitch] = useState("")
   const [scrappeyKey, setScrappeyKey] = useState("")
@@ -28,6 +31,8 @@ export function SellPage() {
     setProduct(store.product)
     setInstaller(store.installer)
     setHosted(store.hosted)
+    setKeygen(store.keygen)
+    setIssued(store.issued)
     setPrice(store.product.price)
     setPitch(store.product.pitch)
   }
@@ -48,7 +53,8 @@ export function SellPage() {
   const keysReady = Boolean(hosted?.scrappey || hosted?.dataforseo)
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
+    <div className="grid gap-6">
+      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
       <section className="rounded-2xl border border-line bg-panel p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Sell PlaceFind</p>
         <h2 className="mt-1 font-display text-3xl text-paper">Create the Windows setup</h2>
@@ -231,6 +237,17 @@ export function SellPage() {
           )}
         </section>
       </aside>
+      </div>
+      {error && <p className="text-sm text-clay">{error}</p>}
+      <KeygenPanel
+        keygen={keygen}
+        issued={issued}
+        installerRunning={installer?.status === "running"}
+        onKeygen={setKeygen}
+        onIssued={setIssued}
+        onInstaller={setInstaller}
+        onError={setError}
+      />
     </div>
   )
 }

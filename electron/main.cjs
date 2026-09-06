@@ -28,6 +28,11 @@ function packagedKeysFile() {
   return fs.existsSync(fromResources) ? fromResources : ""
 }
 
+function packagedKeygenFile() {
+  const fromResources = path.join(process.resourcesPath, "keygen-public.json")
+  return fs.existsSync(fromResources) ? fromResources : ""
+}
+
 function startPackagedServer() {
   if (!app.isPackaged) return
   serverProcess = spawn(process.execPath, [packagedServerEntry()], {
@@ -38,6 +43,7 @@ function startPackagedServer() {
       PLACEFIND_STATIC: "1",
       PLACEFIND_UI_DIR: packagedUiDir(),
       PLACEFIND_KEYS_FILE: packagedKeysFile(),
+      PLACEFIND_KEYGEN_FILE: packagedKeygenFile(),
       PORT,
     },
     stdio: "inherit",

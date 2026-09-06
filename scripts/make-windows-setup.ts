@@ -14,14 +14,17 @@ if (!existsSync(exe)) {
 }
 
 const hostedKeys = path.join(root, ".data", "hosted-keys.json")
+const keygenPublic = path.join(root, ".data", "keygen-public.json")
 const resourcesDir = path.join(unpacked, "resources")
-if (existsSync(hostedKeys) && existsSync(resourcesDir)) {
-  copyFileSync(hostedKeys, path.join(resourcesDir, "hosted-keys.json"))
-  console.log("Included hosted API keys in the Windows app.")
-} else if (existsSync(hostedKeys)) {
+if (existsSync(hostedKeys)) {
   mkdirSync(resourcesDir, { recursive: true })
   copyFileSync(hostedKeys, path.join(resourcesDir, "hosted-keys.json"))
   console.log("Included hosted API keys in the Windows app.")
+}
+if (existsSync(keygenPublic)) {
+  mkdirSync(resourcesDir, { recursive: true })
+  copyFileSync(keygenPublic, path.join(resourcesDir, "keygen-public.json"))
+  console.log("Included Keygen public config in the Windows app.")
 }
 
 const icon = path.join(root, "release", ".icon-ico", "icon.ico")

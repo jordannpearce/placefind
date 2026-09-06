@@ -25,9 +25,26 @@ npm run desktop
 
 1. Open **Sell**.
 2. Paste your Scrappey key and DataForSEO login + API password, then click **Save keys into the setup**.
-3. Set the price you charge (shown on the customer download page).
-4. Download `PlaceFind-Setup-1.0.0.exe`, or copy it from `/workspace/release/`.
-5. Send buyers the Setup file after they pay.
+3. Connect [Keygen.sh](https://keygen.sh): paste your account ID, PlaceFind product ID, policy ID, and an admin or product token, then click **Save Keygen**.
+4. After a sale, issue a key from **Admin** (emails the buyer) or **Sell** (copy the key).
+5. Set the price you charge (shown on Buy and Download).
+6. Download `PlaceFind-Setup-1.0.0.exe`, or copy it from `/workspace/release/`.
+7. Buyers can also sign up at **/buy**, pay, and receive the key on their account page.
+
+The Keygen admin token never goes into the installer. Buyer copies only get your public account and product IDs so they can validate a key. The seller copy on this machine does not ask for a customer license.
+
+## License store and admin
+
+Open [http://127.0.0.1:43141/buy](http://127.0.0.1:43141/buy) for customer signup and purchase. The first account created on this machine is an admin. Admins use **/admin** to issue Keygen keys and **/sell** to build the Windows setup.
+
+Paste a [Resend](https://resend.com) API key on **Admin** to send:
+
+- a welcome email after signup
+- a license email with the Keygen key and download steps after a purchase or a manual issue
+
+Until Resend is connected, those messages stay in the Admin outbox on this computer. Use `onboarding@resend.dev` as the from address while you test. Card charges are recorded locally in this preview; Stripe can be added later.
+
+The Keygen admin token never goes into the installer. Buyer copies only get your public account and product IDs so they can validate a key. The seller copy on this machine does not ask for a customer license.
 
 Keys are encrypted on disk and inside the Windows setup. Buyers never see the values in Settings, and the installed copy has no Sell page. A determined person who unpacks the app could still recover them, so treat this as hiding keys from customers, not as a vault.
 
@@ -51,7 +68,16 @@ Open **Settings** in the app:
 2. Paste your DataForSEO dashboard login and **API password**.
 3. Click **Test connection**, then search.
 
-If you saved keys on **Sell**, buyers never see a key form. Search just works.
+If you saved keys on **Sell**, buyers never see a key form. If you also connected Keygen, they unlock the app with the license key you assigned.
+
+Optional Keygen defaults for the seller machine:
+
+```bash
+KEYGEN_ACCOUNT_ID=
+KEYGEN_PRODUCT_ID=
+KEYGEN_POLICY_ID=
+KEYGEN_TOKEN=
+```
 
 ## How a search works
 

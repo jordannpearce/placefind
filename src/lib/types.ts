@@ -100,7 +100,67 @@ export type HostedKeyStatus = {
   seller: boolean
 }
 
+export type LicenseStatus = {
+  required: boolean
+  configured: boolean
+  valid: boolean
+  keyHint: string
+  code: string
+  detail: string
+  expiry: string | null
+  seller: boolean
+}
+
+export type KeygenStatus = {
+  accountId: string
+  productId: string
+  policyId: string
+  tokenHint: string
+  connected: boolean
+  canIssue: boolean
+}
+
+export type IssuedLicense = {
+  id: string
+  key: string
+  name: string
+  email: string
+  createdAt: string
+  expiry: string | null
+}
+
+export type AuthUser = {
+  id: string
+  name: string
+  email: string
+  role: "customer" | "admin"
+  createdAt: string
+}
+
+export type OrderInfo = {
+  id: string
+  name: string
+  email: string
+  amount: string
+  status: "paid" | "pending_license"
+  licenseKey: string | null
+  createdAt: string
+  emailedAt: string | null
+}
+
+export type MailStatus = {
+  configured: boolean
+  fromEmail: string
+  fromName: string
+  keyHint: string
+}
+
 export type RuntimeInfo = {
   seller: boolean
+  store: boolean
+  admin: boolean
+  user: AuthUser | null
   hosted: HostedKeyStatus
+  license: LicenseStatus
+  keygen: KeygenStatus
 }

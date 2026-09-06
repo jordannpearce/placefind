@@ -25,7 +25,7 @@ export function DownloadPage() {
         <p className="mt-3 text-sm leading-6 text-muted">{product?.pitch}</p>
         <p className="mt-4 font-display text-3xl text-brass">${product?.price ?? "49"}</p>
         <p className="mt-1 text-xs text-muted">
-          One-time license for the Windows app. Search works as soon as they install it. Your API keys stay hidden.
+          One-time Windows app. After they pay, send the Setup file and a Keygen license key. Your API keys stay hidden.
         </p>
 
         {setup ? (
@@ -57,8 +57,8 @@ export function DownloadPage() {
         <ol className="mt-4 grid gap-3 text-sm leading-6 text-paper/80">
           <li>1. Run the Setup file on Windows 10 or 11 (64-bit).</li>
           <li>2. Choose an install folder. A desktop shortcut is created for you.</li>
-          <li>3. Open PlaceFind. If the seller included API keys, you can search right away.</li>
-          <li>4. Search a business by name, city, and state.</li>
+          <li>3. Open PlaceFind and enter the license key the seller sent you.</li>
+          <li>4. Search a business by name, city, and state. Maps keys stay hidden.</li>
         </ol>
       </section>
     </div>
