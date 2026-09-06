@@ -73,8 +73,18 @@ describe("normalizeTrafficSchedule", () => {
       lastSearchCount: 4,
     })
     assert.equal(saved.value?.lastSearchCount, 4)
-    assert.equal(normalizeTrafficSchedule({ lastSearchCount: 99 }).value?.lastSearchCount, 50)
-    assert.equal(normalizeTrafficSchedule({}).value?.lastSearchCount, 3)
+    assert.equal(
+      normalizeTrafficSchedule({
+        enabled: false,
+        cadence: "daily",
+        hour: 9,
+        minute: 0,
+        timeZone: "utc",
+        lastSearchCount: 99,
+      }).value?.lastSearchCount,
+      50,
+    )
+    assert.equal(normalizeTrafficSchedule(null).value?.lastSearchCount, 3)
   })
 })
 

@@ -612,7 +612,7 @@ describe("runCampaignTraffic", () => {
       assert.equal(result.traffic.sessionsRequested, 3)
       assert.equal(result.traffic.sessionsOk, 3)
       assert.equal(result.campaign.trafficSchedule.lastSearchCount, 3)
-      const searchUrls = urls.filter((url) => url.includes("/maps/search/"))
+      const searchUrls = urls.filter((url) => /\/maps\/search\/[^?]+\/@/.test(url))
       assert.equal(searchUrls.length, 3)
       assert.ok(result.traffic.log?.some((line) => /3 of 4 searches/.test(line.message)))
     } finally {
