@@ -51,15 +51,15 @@ textarea {
 .leaflet-host {
   background: #17140f;
   font: inherit;
-  width: 100%;
-  min-height: 420px;
-  height: 420px;
+  width: 100% !important;
+  min-height: 420px !important;
+  height: 420px !important;
 }
 
 @media (min-width: 1024px) {
   .leaflet-container,
   .leaflet-host {
-    height: 32rem;
+    height: 32rem !important;
   }
 }
 
