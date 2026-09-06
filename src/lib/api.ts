@@ -1,5 +1,6 @@
 import type {
   ApiKeys,
+  AccountUsage,
   AuthUser,
   Campaign,
   CampaignInput,
@@ -176,8 +177,13 @@ export async function loadAccount(): Promise<{
   listings?: DirectoryListing[]
   orders: OrderInfo[]
   product: ProductInfo
+  usage?: AccountUsage
 }> {
   return request("/api/account")
+}
+
+export async function requestAiPrompt(): Promise<{ accepted: boolean; usage: AccountUsage }> {
+  return request("/api/ai/prompts", { method: "POST", body: JSON.stringify({}) })
 }
 
 export async function searchDirectory(input: {

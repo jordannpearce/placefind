@@ -140,6 +140,21 @@ export type AuthUser = {
   createdAt: string
 }
 
+export type UsageMeter = {
+  used: number
+  remaining: number
+  limit: number
+}
+
+export type AccountUsage = {
+  month: string
+  monthTimeZone: "UTC"
+  rankScans: UsageMeter
+  aiPrompts: UsageMeter
+  trafficCampaigns: UsageMeter
+  unlimited: boolean
+}
+
 export type OrderInfo = {
   id: string
   name: string

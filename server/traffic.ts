@@ -24,6 +24,7 @@ import { parseLocationCoordinate } from "./grid.ts"
 import { defaultTrafficSchedule } from "./schedule.ts"
 import { mergeHostedKeys, trafficRunnerConfigured } from "./hosted-keys.ts"
 import { publicTrafficMessage } from "./public-copy.ts"
+import { consumeMonthlyUsage, QuotaError } from "./usage.ts"
 import { isSellerMode } from "./runtime.ts"
 import {
   listingNotFoundMessage,
@@ -669,6 +670,12 @@ export function startCampaignTraffic(
   const searches = requestedTrafficSearches(startInput, campaign.trafficSchedule?.lastSearchCount)
   const availablePairs = pairsForTraffic(pins, keywords)
   const pairs = planTrafficPairs(availablePairs, searches)
+  try {
+    consumeMonthlyUsage(userId || campaign.userId, "trafficCampaigns")
+  } catch (error) {
+    if (error instanceof QuotaError) throw new CampaignError(error.message, error.status)
+    throw error
+  }
   const startedAt = new Date().toISOString()
   const job: TrafficJob = {
     id: newId(),

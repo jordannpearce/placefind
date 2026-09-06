@@ -1,5 +1,5 @@
 const VENDOR_TALK =
-  /dataforseo|scrappey|keygen|resend|paddle|leaflet|railway|api keys?|api password|hosted keys?|seller keys?|when a key is saved|\btokens?\b/i
+  /dataforseo|scrappey|keygen|resend|paddle|leaflet|railway|cloro|api keys?|api password|hosted keys?|seller keys?|when a key is saved|\btokens?\b/i
 
 export const SAMPLE_SEARCH_USED_MESSAGE =
   "This sample search is already in use. Create a PlaceFind account to run more lookups."

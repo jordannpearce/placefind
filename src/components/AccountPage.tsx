@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
 import { loadAccount, logout } from "../lib/api.ts"
 import { listingLocation, listingPath, mapsStatusLabel } from "../lib/listings.ts"
-import type { AuthUser, DirectoryListing } from "../lib/types.ts"
+import type { AccountUsage, AuthUser, DirectoryListing } from "../lib/types.ts"
+import { UsageCard } from "./UsageCard.tsx"
 
 type Props = {
   user: AuthUser
@@ -11,14 +12,24 @@ type Props = {
 
 export function AccountPage({ user, onLogout, onGo }: Props) {
   const [listings, setListings] = useState<DirectoryListing[]>([])
+  const [usage, setUsage] = useState<AccountUsage | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [usageError, setUsageError] = useState<string | null>(null)
+  const [usageLoading, setUsageLoading] = useState(true)
 
   useEffect(() => {
     void loadAccount()
       .then((account) => {
         setListings(account.listings ?? [])
+        if (account.usage) setUsage(account.usage)
+        else setUsageError("Monthly usage is not available yet.")
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Could not load your account."))
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : "Could not load your account."
+        setError(message)
+        setUsageError(message)
+      })
+      .finally(() => setUsageLoading(false))
   }, [])
 
   return (
@@ -54,6 +65,8 @@ export function AccountPage({ user, onLogout, onGo }: Props) {
           </button>
         </div>
       </section>
+
+      <UsageCard usage={usage} error={usageError} loading={usageLoading} />
 
       <section className="rounded-2xl border border-line bg-panel p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Your listings</p>

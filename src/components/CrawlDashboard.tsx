@@ -2,7 +2,8 @@ import { LoaderCircle } from "lucide-react"
 import { useEffect, useState } from "react"
 import { loadAccount, loadCrawl, loadCrawls, requestWebsiteCrawl } from "../lib/api.ts"
 import { listingLocation, listingPath } from "../lib/listings.ts"
-import type { AuthUser, CrawlJob, DirectoryListing } from "../lib/types.ts"
+import type { AccountUsage, AuthUser, CrawlJob, DirectoryListing } from "../lib/types.ts"
+import { UsageCard } from "./UsageCard.tsx"
 
 type Props = {
   user: AuthUser
@@ -23,6 +24,8 @@ export function CrawlDashboard({ user, onGo }: Props) {
   const [website, setWebsite] = useState("")
   const [active, setActive] = useState<CrawlJob | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [usage, setUsage] = useState<AccountUsage | null>(null)
+  const [usageError, setUsageError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
 
@@ -33,11 +36,22 @@ export function CrawlDashboard({ user, onGo }: Props) {
     setCrawls(jobs)
     setListingId((current) => current || rows[0]?.id || "")
     if (!website && rows[0]?.website) setWebsite(rows[0].website)
+    if (account.usage) {
+      setUsage(account.usage)
+      setUsageError(null)
+    } else {
+      setUsage(null)
+      setUsageError("Monthly usage is not available yet.")
+    }
   }
 
   useEffect(() => {
     void refresh()
-      .catch((err) => setError(err instanceof Error ? err.message : "Could not load the crawl desk."))
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : "Could not load the crawl desk."
+        setError(message)
+        setUsageError(message)
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -152,6 +166,8 @@ export function CrawlDashboard({ user, onGo }: Props) {
           </form>
         )}
       </section>
+
+      <UsageCard usage={usage} error={usageError} loading={loading} />
 
       {active && (
         <section className="rounded-2xl border border-line bg-panel p-6">

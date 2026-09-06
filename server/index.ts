@@ -96,6 +96,8 @@ import { createReview, listingReviewSummary, reviewsForListing, seedDirectoryRev
 import { robotsTxt, siteOrigin, sitemapXml } from "./robots.ts"
 import { crawlsForUser, getCrawl, publicCrawl, requestListingCrawl } from "./site-crawl.ts"
 import { initStore } from "./store.ts"
+import { accountUsageFor, QuotaError } from "./usage.ts"
+import { AiPromptError, submitAiPrompt } from "./ai-prompts.ts"
 import { testScrappey } from "./scrappey.ts"
 import { checkout, listOrders, ordersForUser, publicOrder, shopSummary } from "./shop.ts"
 import { US_STATES } from "./states.ts"
@@ -853,7 +855,27 @@ async function start() {
       listings: listingsForUser(user.id).map((row) => publicListing(row, true)),
       orders: ordersForUser(user.id).map(publicOrder),
       product: readProduct(),
+      usage: accountUsageFor(user.id, user.role),
     })
+  })
+
+  app.post("/api/ai/prompts", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    try {
+      const result = submitAiPrompt(user.id, user.role)
+      res.json({ ...result, usage: accountUsageFor(user.id, user.role) })
+    } catch (error) {
+      if (error instanceof QuotaError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      if (error instanceof AiPromptError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not run that AI prompt." })
+    }
   })
 
   app.get("/api/admin", (req, res) => {

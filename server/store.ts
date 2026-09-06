@@ -16,6 +16,7 @@ export type StoreCollection =
   | "listings"
   | "crawls"
   | "reviews"
+  | "usage"
 
 type JsonRow = Record<string, unknown>
 
@@ -32,6 +33,7 @@ const FILES: Record<StoreCollection, string> = {
   listings: "listings.json",
   crawls: "crawls.json",
   reviews: "reviews.json",
+  usage: "usage.json",
 }
 
 const SCHEMA_SQL = `
@@ -130,6 +132,10 @@ CREATE TABLE IF NOT EXISTS reviews (
   id TEXT PRIMARY KEY,
   payload JSONB NOT NULL
 );
+CREATE TABLE IF NOT EXISTS usage (
+  id TEXT PRIMARY KEY,
+  payload JSONB NOT NULL
+);
 `
 
 const memory: Record<StoreCollection, JsonRow[]> = {
@@ -145,6 +151,7 @@ const memory: Record<StoreCollection, JsonRow[]> = {
   listings: [],
   crawls: [],
   reviews: [],
+  usage: [],
 }
 
 let loaded = false
@@ -321,7 +328,7 @@ async function persistPostgres(name: StoreCollection) {
           row.count ?? 1,
         ])
       }
-    } else if (name === "listings" || name === "crawls" || name === "reviews") {
+    } else if (name === "listings" || name === "crawls" || name === "reviews" || name === "usage") {
       const unique = uniqueRowsByKey(rows, "id")
       const ids = unique.map((row) => String(row.id))
       for (const row of unique) {
@@ -374,6 +381,7 @@ async function loadPostgres() {
   const listings = await pool.query("SELECT payload FROM listings")
   const crawls = await pool.query("SELECT payload FROM crawls")
   const reviews = await pool.query("SELECT payload FROM reviews")
+  const usage = await pool.query("SELECT payload FROM usage")
   memory.users = users.rows
   memory.sessions = sessions.rows
   memory.orders = orders.rows
@@ -386,6 +394,7 @@ async function loadPostgres() {
   memory.listings = listings.rows.map((row) => row.payload as JsonRow)
   memory.crawls = crawls.rows.map((row) => row.payload as JsonRow)
   memory.reviews = reviews.rows.map((row) => row.payload as JsonRow)
+  memory.usage = usage.rows.map((row) => row.payload as JsonRow)
 }
 
 function collectionEmpty() {

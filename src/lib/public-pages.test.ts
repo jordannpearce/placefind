@@ -21,6 +21,7 @@ const PUBLIC_FILES = [
   "components/AuthPage.tsx",
   "components/AccountPage.tsx",
   "components/CrawlDashboard.tsx",
+  "components/UsageCard.tsx",
   "lib/legal.ts",
   "lib/nav.ts",
 ]
@@ -45,6 +46,7 @@ describe("public website copy", () => {
     for (const rel of PUBLIC_FILES) {
       const text = readFileSync(path.join(root, rel), "utf8")
       assert.equal(isPublicVendorLeak(text), false, rel)
+      assert.equal(/cloro/i.test(text), false, rel)
     }
   })
 

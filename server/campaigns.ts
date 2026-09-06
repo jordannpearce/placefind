@@ -27,6 +27,7 @@ import {
 } from "./schedule.ts"
 import { normalizePinSource, resolveScanPoints, uniqueCityNamesWithinMiles, type PinSource } from "./geo-points.ts"
 import { readCollection, writeCollection } from "./store.ts"
+import { consumeMonthlyUsage, QuotaError } from "./usage.ts"
 import type { ApiKeys } from "./types.ts"
 import type { ScanCompare } from "../src/lib/types.ts"
 import {
@@ -1097,6 +1098,12 @@ export async function scanCampaign(
       competitors: [],
       ownGeo,
       nearbyCities,
+    }
+    try {
+      consumeMonthlyUsage(userId || campaign.userId, "rankScans")
+    } catch (error) {
+      if (error instanceof QuotaError) throw new CampaignError(error.message, error.status)
+      throw error
     }
     persistLiveGrid(campaign.id, liveGrid)
 
