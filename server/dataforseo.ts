@@ -121,24 +121,32 @@ export function isPendingMapsStatus(code?: number | null): boolean {
   return Boolean(code && TASK_PENDING.has(code))
 }
 
-export function isFailedMapsStatus(code?: number | null): boolean {
+export function isEmptySerpMessage(message?: string | null): boolean {
+  return /no search results/i.test(message || "")
+}
+
+export function isFailedMapsStatus(code?: number | null, message?: string | null): boolean {
+  if (isEmptySerpMessage(message)) return false
   return Boolean(code && code >= 40000 && !TASK_PENDING.has(code))
 }
 
 export function dataForSeoErrorMessage(payload: DfsResponse, httpStatus: number): string | null {
+  if (isEmptySerpMessage(payload.status_message) || isEmptySerpMessage(payload.tasks?.[0]?.status_message)) {
+    return null
+  }
   if (httpStatus === 401 || payload.status_code === 40101 || payload.status_code === 40102) {
     return "DataForSEO rejected the login or API password."
   }
   if (httpStatus >= 400) {
     return payload.status_message || `DataForSEO returned HTTP ${httpStatus}.`
   }
-  if (payload.status_code && isFailedMapsStatus(payload.status_code)) {
+  if (payload.status_code && isFailedMapsStatus(payload.status_code, payload.status_message)) {
     return payload.status_message || "DataForSEO request failed."
   }
   if (isPendingMapsStatus(payload.status_code)) return null
   const task = payload.tasks?.[0]
   if (isPendingMapsStatus(task?.status_code)) return null
-  if (task?.status_code && isFailedMapsStatus(task.status_code)) {
+  if (task?.status_code && isFailedMapsStatus(task.status_code, task.status_message)) {
     return task.status_message || "DataForSEO could not finish the Maps search."
   }
   return null
@@ -331,7 +339,7 @@ export function postedTasksFromResponse(
   requested.forEach((row, index) => {
     const tag = row.tag || ""
     const task = (tag && byTag.get(tag)) || tasks?.[index]
-    if (task?.id && !isFailedMapsStatus(task.status_code)) {
+    if (task?.id && !isFailedMapsStatus(task.status_code, task.status_message)) {
       posted.push({ id: task.id, tag: tag || task.data?.tag || "" })
       return
     }
@@ -402,12 +410,12 @@ export async function collectPostedTasks(
       if (tag == null) return
       const task = await getTask(id)
       const code = task?.status_code ?? 0
-      if (code === TASK_READY) {
+      if (code === TASK_READY || isEmptySerpMessage(task?.status_message)) {
         byTag.set(tag, { items: task?.result?.[0]?.items ?? [], error: null })
         pending.delete(id)
         return
       }
-      if (isFailedMapsStatus(code)) {
+      if (isFailedMapsStatus(code, task?.status_message)) {
         byTag.set(tag, {
           items: null,
           error: task?.status_message || "Maps search could not finish this point.",
@@ -435,7 +443,7 @@ async function retryFailedGets(
   await runPool(failed, TASK_GET_CONCURRENCY, async (row) => {
     const task = await getTask(row.id)
     const code = task?.status_code ?? 0
-    if (code === TASK_READY) {
+    if (code === TASK_READY || isEmptySerpMessage(task?.status_message)) {
       collected.set(row.tag, { items: task?.result?.[0]?.items ?? [], error: null })
     }
   })
@@ -454,6 +462,9 @@ async function liveMapsAtCoordinate(
   const task = payload.tasks?.[0]
   if (isPendingMapsStatus(task?.status_code) || isPendingMapsStatus(payload.status_code)) {
     return { items: [], error: "Maps search is still running." }
+  }
+  if (isEmptySerpMessage(error) || isEmptySerpMessage(task?.status_message)) {
+    return { items: task?.result?.[0]?.items ?? [], error: null }
   }
   if (error) return { items: [], error }
   return { items: task?.result?.[0]?.items ?? [], error: null }

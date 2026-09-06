@@ -3,7 +3,9 @@ import { describe, it } from "node:test"
 import { buildGrid } from "./grid.ts"
 import {
   collectPostedTasks,
+  dataForSeoErrorMessage,
   finalizeGridCells,
+  isEmptySerpMessage,
   postedTasksFromResponse,
   scanMapsGrid,
   type MapsGridClient,
@@ -37,6 +39,19 @@ function mapsItem(title: string, placeId: string, rank: number): MapsItem {
     address: "900 E 11th St, Austin, TX",
   }
 }
+
+describe("empty SERP handling", () => {
+  it("treats No Search Results as a finished empty cell, not an auth error", () => {
+    assert.equal(isEmptySerpMessage("No Search Results."), true)
+    assert.equal(
+      dataForSeoErrorMessage(
+        { status_code: 40102, status_message: "No Search Results.", tasks: [{ status_code: 40102, status_message: "No Search Results." }] },
+        200,
+      ),
+      null,
+    )
+  })
+})
 
 describe("postedTasksFromResponse", () => {
   it("keeps our request tag when the response omits data.tag", () => {
