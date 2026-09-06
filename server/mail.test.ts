@@ -15,17 +15,16 @@ import {
 import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
 
 describe("licenseEmail", () => {
-  it("includes the license key and download steps", () => {
+  it("points new customers at the directory instead of a boxed product", () => {
     const message = licenseEmail({
       name: "Jordan Pearce",
       product: "PlaceFind",
       key: "AAAA-BBBB-CCCC",
-      downloadUrl: "http://127.0.0.1:43141/download",
+      downloadUrl: "http://127.0.0.1:43141/join",
     })
-    assert.equal(message.subject.includes("license key"), true)
-    assert.equal(message.text.includes("AAAA-BBBB-CCCC"), true)
-    assert.equal(message.html.includes("AAAA-BBBB-CCCC"), true)
-    assert.equal(message.text.includes("http://127.0.0.1:43141/download"), true)
+    assert.equal(message.subject.includes("account"), true)
+    assert.equal(/download|windows|license key|setup\.exe/i.test(message.text + message.html), false)
+    assert.equal(/directory|listing|google maps/i.test(message.text), true)
   })
 })
 
@@ -33,7 +32,8 @@ describe("welcomeEmail", () => {
   it("names the product and price", () => {
     const message = welcomeEmail({ name: "Jordan", product: "PlaceFind", price: "49" })
     assert.equal(message.subject, "Welcome to PlaceFind")
-    assert.equal(message.text.includes("$49"), true)
+    assert.equal(/directory|listing|google maps/i.test(message.text), true)
+    assert.equal(/download|windows|license key|setup\.exe/i.test(message.text + message.html), false)
     assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.text), false)
     assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.html), false)
   })

@@ -121,25 +121,25 @@ export function mailPresets(product = { name: "PlaceFind", price: "49" }): MailP
       type: "welcome",
       label: "Welcome",
       subject: `Welcome to ${product.name}`,
-      text: `Hi {{first}},\n\nYour ${product.name} account is ready. Buy a license from your account page to get a license key and the Windows setup.\n\n${product.name} costs $${product.price} for one Windows license.\n`,
+      text: `Hi {{first}},\n\nYour ${product.name} account is ready. Sign in to add your business to the directory and confirm it on Google Maps.\n`,
     },
     {
       type: "activation",
-      label: "Activation / license",
-      subject: `Activate your ${product.name} license`,
-      text: `Hi {{first}},\n\nYour ${product.name} license is ready to unlock the Windows app.\n\n1. Sign in and open your account page.\n2. Copy your license key.\n3. Download the Windows setup.\n4. Paste the key when ${product.name} asks you to unlock.\n\nIf you have not bought a license yet, you can get one from your account page.\n`,
+      label: "Confirm your listing",
+      subject: `Confirm your ${product.name} listing`,
+      text: `Hi {{first}},\n\nYour ${product.name} account is ready.\n\n1. Sign in and open your account.\n2. Create a listing with your business name, city, and state.\n3. Check Google Maps and confirm the matching place.\n`,
     },
     {
       type: "marketing",
       label: "Marketing",
-      subject: "Find any Maps listing from a name and city",
-      text: `Hi {{first}},\n\n${product.name} looks up a Google Maps listing from a business name, city, and state — then tracks ranks on a map grid.\n\nOpen your account, download the Windows app, and run a scan when you are ready.\n`,
+      subject: "Find local businesses — and see who shows on Maps",
+      text: `Hi {{first}},\n\n${product.name} is a web directory for local businesses. Browse listings, or add your own and confirm the matching Google Maps place.\n\nSign in when you are ready to publish a profile.\n`,
     },
     {
       type: "info",
       label: "Info",
       subject: `A note from ${product.name}`,
-      text: `Hi {{first}},\n\nA quick note from the ${product.name} team. Sign in to your account for your license, download, and scans.\n\nReply to this email if you need help with your account.\n`,
+      text: `Hi {{first}},\n\nA quick note from the ${product.name} team. Sign in to manage your listings and scans.\n\nReply to this email if you need help with your account.\n`,
     },
     {
       type: "updates",
@@ -244,8 +244,8 @@ export function welcomeEmail(input: { name: string; product: string; price: stri
   return {
     to: "",
     subject: `Welcome to ${input.product}`,
-    text: `Hi ${first},\n\nYour ${input.product} account is ready. Buy a license from your account page to get a license key and the Windows setup.\n\nPlaceFind costs $${input.price} for one Windows license.\n`,
-    html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} account is ready. Buy a license to get a license key and the Windows setup.</p><p>PlaceFind costs $${escapeHtml(input.price)} for one Windows license.</p>`,
+    text: `Hi ${first},\n\nYour ${input.product} account is ready. Sign in to add your business to the directory and confirm it on Google Maps.\n`,
+    html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} account is ready. Sign in to add your business to the directory and confirm it on Google Maps.</p>`,
   }
 }
 
@@ -258,9 +258,9 @@ export function licenseEmail(input: {
   const first = input.name.split(" ")[0] || "there"
   return {
     to: "",
-    subject: `Your ${input.product} license key`,
-    text: `Hi ${first},\n\nThanks for buying ${input.product}. Here is your license key:\n\n${input.key}\n\n1. Download the Windows setup: ${input.downloadUrl}\n2. Install PlaceFind on Windows 10 or 11.\n3. Paste this key when the app asks you to unlock.\n\nKeep this email. The key is tied to your purchase.\n`,
-    html: `<p>Hi ${escapeHtml(first)},</p><p>Thanks for buying ${escapeHtml(input.product)}. Here is your license key:</p><p style="font-family:ui-monospace,monospace;font-size:16px;padding:12px;border:1px solid #3d362c;background:#17140f;color:#f3ead8">${escapeHtml(input.key)}</p><ol><li>Download the Windows setup: <a href="${escapeHtml(input.downloadUrl)}">${escapeHtml(input.downloadUrl)}</a></li><li>Install PlaceFind on Windows 10 or 11.</li><li>Paste this key when the app asks you to unlock.</li></ol><p>Keep this email. The key is tied to your purchase.</p>`,
+    subject: `Your ${input.product} account`,
+    text: `Hi ${first},\n\nThanks for joining ${input.product}. Sign in to create a listing and confirm it on Google Maps.\n`,
+    html: `<p>Hi ${escapeHtml(first)},</p><p>Thanks for joining ${escapeHtml(input.product)}. Sign in to create a listing and confirm it on Google Maps.</p>`,
   }
 }
 
@@ -279,8 +279,8 @@ export function pendingLicenseEmail(input: { name: string; product: string }): M
   return {
     to: "",
     subject: `We received your ${input.product} order`,
-    text: `Hi ${first},\n\nYour ${input.product} order is in. We will email your license key as soon as it is issued.\n`,
-    html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} order is in. We will email your license key as soon as it is issued.</p>`,
+    text: `Hi ${first},\n\nYour ${input.product} account is in. Sign in to create a listing when you are ready.\n`,
+    html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} account is in. Sign in to create a listing when you are ready.</p>`,
   }
 }
 

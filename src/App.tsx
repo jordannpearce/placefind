@@ -1,34 +1,34 @@
-import { Download } from "lucide-react"
 import { useEffect, useState } from "react"
 import { AccountPage } from "./components/AccountPage.tsx"
 import { AdminLogin } from "./components/AdminLogin.tsx"
 import { AdminPage } from "./components/AdminPage.tsx"
 import { AppNav } from "./components/AppNav.tsx"
 import { AuthPage } from "./components/AuthPage.tsx"
-import { BuyPage } from "./components/BuyPage.tsx"
 import { ResetPage } from "./components/ResetPage.tsx"
-import { DownloadPage } from "./components/DownloadPage.tsx"
+import { DirectoryPage } from "./components/DirectoryPage.tsx"
 import { HomePage } from "./components/HomePage.tsx"
 import { LegalPage } from "./components/LegalPage.tsx"
-import { LicenseGate } from "./components/LicenseGate.tsx"
+import { ListingDetailPage } from "./components/ListingDetailPage.tsx"
+import { ListingFormPage } from "./components/ListingFormPage.tsx"
 import { ResultPanel } from "./components/ResultPanel.tsx"
 import { SearchForm } from "./components/SearchForm.tsx"
 import { SiteFooter } from "./components/SiteFooter.tsx"
 import { TrackPage } from "./components/TrackPage.tsx"
-import { SellPage } from "./components/SellPage.tsx"
 import { isLegalPath } from "./lib/legal.ts"
 import { loadRuntime, searchBusiness, stopImpersonation } from "./lib/api.ts"
-import { allowedPath, clientIsDesktop, currentPath, isAppPath, pageTitle, type AppPath } from "./lib/nav.ts"
+import {
+  allowedPath,
+  clientIsDesktop,
+  currentPath,
+  isAppPath,
+  isListingCreatePath,
+  isListingEditPath,
+  listingIdFromPath,
+  pageTitle,
+  type AppPath,
+} from "./lib/nav.ts"
 import { emptyKeys, loadHistory, pushHistory } from "./lib/storage.ts"
-import type {
-  AuthUser,
-  HistoryItem,
-  HostedKeyStatus,
-  ImpersonatingInfo,
-  LicenseStatus,
-  SearchQuery,
-  SearchResponse,
-} from "./lib/types.ts"
+import type { AuthUser, HistoryItem, HostedKeyStatus, ImpersonatingInfo, SearchQuery, SearchResponse } from "./lib/types.ts"
 
 const emptyQuery = (): SearchQuery => ({ name: "", city: "", state: "", keyword: "" })
 
@@ -40,8 +40,16 @@ function scrollToHash(hash: string) {
   }, 40)
 }
 
+function requestedAppPath(raw: string): AppPath {
+  if (raw.startsWith("/listings")) return "/listings"
+  return isAppPath(raw) ? raw : "/"
+}
+
 export default function App() {
   const [path, setPath] = useState<AppPath>(currentPath)
+  const [listingId, setListingId] = useState(() => listingIdFromPath())
+  const [listingCreate, setListingCreate] = useState(() => isListingCreatePath())
+  const [listingEdit, setListingEdit] = useState(() => isListingEditPath())
   const [query, setQuery] = useState<SearchQuery>(emptyQuery)
   const [history, setHistory] = useState(loadHistory)
   const [loading, setLoading] = useState(false)
@@ -54,15 +62,23 @@ export default function App() {
   const [admin, setAdmin] = useState(false)
   const [bootstrap, setBootstrap] = useState(false)
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [license, setLicense] = useState<LicenseStatus | null>(null)
   const [publicUrl, setPublicUrl] = useState("")
   const [impersonating, setImpersonating] = useState<ImpersonatingInfo | null>(null)
   const [runtimeReady, setRuntimeReady] = useState(false)
 
   const access = { desktop, store, admin, user, impersonating }
 
+  function syncListingRoute() {
+    setListingId(listingIdFromPath())
+    setListingCreate(isListingCreatePath())
+    setListingEdit(isListingEditPath())
+  }
+
   useEffect(() => {
-    const onPop = () => setPath(currentPath())
+    const onPop = () => {
+      setPath(currentPath())
+      syncListingRoute()
+    }
     window.addEventListener("popstate", onPop)
     return () => window.removeEventListener("popstate", onPop)
   }, [])
@@ -87,7 +103,6 @@ export default function App() {
         setBootstrap(Boolean(runtime.bootstrap))
         setUser(runtime.user)
         setImpersonating(runtime.impersonating ?? null)
-        setLicense(runtime.license)
         setPublicUrl(runtime.publicUrl ?? "")
         const dest = allowedPath(currentPath(), {
           desktop: nextDesktop,
@@ -99,6 +114,7 @@ export default function App() {
         if (dest !== currentPath()) {
           window.history.replaceState({}, "", dest)
           setPath(dest)
+          syncListingRoute()
         }
       })
       .catch(() => {
@@ -110,11 +126,14 @@ export default function App() {
 
   function go(next: string) {
     const [rawPath, hash] = next.split("#")
-    const requested = (rawPath || "/") as AppPath
-    const dest = isAppPath(requested) ? allowedPath(requested, access) : "/"
-    const url = hash ? `${dest}#${hash}` : dest
+    const raw = rawPath || "/"
+    const requested = requestedAppPath(raw)
+    const dest = allowedPath(requested, access)
+    const urlPath = dest === "/listings" && raw.startsWith("/listings") ? raw : dest
+    const url = hash ? `${urlPath}#${hash}` : urlPath
     window.history.pushState({}, "", url)
     setPath(dest)
+    syncListingRoute()
     if (hash) scrollToHash(hash)
     else window.scrollTo({ top: 0, behavior: "smooth" })
   }
@@ -128,27 +147,30 @@ export default function App() {
       setDesktop(nextDesktop)
       setStore(Boolean(runtime.store) && !nextDesktop)
       setAdmin(runtime.admin)
-      setLicense(runtime.license)
       setUser(runtime.user ?? nextUser)
       setImpersonating(runtime.impersonating ?? null)
-      const next = dest ?? allowedPath(desktop || nextDesktop ? "/" : "/account", {
-        desktop: nextDesktop,
-        store: Boolean(runtime.store) && !nextDesktop,
-        admin: runtime.admin,
-        user: runtime.user ?? nextUser,
-        impersonating: runtime.impersonating ?? null,
-      })
+      const next =
+        dest ??
+        allowedPath(desktop || nextDesktop ? "/" : "/account", {
+          desktop: nextDesktop,
+          store: Boolean(runtime.store) && !nextDesktop,
+          admin: runtime.admin,
+          user: runtime.user ?? nextUser,
+          impersonating: runtime.impersonating ?? null,
+        })
       window.history.pushState({}, "", next)
       setPath(next)
+      syncListingRoute()
     } catch {
       const next = dest ?? (desktop ? "/" : "/account")
       window.history.pushState({}, "", next)
       setPath(next)
+      syncListingRoute()
     }
   }
 
   function onAuthed(next: AuthUser) {
-    const stay = path === "/track" || path === "/try" || path === "/demo"
+    const stay = path === "/track" || path === "/try" || path === "/demo" || path === "/listings" || path === "/directory"
     void refreshSession(next, stay ? path : desktop ? "/" : "/account")
   }
 
@@ -176,36 +198,21 @@ export default function App() {
     }
   }
 
-  function exportJson() {
-    if (!result?.best) return
-    const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `${result.best.title.replace(/[^\w]+/g, "-").toLowerCase()}.json`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
-
   function useHistory(item: HistoryItem) {
     const next = { name: item.name, city: item.city, state: item.state, keyword: item.keyword ?? "" }
     setQuery(next)
     void runSearch(next)
   }
 
-  const lookupBlocked = Boolean(license?.required && !license.valid && desktop)
   const needsDesktopLogin = desktop && !user && path !== "/admin" && path !== "/reset" && !isLegalPath(path)
   const needsTrackLogin = !desktop && path === "/track" && !user
   const needsTryLogin = !desktop && (path === "/try" || path === "/demo") && !user
+  const needsListingLogin = !desktop && path === "/listings" && listingCreate && !user
   const showHome = !desktop && path === "/"
   const showLegal = isLegalPath(path)
-  const showLookup =
-    ((desktop && path === "/") || (!desktop && (path === "/try" || path === "/demo") && Boolean(user))) &&
-    !lookupBlocked &&
-    !needsDesktopLogin
-  const showTrack = path === "/track" && !lookupBlocked && Boolean(user)
+  const showLookup = ((desktop && path === "/") || (!desktop && (path === "/try" || path === "/demo") && Boolean(user))) && !needsDesktopLogin
+  const showTrack = path === "/track" && Boolean(user)
   const showWebsiteChrome = !desktop
-  const tryScanDest = user ? "/try" : "/#sample"
 
   return (
     <div className="min-h-screen bg-ink">
@@ -232,7 +239,7 @@ export default function App() {
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <button type="button" onClick={() => go("/")} className="text-left">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">
-              {desktop ? "Windows desktop" : "Maps research for local businesses"}
+              {desktop ? "Maps lookup" : "Business directory"}
             </p>
             <h1 className="font-display text-3xl text-paper sm:text-4xl">PlaceFind</h1>
           </button>
@@ -240,34 +247,16 @@ export default function App() {
             {runtimeReady && !needsDesktopLogin && (
               <AppNav path={path} desktop={desktop} store={store} admin={admin} user={user} onGo={go} />
             )}
-            {showLookup && result?.best && (
-              <button
-                type="button"
-                onClick={exportJson}
-                className="inline-flex h-10 items-center gap-2 rounded-lg border border-line px-3 text-sm text-paper/80 hover:border-brass"
-              >
-                <Download className="h-4 w-4" />
-                Export
-              </button>
-            )}
           </div>
         </header>
 
-        {admin && !impersonating && path === "/sell" && <SellPage />}
         {path === "/admin" && admin && !impersonating && (
-          <AdminPage currentUserId={user?.id} onViewAs={(next) => void refreshSession(next, "/account")} />
+          <AdminPage currentUserId={user?.id} onViewAs={(next) => void refreshSession(next, "/account")} onGo={go} />
         )}
         {path === "/admin" && !admin && !impersonating && <AdminLogin bootstrap={bootstrap} onAuthed={onAdminAuthed} />}
-        {!desktop && (admin || store) && path === "/download" && (
-          <DownloadPage onTryScan={() => go(tryScanDest)} />
-        )}
-        {!desktop && store && path === "/buy" && (
-          <BuyPage user={user} onAuthed={onAuthed} onTryScan={() => go(tryScanDest)} />
-        )}
         {path === "/account" && user && (
           <AccountPage
             user={user}
-            desktop={desktop}
             onLogout={() => {
               setUser(null)
               setAdmin(false)
@@ -275,46 +264,55 @@ export default function App() {
               window.history.pushState({}, "", "/login")
               setPath("/login")
             }}
-            onBuy={desktop ? undefined : () => go("/buy")}
+            onGo={go}
           />
         )}
         {path === "/reset" && (
-          <ResetPage
-            desktop={desktop}
-            publicUrl={publicUrl}
-            onAuthed={onAuthed}
-            onGoLogin={() => go("/login")}
-          />
+          <ResetPage publicUrl={publicUrl} onAuthed={onAuthed} onGoLogin={() => go("/login")} />
         )}
         {showLegal && <LegalPage path={path} />}
-        {showHome && <HomePage user={user} store={store} onGo={go} />}
-        {(needsDesktopLogin || needsTrackLogin || needsTryLogin || (path === "/login" && !user)) && (
+        {showHome && <HomePage user={user} onGo={go} />}
+        {path === "/directory" && <DirectoryPage user={user} onGo={go} />}
+        {path === "/listings" && listingCreate && user && <ListingFormPage user={user} onGo={go} />}
+        {path === "/listings" && listingId && listingEdit && user && (
+          <ListingFormPage listingId={listingId} user={user} onGo={go} />
+        )}
+        {path === "/listings" && listingId && !listingEdit && (
+          <ListingDetailPage listingId={listingId} user={user} onGo={go} />
+        )}
+        {(needsDesktopLogin ||
+          needsTrackLogin ||
+          needsTryLogin ||
+          needsListingLogin ||
+          (path === "/login" && !user) ||
+          (path === "/join" && !user)) && (
           <AuthPage
-            desktop={desktop}
+            mode={path === "/join" || needsListingLogin ? "join" : "login"}
             publicUrl={publicUrl}
             title={
               needsTrackLogin
                 ? "Sign in to track ranks"
                 : needsTryLogin
                   ? "Sign in to run a test scan"
-                  : undefined
+                  : needsListingLogin || path === "/join"
+                    ? "Create a PlaceFind account"
+                    : undefined
             }
             intro={
               needsTrackLogin
                 ? "Grid tracking is for signed-in customers."
                 : needsTryLogin
                   ? "The live test scan is for signed-in customers. Visitors can try the sample search on the home page."
-                  : undefined
+                  : needsListingLogin || path === "/join"
+                    ? "Create an account to add your business to the directory and cross-check it on Google Maps."
+                    : undefined
             }
             onAuthed={onAuthed}
-            onGoBuy={desktop ? undefined : () => go("/buy")}
+            onGoLogin={() => go("/login")}
+            onGoJoin={() => go("/join")}
           />
         )}
-        {(path === "/" || path === "/track" || path === "/try" || path === "/demo") &&
-          lookupBlocked &&
-          license &&
-          user && <LicenseGate license={license} onActivated={setLicense} />}
-        {showTrack && <TrackPage keys={emptyKeys()} hosted={hosted} seller={seller} desktop={desktop} />}
+        {showTrack && <TrackPage keys={emptyKeys()} hosted={hosted} seller={seller} />}
         {showLookup && (
           <div className="grid flex-1 gap-6 lg:grid-cols-[20rem_1fr]">
             <aside className="min-w-0 rounded-2xl border border-line bg-panel p-5">

@@ -12,7 +12,7 @@ describe("usingCityGpsBackupNote", () => {
 describe("sampleSearchUsedMessage", () => {
   it("never mentions tracking or vendors", () => {
     const text = sampleSearchUsedMessage()
-    assert.equal(text, "This sample search is already in use. Download PlaceFind to run unlimited lookups.")
+    assert.equal(text, "This sample search is already in use. Create a PlaceFind account to run more lookups.")
     assert.equal(isPublicVendorLeak(text), false)
     assert.equal(/\bip\b|rate limit|tracking|we log|fingerprint/i.test(text), false)
   })

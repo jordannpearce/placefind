@@ -62,7 +62,7 @@ export function AdminUsers({ users, currentUserId, onUsers, onError, onMessage, 
       <h2 className="mt-1 font-display text-3xl text-paper">Manage accounts</h2>
       <p className="mt-3 text-sm leading-6 text-muted">
         Create, edit, suspend, or delete customer and admin accounts. Use View as user to open the site as that
-        customer. Suspended users cannot sign in on the website or the desktop app, but you can still view as them.
+        customer. Suspended users cannot sign in, but you can still view as them.
       </p>
 
       <form

@@ -9,7 +9,7 @@ type Props = {
   onGoLogin: () => void
 }
 
-export function ResetPage({ desktop, publicUrl, onAuthed, onGoLogin }: Props) {
+export function ResetPage({ publicUrl, onAuthed, onGoLogin }: Props) {
   const token = new URLSearchParams(window.location.search).get("token") ?? ""
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
@@ -23,17 +23,11 @@ export function ResetPage({ desktop, publicUrl, onAuthed, onGoLogin }: Props) {
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Password</p>
       <h2 className="mt-2 font-display text-3xl text-paper">Choose a new password</h2>
       <p className="mt-3 text-sm leading-6 text-muted">
-        {desktop
-          ? "Set a new password here, or open the same reset link on the PlaceFind website."
-          : "Enter a new password for your PlaceFind account. This link works once and expires in one hour."}
+        Enter a new password for your PlaceFind account. This link works once and expires in one hour.
       </p>
-      {desktop && websiteReset && (
+      {websiteReset && (
         <p className="mt-3 text-sm text-muted">
-          Prefer the website?{" "}
-          <a href={websiteReset} target="_blank" rel="noreferrer" className="text-brass hover:underline">
-            Open this reset page in a browser
-          </a>
-          .
+          Opened a copied link? Keep this tab — it is the PlaceFind reset page.
         </p>
       )}
       <form

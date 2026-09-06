@@ -14,6 +14,8 @@ export type AppPath =
   | "/reset"
   | "/try"
   | "/demo"
+  | "/directory"
+  | "/listings"
   | "/terms"
   | "/privacy"
   | "/policy"
@@ -47,6 +49,8 @@ const PATHS: AppPath[] = [
   "/reset",
   "/try",
   "/demo",
+  "/directory",
+  "/listings",
   "/terms",
   "/privacy",
   "/policy",
@@ -54,6 +58,20 @@ const PATHS: AppPath[] = [
   "/data-policy",
   "/refund",
 ]
+
+export function listingIdFromPath(pathname = typeof window === "undefined" ? "/" : window.location.pathname): string | null {
+  const match = pathname.match(/^\/listings\/([^/]+)/)
+  if (!match || match[1] === "new") return null
+  return match[1]
+}
+
+export function isListingCreatePath(pathname = typeof window === "undefined" ? "/" : window.location.pathname): boolean {
+  return pathname === "/listings/new" || pathname === "/listings/new/"
+}
+
+export function isListingEditPath(pathname = typeof window === "undefined" ? "/" : window.location.pathname): boolean {
+  return /^\/listings\/[^/]+\/edit\/?$/.test(pathname)
+}
 
 export function currentPath(): AppPath {
   const path = window.location.pathname
@@ -68,6 +86,8 @@ export function currentPath(): AppPath {
   if (path.startsWith("/reset")) return "/reset"
   if (path.startsWith("/try")) return "/try"
   if (path.startsWith("/demo")) return "/demo"
+  if (path.startsWith("/directory")) return "/directory"
+  if (path.startsWith("/listings")) return "/listings"
   if (path.startsWith("/terms")) return "/terms"
   if (path.startsWith("/privacy")) return "/privacy"
   if (path.startsWith("/policy")) return "/policy"
@@ -86,15 +106,13 @@ export function isAppPath(path: string): path is AppPath {
 }
 
 export function allowedPath(next: AppPath, access: NavAccess): AppPath {
-  const { desktop, store, admin, user, impersonating } = access
+  const { desktop, admin, user, impersonating } = access
   if (isLegalPath(next)) return next
   if (next === "/admin") return impersonating ? (user ? "/account" : "/") : "/admin"
   if (next === "/reset") return "/reset"
   if (next === "/sell") return admin ? "/sell" : impersonating ? "/account" : "/admin"
-  if (next === "/join") {
-    if (desktop) return user ? "/" : "/login"
-    return store ? "/buy" : "/"
-  }
+  if (next === "/join") return user ? "/account" : "/join"
+  if (next === "/directory" || next === "/listings") return next
   if (next === "/try" || next === "/demo") {
     if (desktop && !user) return "/login"
     return next
@@ -103,14 +121,13 @@ export function allowedPath(next: AppPath, access: NavAccess): AppPath {
   if (next === "/track") return desktop && !user ? "/login" : "/track"
   if (next === "/account") return user ? "/account" : "/login"
   if (next === "/login") return user ? (desktop ? "/" : "/account") : "/login"
-  if (next === "/download") return !desktop && (admin || store) ? "/download" : desktop ? "/" : "/"
-  if (next === "/buy") return !desktop && store ? "/buy" : desktop ? "/" : "/"
+  if (next === "/download" || next === "/buy") return desktop && !user ? "/login" : "/"
   if (next === "/") return "/"
   return "/"
 }
 
 export function navLinks(access: NavAccess): NavLink[] {
-  const { desktop, store, admin, user } = access
+  const { desktop, admin, user } = access
   if (desktop && !user) return []
 
   if (desktop) {
@@ -119,28 +136,31 @@ export function navLinks(access: NavAccess): NavLink[] {
       { href: "/track", label: "Track" },
     ]
     if (user) links.push({ href: "/account", label: "Account" })
-    if (admin) links.push({ href: "/sell", label: "Sell" }, { href: "/admin", label: "Admin" })
+    if (admin) links.push({ href: "/admin", label: "Admin" })
     return links
   }
 
-  const links: NavLink[] = [{ href: "/", label: "Home" }]
+  const links: NavLink[] = [
+    { href: "/", label: "Home" },
+    { href: "/directory", label: "Directory" },
+  ]
   if (!user) links.push({ href: "/#how-it-works", label: "How it works" })
-  if (user) links.push({ href: "/try", label: "Test scan" }, { href: "/track", label: "Track" })
-  if (store) {
-    links.push({ href: "/buy", label: "Buy" }, { href: "/download", label: "Download" })
-    links.push(user ? { href: "/account", label: "Account" } : { href: "/login", label: "Sign in" })
+  if (user) {
+    links.push({ href: "/listings/new", label: "Create listing" }, { href: "/try", label: "Test scan" }, { href: "/track", label: "Track" })
+    links.push({ href: "/account", label: "Account" })
+  } else {
+    links.push({ href: "/join", label: "Join" }, { href: "/login", label: "Sign in" })
   }
-  if (admin) {
-    links.push({ href: "/sell", label: "Sell" }, { href: "/admin", label: "Admin" })
-  }
+  if (admin) links.push({ href: "/admin", label: "Admin" })
   return links
 }
 
 export function pageTitle(path: AppPath): string {
   if (path === "/") return "PlaceFind — Find businesses on Google Maps"
+  if (path === "/directory") return "Directory · PlaceFind"
+  if (path === "/listings") return "Listing · PlaceFind"
   if (path === "/try" || path === "/demo") return "Test scan · PlaceFind"
-  if (path === "/buy") return "Buy · PlaceFind"
-  if (path === "/download") return "Download · PlaceFind"
+  if (path === "/join") return "Join · PlaceFind"
   if (path === "/login") return "Sign in · PlaceFind"
   if (path === "/track") return "Track · PlaceFind"
   if (path === "/terms") return "Terms of use · PlaceFind"

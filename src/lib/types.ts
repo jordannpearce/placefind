@@ -184,6 +184,40 @@ export type MailSendResult = {
   outbox: OutboxRow[]
 }
 
+export type MapsStatus = "pending" | "found" | "not_found"
+
+export type DirectoryListing = {
+  id: string
+  ownerUserId?: string
+  name: string
+  city: string
+  state: string
+  category: string
+  keywords: string[]
+  phone: string
+  website: string
+  hours: string
+  placeId: string | null
+  cid: string | null
+  mapsStatus: MapsStatus
+  mapsTitle: string
+  mapsAddress: string
+  mapsUrl: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ListingInput = {
+  name: string
+  city: string
+  state: string
+  category?: string
+  keywords?: string[] | string
+  phone?: string
+  website?: string
+  hours?: string
+}
+
 export type ImpersonatingInfo = {
   name: string
   email: string

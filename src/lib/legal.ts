@@ -13,7 +13,7 @@ export type LegalPage = {
 export const LEGAL_UPDATED = "September 6, 2026"
 
 const SHARED_CONTACT =
-  "If you have a question about this page, sign in and write us from the email on your account, or use the contact address printed on your license receipt."
+  "If you have a question about this page, sign in and write us from the email on your account."
 
 export const LEGAL_PAGES: LegalPage[] = [
   {
@@ -22,20 +22,20 @@ export const LEGAL_PAGES: LegalPage[] = [
     title: "Terms of use",
     updated: LEGAL_UPDATED,
     intro:
-      "These terms cover the PlaceFind website, your account, and the Windows desktop app. By buying a license or creating an account, you agree to them.",
+      "These terms cover the PlaceFind website and your account. By creating an account or using the directory, you agree to them.",
     sections: [
       {
         heading: "What PlaceFind is",
         body: [
-          "PlaceFind is research software for local businesses. It looks up Google Maps listings from a business name, city, state, and optional keyword, and it lets signed-in customers track how those listings appear across an area.",
-          "We license a Windows desktop app and a matching web account. The website also explains the product, sells licenses, and lets signed-in customers run tools they have paid for.",
+          "PlaceFind is a web directory for local businesses. People use it to find businesses, and businesses use it to list themselves and see whether they appear on Google Maps.",
+          "Signed-in businesses can create a listing, confirm the matching Google Maps place, and use optional rank-tracking tools on their account.",
         ],
       },
       {
-        heading: "Your license",
+        heading: "Your account",
         body: [
-          "A paid license is for one Windows computer unless we say otherwise at checkout. You may not share, rent, or resell the key. You may move the app to a replacement computer if you stop using the old one.",
-          "We may refuse or revoke a license if we reasonably believe it was obtained by fraud, shared publicly, or used to overload the service.",
+          "An account lets you add and manage PlaceFind listings and use signed-in tools. You may not share your password or use the service to impersonate another business.",
+          "We may refuse or close an account if we reasonably believe it was obtained by fraud, used to overload the service, or used to post a listing that is not yours.",
         ],
       },
       {
@@ -55,7 +55,7 @@ export const LEGAL_PAGES: LegalPage[] = [
         heading: "No warranty",
         body: [
           "Maps results change. Rankings move. PlaceFind presents listings as we find them at search time. We do not guarantee a rank, a lead, or that a listing will stay the same.",
-          "The software is provided as-is. To the extent the law allows, PlaceFind is not liable for lost profits, lost data, or indirect damages from using the site or the app.",
+          "The service is provided as-is. To the extent the law allows, PlaceFind is not liable for lost profits, lost data, or indirect damages from using the site.",
         ],
       },
       {
@@ -73,35 +73,34 @@ export const LEGAL_PAGES: LegalPage[] = [
     nav: "Policy",
     title: "Privacy policy",
     updated: LEGAL_UPDATED,
-    intro:
-      "This policy explains what PlaceFind collects when you use the website or the Windows app, and how we use that information.",
+    intro: "This policy explains what PlaceFind collects when you use the website, and how we use that information.",
     sections: [
       {
         heading: "Information you give us",
         body: [
-          "When you create an account or buy a license we store your name, email, and a hashed password. We also store the license key issued to you and a record of the order.",
+          "When you create an account we store your name, email, and a hashed password. When you add a listing we store the business name, city, state, category, keywords, and optional phone, website, and hours.",
           "If you run Track or save a campaign, we store the business name, city, state, keywords, and scan results you asked us to keep so you can come back to them.",
         ],
       },
       {
         heading: "Information created by using the site",
         body: [
-          "We use a session cookie to keep you signed in. The desktop app talks to the same account so your license and campaigns stay in one place.",
+          "We use a session cookie to keep you signed in so your listings and campaigns stay on your account.",
           "We keep ordinary server logs so we can run the service, find bugs, and stop abuse. Those logs are not used to build an advertising profile.",
         ],
       },
       {
         heading: "How we use it",
         body: [
-          "We use account data to sign you in, deliver a license, send transactional email, and show you your scans. We use campaign data only to provide the product you asked for.",
+          "We use account data to sign you in, send transactional email, show your listings, and show you your scans. We use listing and campaign data only to provide the product you asked for.",
           "We do not sell your account list. We do not rent emails to other companies.",
         ],
       },
       {
         heading: "How long we keep it",
         body: [
-          "We keep your account and license records while the account is open and for a reasonable period afterward so we can handle refunds, chargebacks, or support.",
-          "You can ask us to close an account. We may retain a minimal record when the law or a payment dispute requires it.",
+          "We keep your account and listing records while the account is open and for a reasonable period afterward so we can handle support requests.",
+          "You can ask us to close an account. We may retain a minimal record when the law requires it.",
         ],
       },
       {
@@ -121,19 +120,19 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "Transactional email",
         body: [
-          "We send mail that the product needs: account confirmation, license delivery, password reset links, and receipts. These are not marketing messages. You receive them because you bought PlaceFind, reset a password, or asked the site to do something.",
+          "We send mail that the product needs: account confirmation, password reset links, and notices about your listings. These are not marketing messages. You receive them because you created an account, reset a password, or asked the site to do something.",
         ],
       },
       {
         heading: "Optional product mail",
         body: [
-          "From time to time we may send product updates, tips, or an offer to existing customers. That mail always includes a way to unsubscribe. Unsubscribing from optional mail does not cancel your license or stop transactional messages.",
+          "From time to time we may send product updates, tips, or an offer to existing customers. That mail always includes a way to unsubscribe. Unsubscribing from optional mail does not close your account or stop transactional messages.",
         ],
       },
       {
         heading: "What we will not do",
         body: [
-          "We will not add you to a third-party list. We will not sell your address. We will not disguise a sales pitch as a license or password email.",
+          "We will not add you to a third-party list. We will not sell your address. We will not disguise a sales pitch as a password email.",
         ],
       },
       {
@@ -147,19 +146,18 @@ export const LEGAL_PAGES: LegalPage[] = [
     nav: "Data policy",
     title: "Data policy",
     updated: LEGAL_UPDATED,
-    intro:
-      "This page is a plain-language look at the data PlaceFind stores for the product to work.",
+    intro: "This page is a plain-language look at the data PlaceFind stores for the product to work.",
     sections: [
       {
         heading: "Account data",
         body: [
-          "Name, email, hashed password, role (customer or admin), and account status. This is what lets you sign in on the website and on Windows.",
+          "Name, email, hashed password, role (customer or admin), and account status. This is what lets you sign in on the website.",
         ],
       },
       {
-        heading: "License and order data",
+        heading: "Listing data",
         body: [
-          "Order records, license keys, and the email the key was sent to. We keep this so you can recover a key and so we can tell a valid license from a copied one.",
+          "Business name, city, state, category, keywords, optional contact details, and the Google Maps place you confirmed (or a not-found status). Public directory pages show the profile you published.",
         ],
       },
       {
@@ -183,7 +181,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "Closing an account",
         body: [
-          "Ask us from the email on your account if you want the account closed. Campaign data is removed with the account unless a legal hold applies.",
+          "Ask us from the email on your account if you want the account closed. Campaign and listing data is removed with the account unless a legal hold applies.",
           SHARED_CONTACT,
         ],
       },
@@ -194,43 +192,36 @@ export const LEGAL_PAGES: LegalPage[] = [
     nav: "Refunds",
     title: "Refund policy",
     updated: LEGAL_UPDATED,
-    intro:
-      "PlaceFind is a paid Windows license plus a web account. This page explains when we refund a purchase.",
+    intro: "PlaceFind is a web directory and account. This page explains how billing questions are handled.",
     sections: [
       {
-        heading: "Unused license within 14 days",
+        heading: "The public directory is free to browse",
         body: [
-          "If you bought a license and have not activated it on a Windows computer, you may request a refund within 14 days of the purchase date. Write us from the email on the order.",
+          "Visitors can browse listings and try a sample Maps lookup without paying. Creating an account and adding a listing does not require a purchase today.",
         ],
       },
       {
-        heading: "After you activate",
+        heading: "If a paid plan is added later",
         body: [
-          "Once the key is activated on a computer, the license is in use. We generally do not refund an activated license. If the installer never ran or the key never unlocked the app because of a defect on our side, we will repair that or refund the unused key.",
+          "If you pay for an optional plan in the future, unused time on that plan may be refunded within 14 days of the charge if you write us from the email on your account. We will say so clearly at checkout.",
         ],
       },
       {
         heading: "What we do not promise",
         body: [
           "Maps results, ranks, and traffic on Google Maps are outside our control. A refund is not available because a listing ranked lower than you hoped or because a competitor appeared in a scan.",
-          "We do not offer partial refunds for unused campaign slots or for time you did not spend in the app.",
         ],
       },
       {
         heading: "How to ask",
-        body: [
-          "Sign in, open your account, and write us from that email with the order date. If we approve a refund, we reverse the charge through the same payment method when we can, and we disable the unused key.",
-          SHARED_CONTACT,
-        ],
+        body: ["Sign in, open your account, and write us from that email.", SHARED_CONTACT],
       },
     ],
   },
 ]
 
 export function legalPageFor(path: string): LegalPage | null {
-  return (
-    LEGAL_PAGES.find((page) => page.path === path || page.aliases?.includes(path as LegalPath)) ?? null
-  )
+  return LEGAL_PAGES.find((page) => page.path === path || page.aliases?.includes(path as LegalPath)) ?? null
 }
 
 export function isLegalPath(path: string): path is LegalPath {

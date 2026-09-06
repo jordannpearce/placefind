@@ -2,7 +2,7 @@
   "name": "placefind",
   "private": true,
   "version": "1.0.0",
-  "description": "Windows desktop app that finds a Google Maps listing from a business name, city, and state.",
+  "description": "Web directory for local businesses with a Google Maps cross-check.",
   "author": "PlaceFind",
   "type": "module",
   "main": "electron/main.cjs",

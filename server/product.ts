@@ -14,7 +14,7 @@ const FALLBACK: ProductInfo = {
   name: "PlaceFind",
   version: "1.0.0",
   price: "49",
-  pitch: "Windows software that finds a Google Maps listing from a business name, city, state, and keyword.",
+  pitch: "A web directory for local businesses, with a Google Maps cross-check.",
 }
 
 export function readProduct(): ProductInfo {

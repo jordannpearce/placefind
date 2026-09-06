@@ -89,6 +89,19 @@ import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
 import { requestIp, runWebsiteSearch, VisitorSearchUsedError } from "./search-limit.ts"
 import { readSearchQuery } from "./search-query.ts"
+import {
+  confirmListingMatch,
+  createListing,
+  deleteListing,
+  getListing,
+  ListingError,
+  listPublicListings,
+  listingsForUser,
+  publicListing,
+  seedDirectoryListings,
+  updateListing,
+  verifyListingOnMaps,
+} from "./listings.ts"
 import { initStore } from "./store.ts"
 import { testScrappey } from "./scrappey.ts"
 import { attachUserLicense, checkout, issueAndDeliver, listOrders, ordersForUser, publicOrder, shopSummary } from "./shop.ts"
@@ -117,6 +130,7 @@ function readQuery(body: Partial<SearchQuery>): { query: SearchQuery; error?: st
 
 async function start() {
   await initStore()
+  seedDirectoryListings()
   await initGeoPoints()
   await hydrateHostedKeys()
   recoverStaleTrafficJobs()
@@ -143,7 +157,7 @@ async function start() {
 
   function store(req: express.Request, res: express.Response) {
     if (storeOpen()) return true
-    res.status(403).json({ error: "The license store is not available in this copy." })
+    res.status(403).json({ error: "That purchase flow is no longer available." })
     return false
   }
 
@@ -195,6 +209,124 @@ async function start() {
     res.json({ states: US_STATES })
   })
 
+  app.get("/api/listings", (req, res) => {
+    const query = {
+      name: String(req.query.name ?? ""),
+      city: String(req.query.city ?? ""),
+      state: String(req.query.state ?? ""),
+      keyword: String(req.query.keyword ?? ""),
+    }
+    const admin = canManage(req.headers.cookie)
+    const user = actor(req)
+    res.json({
+      listings: listPublicListings(query).map((row) => publicListing(row, admin || row.ownerUserId === user?.id)),
+    })
+  })
+
+  app.get("/api/listings/:id", (req, res) => {
+    try {
+      const listing = getListing(String(req.params.id ?? ""))
+      const admin = canManage(req.headers.cookie)
+      const user = actor(req)
+      res.json({ listing: publicListing(listing, admin || listing.ownerUserId === user?.id) })
+    } catch (error) {
+      if (error instanceof ListingError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not load that listing." })
+    }
+  })
+
+  app.post("/api/listings", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    try {
+      const listing = createListing(req.body ?? {}, user.id)
+      res.status(201).json({ listing: publicListing(listing, true) })
+    } catch (error) {
+      if (error instanceof ListingError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not create the listing." })
+    }
+  })
+
+  app.patch("/api/listings/:id", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    try {
+      const listing = updateListing(String(req.params.id ?? ""), req.body ?? {}, user.id, user.role === "admin")
+      res.json({ listing: publicListing(listing, true) })
+    } catch (error) {
+      if (error instanceof ListingError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not update the listing." })
+    }
+  })
+
+  app.delete("/api/listings/:id", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    try {
+      deleteListing(String(req.params.id ?? ""), user.id, user.role === "admin")
+      res.json({ ok: true })
+    } catch (error) {
+      if (error instanceof ListingError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not delete the listing." })
+    }
+  })
+
+  app.post("/api/listings/:id/verify", async (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const keys = isSellerMode() ? ((req.body ?? {}) as ApiKeys) : {}
+    try {
+      const verified = await verifyListingOnMaps(String(req.params.id ?? ""), user.id, user.role === "admin", (query) =>
+        searchBusiness(query, keys),
+      )
+      res.json({
+        listing: publicListing(verified.listing, true),
+        result: verified.result,
+        candidates: verified.candidates,
+      })
+    } catch (error) {
+      if (error instanceof ListingError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not check Google Maps for this listing." })
+    }
+  })
+
+  app.post("/api/listings/:id/confirm", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const body = (req.body ?? {}) as {
+      placeId?: string
+      cid?: string
+      title?: string
+      address?: string
+      mapsStatus?: "pending" | "found" | "not_found"
+    }
+    try {
+      const listing = confirmListingMatch(String(req.params.id ?? ""), user.id, user.role === "admin", body)
+      res.json({ listing: publicListing(listing, true) })
+    } catch (error) {
+      if (error instanceof ListingError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not confirm the Maps listing." })
+    }
+  })
+
   app.post("/api/search", async (req, res) => {
     const desktop = isDesktopRequest(req)
     if (desktop && !actor(req)) {
@@ -209,7 +341,7 @@ async function start() {
     const license = await licenseStatus()
     if (license.required && !license.valid && (desktop || !storeOpen())) {
       res.status(402).json({
-        error: license.detail || "Enter a valid PlaceFind license key to search.",
+        error: license.detail || "Sign in with a PlaceFind account to search.",
         license,
       })
       return
@@ -354,7 +486,7 @@ async function start() {
     const license = await licenseStatus()
     if (license.required && !license.valid && (desktop || !storeOpen())) {
       res.status(402).json({
-        error: license.detail || "Enter a valid PlaceFind license key to scan ranks.",
+        error: license.detail || "Sign in with a PlaceFind account to scan ranks.",
         license,
       })
       return
@@ -425,7 +557,7 @@ async function start() {
     const license = await licenseStatus()
     if (license.required && !license.valid && (desktop || !storeOpen())) {
       res.status(402).json({
-        error: license.detail || "Enter a valid PlaceFind license key to scan ranks.",
+        error: license.detail || "Sign in with a PlaceFind account to scan ranks.",
         license,
       })
       return
@@ -455,7 +587,7 @@ async function start() {
     const license = await licenseStatus()
     if (license.required && !license.valid && (desktop || !storeOpen())) {
       res.status(402).json({
-        error: license.detail || "Enter a valid PlaceFind license key to start traffic.",
+        error: license.detail || "Sign in with a PlaceFind account to start traffic.",
         license,
       })
       return
@@ -668,10 +800,9 @@ async function start() {
 
   app.post("/api/auth/signup", async (req, res) => {
     if (isDesktopRequest(req)) {
-      res.status(403).json({ error: "Create your account when you buy PlaceFind on the website." })
+      res.status(403).json({ error: "Create your account on the PlaceFind website." })
       return
     }
-    if (!store(req, res)) return
     const body = (req.body ?? {}) as { name?: string; email?: string; password?: string }
     const result = signup({ name: body.name ?? "", email: body.email ?? "", password: body.password ?? "" })
     if (result.error || !result.user) {
@@ -762,7 +893,7 @@ async function start() {
     if (!store(req, res)) return
     const user = actor(req)
     if (!user) {
-      res.status(401).json({ error: "Sign in to buy a license." })
+      res.status(401).json({ error: "Sign in to continue." })
       return
     }
     const result = await checkout(user)
@@ -776,11 +907,12 @@ async function start() {
   app.get("/api/account", (req, res) => {
     const user = actor(req)
     if (!user) {
-      res.status(401).json({ error: "Sign in to see your licenses." })
+      res.status(401).json({ error: "Sign in to see your account." })
       return
     }
     res.json({
       user,
+      listings: listingsForUser(user.id).map((row) => publicListing(row, true)),
       orders: ordersForUser(user.id).map(publicOrder),
       product: readProduct(),
     })
@@ -807,6 +939,7 @@ async function start() {
       })),
       mailPresets: mailPresets(readProduct()),
       geoPoints: geoPointsMeta(),
+      listings: listPublicListings().map((row) => publicListing(row, true)),
     })
   })
 

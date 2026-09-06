@@ -2,7 +2,7 @@ const VENDOR_TALK =
   /dataforseo|scrappey|keygen|resend|paddle|leaflet|railway|api keys?|api password|hosted keys?|seller keys?|when a key is saved|\btokens?\b/i
 
 export const SAMPLE_SEARCH_USED_MESSAGE =
-  "This sample search is already in use. Download PlaceFind to run unlimited lookups."
+  "This sample search is already in use. Create a PlaceFind account to run more lookups."
 
 export function sampleSearchUsedMessage() {
   return SAMPLE_SEARCH_USED_MESSAGE

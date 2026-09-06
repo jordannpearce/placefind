@@ -26,6 +26,9 @@ import type {
   TrafficSchedule,
   PinSource,
   GeoPointsStatus,
+  DirectoryListing,
+  ListingInput,
+  BusinessListing,
 } from "./types.ts"
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -108,7 +111,7 @@ export async function saveKeygen(input: {
     error?: string
   }
   if (!response.ok || !payload.keygen || !payload.installer) {
-    throw new Error(payload.error || "Could not save Keygen settings.")
+    throw new Error(payload.error || "Could not save those settings.")
   }
   return { keygen: payload.keygen, installer: payload.installer, issued: payload.issued ?? [] }
 }
@@ -126,7 +129,7 @@ export async function testKeygen(input: {
     body: JSON.stringify(input),
   })
   const payload = (await response.json()) as { ok?: boolean; message?: string; error?: string }
-  if (!response.ok) throw new Error(payload.error || payload.message || "Could not reach Keygen.")
+  if (!response.ok) throw new Error(payload.error || payload.message || "Could not reach that service.")
   return { ok: Boolean(payload.ok), message: payload.message || "" }
 }
 
@@ -174,7 +177,7 @@ export async function saveHostedKeys(input: {
   })
   const payload = (await response.json()) as { hosted?: HostedKeyStatus; installer?: InstallerStatus; error?: string }
   if (!response.ok || !payload.hosted || !payload.installer) {
-    throw new Error(payload.error || "Could not save API keys into the installer.")
+    throw new Error(payload.error || "Could not save Maps search credentials.")
   }
   return { hosted: payload.hosted, installer: payload.installer }
 }
@@ -199,7 +202,7 @@ export async function loadInstaller(): Promise<InstallerStatus> {
 
 export async function startInstallerBuild(): Promise<InstallerStatus> {
   const response = await fetch("/api/installer/build", { method: "POST", credentials: "include" })
-  if (!response.ok) throw new Error("Could not start the Windows setup build.")
+  if (!response.ok) throw new Error("Could not start that build.")
   return (await response.json()) as InstallerStatus
 }
 
@@ -248,8 +251,73 @@ export async function checkoutOrder(): Promise<{ order: OrderInfo; license: Issu
   return request("/api/shop/checkout", { method: "POST" })
 }
 
-export async function loadAccount(): Promise<{ user: AuthUser; orders: OrderInfo[]; product: ProductInfo }> {
+export async function loadAccount(): Promise<{
+  user: AuthUser
+  listings?: DirectoryListing[]
+  orders: OrderInfo[]
+  product: ProductInfo
+}> {
   return request("/api/account")
+}
+
+export async function searchDirectory(input: {
+  name?: string
+  city?: string
+  state?: string
+  keyword?: string
+}): Promise<DirectoryListing[]> {
+  const query = new URLSearchParams()
+  if (input.name?.trim()) query.set("name", input.name.trim())
+  if (input.city?.trim()) query.set("city", input.city.trim())
+  if (input.state?.trim()) query.set("state", input.state.trim())
+  if (input.keyword?.trim()) query.set("keyword", input.keyword.trim())
+  const suffix = query.size ? `?${query}` : ""
+  const payload = await request<{ listings: DirectoryListing[] }>(`/api/listings${suffix}`)
+  return payload.listings
+}
+
+export async function loadListing(id: string): Promise<DirectoryListing> {
+  const payload = await request<{ listing: DirectoryListing }>(`/api/listings/${id}`)
+  return payload.listing
+}
+
+export async function createListing(input: ListingInput): Promise<DirectoryListing> {
+  const payload = await request<{ listing: DirectoryListing }>("/api/listings", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+  return payload.listing
+}
+
+export async function updateListing(id: string, input: ListingInput): Promise<DirectoryListing> {
+  const payload = await request<{ listing: DirectoryListing }>(`/api/listings/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  })
+  return payload.listing
+}
+
+export async function deleteListing(id: string): Promise<void> {
+  await request(`/api/listings/${id}`, { method: "DELETE" })
+}
+
+export async function verifyListing(id: string): Promise<{
+  listing: DirectoryListing
+  result: SearchResponse
+  candidates: BusinessListing[]
+}> {
+  return request(`/api/listings/${id}/verify`, { method: "POST", body: JSON.stringify({}) })
+}
+
+export async function confirmListingMatch(
+  id: string,
+  input: { placeId?: string; cid?: string; title?: string; address?: string; mapsStatus?: "pending" | "found" | "not_found" },
+): Promise<DirectoryListing> {
+  const payload = await request<{ listing: DirectoryListing }>(`/api/listings/${id}/confirm`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+  return payload.listing
 }
 
 export async function loadAdmin(): Promise<{
@@ -264,6 +332,7 @@ export async function loadAdmin(): Promise<{
   outbox: Array<{ id: string; to: string; subject: string; createdAt: string; delivered: boolean; detail: string }>
   mailPresets?: Array<{ type: string; label: string; subject: string; text: string }>
   geoPoints?: GeoPointsStatus
+  listings?: DirectoryListing[]
 }> {
   return request("/api/admin")
 }

@@ -68,6 +68,7 @@ describe("publicCheckoutWarning", () => {
     const warning = publicCheckoutWarning("Keygen is not connected.")
     assert.ok(warning)
     assert.equal(leaksVendorTalk(warning), false)
-    assert.match(warning, /license key/i)
+    assert.match(warning, /listing|account/i)
+    assert.equal(/license key|download|windows/i.test(warning), false)
   })
 })

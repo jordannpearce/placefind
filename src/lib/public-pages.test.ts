@@ -15,8 +15,9 @@ const PUBLIC_FILES = [
   "components/SiteFooter.tsx",
   "components/SearchForm.tsx",
   "components/ResultPanel.tsx",
-  "components/BuyPage.tsx",
-  "components/DownloadPage.tsx",
+  "components/DirectoryPage.tsx",
+  "components/ListingDetailPage.tsx",
+  "components/ListingFormPage.tsx",
   "components/AuthPage.tsx",
   "components/AccountPage.tsx",
   "lib/legal.ts",
@@ -49,5 +50,13 @@ describe("public website copy", () => {
   it("does not advertise a used-search or IP limit", () => {
     const home = readFileSync(path.join(root, "components/HomePage.tsx"), "utf8")
     assert.equal(/already in use|you('ve| have) used|ip limit|logged your ip/i.test(home), false)
+  })
+
+  it("does not mention download, Windows, or license keys on the public site", () => {
+    const banned = /download for windows|windows desktop|windows app|setup\.exe|license key|keygen|activation code/i
+    for (const rel of PUBLIC_FILES) {
+      const text = readFileSync(path.join(root, rel), "utf8")
+      assert.equal(banned.test(text), false, rel)
+    }
   })
 })

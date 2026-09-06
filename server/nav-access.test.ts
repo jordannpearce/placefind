@@ -15,24 +15,27 @@ const user: AuthUser = {
 const admin: AuthUser = { ...user, id: "a1", role: "admin", email: "ada@example.com" }
 
 describe("allowedPath", () => {
-  it("sends desktop visitors to sign in and never to Join or Download", () => {
+  it("sends leftover desktop visitors to sign in and never to Join", () => {
     const guest = { desktop: true, store: false, admin: false, user: null } satisfies NavAccess
     assert.equal(allowedPath("/", guest), "/login")
     assert.equal(allowedPath("/track", guest), "/login")
-    assert.equal(allowedPath("/join", guest), "/login")
+    assert.equal(allowedPath("/join", guest), "/join")
     assert.equal(allowedPath("/download", guest), "/login")
     assert.equal(allowedPath("/buy", guest), "/login")
     assert.equal(allowedPath("/reset", guest), "/reset")
   })
 
-  it("keeps the marketing home public and sends Join to Buy", () => {
+  it("keeps the marketing home and directory public and sends Join to signup", () => {
     const guest = { desktop: false, store: true, admin: false, user: null } satisfies NavAccess
     assert.equal(allowedPath("/", guest), "/")
+    assert.equal(allowedPath("/directory", guest), "/directory")
+    assert.equal(allowedPath("/listings", guest), "/listings")
     assert.equal(allowedPath("/track", guest), "/track")
     assert.equal(allowedPath("/try", guest), "/try")
     assert.equal(allowedPath("/demo", guest), "/demo")
-    assert.equal(allowedPath("/join", guest), "/buy")
-    assert.equal(allowedPath("/download", guest), "/download")
+    assert.equal(allowedPath("/join", guest), "/join")
+    assert.equal(allowedPath("/download", guest), "/")
+    assert.equal(allowedPath("/buy", guest), "/")
     assert.equal(allowedPath("/reset", guest), "/reset")
     assert.equal(allowedPath("/terms", guest), "/terms")
     assert.equal(allowedPath("/policy", guest), "/policy")
@@ -42,7 +45,7 @@ describe("allowedPath", () => {
     assert.equal(allowedPath("/refund", guest), "/refund")
   })
 
-  it("lets a signed-in desktop customer use Lookup, Track, and Account", () => {
+  it("lets a signed-in leftover desktop customer use Lookup, Track, and Account", () => {
     const access = { desktop: true, store: false, admin: false, user } satisfies NavAccess
     assert.equal(allowedPath("/", access), "/")
     assert.equal(allowedPath("/track", access), "/track")
@@ -53,7 +56,7 @@ describe("allowedPath", () => {
 })
 
 describe("navLinks", () => {
-  it("hides Download, Join, and Buy on desktop", () => {
+  it("hides Download, Join, and Buy on leftover desktop nav", () => {
     const labels = navLinks({ desktop: true, store: false, admin: false, user }).map((link) => link.label)
     assert.deepEqual(labels, ["Lookup", "Track", "Account"])
     assert.equal(labels.includes("Download"), false)
@@ -61,14 +64,16 @@ describe("navLinks", () => {
     assert.equal(labels.includes("Buy"), false)
   })
 
-  it("uses a marketing nav on the public website and hides Test scan", () => {
+  it("uses a directory nav on the public website and hides Test scan for visitors", () => {
     const guest = navLinks({ desktop: false, store: true, admin: false, user: null }).map((link) => link.label)
-    assert.deepEqual(guest, ["Home", "How it works", "Buy", "Download", "Sign in"])
+    assert.deepEqual(guest, ["Home", "Directory", "How it works", "Join", "Sign in"])
     assert.equal(guest.includes("Test scan"), false)
-    assert.equal(guest.includes("Join"), false)
+    assert.equal(guest.includes("Download"), false)
+    assert.equal(guest.includes("Buy"), false)
     const labels = navLinks({ desktop: false, store: true, admin: false, user }).map((link) => link.label)
-    assert.deepEqual(labels, ["Home", "Test scan", "Track", "Buy", "Download", "Account"])
-    assert.equal(labels.includes("Join"), false)
+    assert.deepEqual(labels, ["Home", "Directory", "Create listing", "Test scan", "Track", "Account"])
+    assert.equal(labels.includes("Download"), false)
+    assert.equal(labels.includes("Buy"), false)
   })
 
   it("shows Admin only for admin users", () => {
@@ -76,6 +81,7 @@ describe("navLinks", () => {
     assert.equal(customer.includes("Admin"), false)
     const staff = navLinks({ desktop: true, store: false, admin: true, user: admin }).map((link) => link.label)
     assert.ok(staff.includes("Admin"))
+    assert.equal(staff.includes("Sell"), false)
   })
 
   it("hides Admin chrome while viewing as a customer", () => {

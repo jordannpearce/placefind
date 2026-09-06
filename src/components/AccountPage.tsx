@@ -1,24 +1,22 @@
 import { useEffect, useState } from "react"
 import { loadAccount, logout } from "../lib/api.ts"
-import type { AuthUser, OrderInfo, ProductInfo } from "../lib/types.ts"
+import { listingLocation, listingPath, mapsStatusLabel } from "../lib/listings.ts"
+import type { AuthUser, DirectoryListing } from "../lib/types.ts"
 
 type Props = {
   user: AuthUser
-  desktop?: boolean
   onLogout: () => void
-  onBuy?: () => void
+  onGo: (path: string) => void
 }
 
-export function AccountPage({ user, desktop, onLogout, onBuy }: Props) {
-  const [orders, setOrders] = useState<OrderInfo[]>([])
-  const [product, setProduct] = useState<ProductInfo | null>(null)
+export function AccountPage({ user, onLogout, onGo }: Props) {
+  const [listings, setListings] = useState<DirectoryListing[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     void loadAccount()
       .then((account) => {
-        setOrders(account.orders)
-        setProduct(account.product)
+        setListings(account.listings ?? [])
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load your account."))
   }, [])
@@ -30,11 +28,13 @@ export function AccountPage({ user, desktop, onLogout, onBuy }: Props) {
         <h2 className="mt-2 font-display text-3xl text-paper">{user.name}</h2>
         <p className="mt-1 text-sm text-muted">{user.email}</p>
         <div className="mt-5 flex flex-wrap gap-3">
-          {!desktop && onBuy && (
-            <button type="button" onClick={onBuy} className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]">
-              Buy a license
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => onGo("/listings/new")}
+            className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
+          >
+            Create a listing
+          </button>
           <button
             type="button"
             onClick={async () => {
@@ -49,27 +49,26 @@ export function AccountPage({ user, desktop, onLogout, onBuy }: Props) {
       </section>
 
       <section className="rounded-2xl border border-line bg-panel p-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">License keys</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Your listings</p>
         {error && <p className="mt-3 text-sm text-clay">{error}</p>}
-        {orders.length === 0 ? (
+        {listings.length === 0 ? (
           <p className="mt-3 text-sm text-muted">
-            {desktop
-              ? "No license is attached to this account yet. Buy PlaceFind on the website, then sign in here again."
-              : `No licenses yet. Buy ${product?.name ?? "PlaceFind"} to get a license key.`}
+            No listings yet. Create a PlaceFind profile for your business, then confirm it on Google Maps.
           </p>
         ) : (
           <ul className="mt-4 grid gap-3">
-            {orders.map((order) => (
-              <li key={order.id} className="rounded-xl border border-line bg-ink px-4 py-3">
-                <p className="text-sm text-paper">
-                  ${order.amount} · {order.status === "paid" ? "License ready" : "Waiting for a key"}
-                </p>
-                {order.licenseKey ? (
-                  <p className="mt-1 break-all font-mono text-sm text-brass">{order.licenseKey}</p>
-                ) : (
-                  <p className="mt-1 text-sm text-muted">Your license key will appear here once it is issued.</p>
-                )}
-                <p className="mt-1 text-xs text-muted">{new Date(order.createdAt).toLocaleString()}</p>
+            {listings.map((listing) => (
+              <li key={listing.id}>
+                <button
+                  type="button"
+                  onClick={() => onGo(listingPath(listing.id))}
+                  className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-left hover:border-brass/60"
+                >
+                  <p className="text-sm text-paper">{listing.name}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {listingLocation(listing)} · {mapsStatusLabel(listing.mapsStatus)}
+                  </p>
+                </button>
               </li>
             ))}
           </ul>

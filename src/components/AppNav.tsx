@@ -18,7 +18,12 @@ export function AppNav({ path, desktop, store, admin, user, onGo }: Props) {
   return (
     <nav className="flex flex-wrap items-center gap-1">
       {links.map((link) => {
-        const active = link.href === path || (link.href.startsWith("/#") && path === "/")
+        const pathname = window.location.pathname
+        const active =
+          link.href === pathname ||
+          link.href === path ||
+          (link.href.startsWith("/#") && path === "/") ||
+          (link.href === "/listings/new" && pathname.startsWith("/listings"))
         return (
           <a
             key={link.href}

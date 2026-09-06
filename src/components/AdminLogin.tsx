@@ -20,7 +20,7 @@ export function AdminLogin({ bootstrap, onAuthed }: Props) {
       <h2 className="mt-2 font-display text-3xl text-paper">{bootstrap ? "Create the first admin" : "Admin sign in"}</h2>
       <p className="mt-3 text-sm leading-6 text-muted">
         {bootstrap
-          ? "No accounts exist yet. Create the first admin to manage licenses and the Windows setup."
+          ? "No accounts exist yet. Create the first admin to manage users and directory listings."
           : "Sign in with an admin account to manage users. This page stays empty until you are signed in."}
       </p>
       <form

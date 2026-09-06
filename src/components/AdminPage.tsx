@@ -1,46 +1,38 @@
-import { Check, Copy, LoaderCircle } from "lucide-react"
 import { useEffect, useState } from "react"
-import { adminIssueLicense, loadAdmin, saveMail, testMail } from "../lib/api.ts"
-import type { AuthUser, GeoPointsStatus, HostedKeyStatus, IssuedLicense, MailPreset, MailStatus, OrderInfo, OutboxRow } from "../lib/types.ts"
+import { loadAdmin, saveMail, testMail } from "../lib/api.ts"
+import type { AuthUser, DirectoryListing, GeoPointsStatus, HostedKeyStatus, MailPreset, MailStatus, OutboxRow } from "../lib/types.ts"
 import { AdminEmail } from "./AdminEmail.tsx"
 import { AdminGeoPoints } from "./AdminGeoPoints.tsx"
+import { AdminListings } from "./AdminListings.tsx"
 import { AdminUsers } from "./AdminUsers.tsx"
 import { MapsSearchPanel } from "./MapsSearchPanel.tsx"
 
 export function AdminPage({
   currentUserId,
   onViewAs,
+  onGo,
 }: {
   currentUserId?: string
   onViewAs: (user: AuthUser) => void
+  onGo: (path: string) => void
 }) {
   const [users, setUsers] = useState<AuthUser[]>([])
-  const [orders, setOrders] = useState<OrderInfo[]>([])
-  const [issued, setIssued] = useState<IssuedLicense[]>([])
+  const [listings, setListings] = useState<DirectoryListing[]>([])
   const [outbox, setOutbox] = useState<OutboxRow[]>([])
   const [mailPresets, setMailPresets] = useState<MailPreset[]>([])
   const [mail, setMail] = useState<MailStatus | null>(null)
   const [hosted, setHosted] = useState<HostedKeyStatus | null>(null)
   const [geoPoints, setGeoPoints] = useState<GeoPointsStatus | null>(null)
-  const [shop, setShop] = useState({ orderCount: 0, paidCount: 0, pendingCount: 0 })
-  const [keygenReady, setKeygenReady] = useState(false)
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [sendEmail, setSendEmail] = useState(true)
-  const [resendKey, setResendKey] = useState("")
   const [fromEmail, setFromEmail] = useState("")
   const [fromName, setFromName] = useState("")
+  const [mailKey, setMailKey] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [copied, setCopied] = useState("")
-  const [latest, setLatest] = useState<IssuedLicense | null>(null)
 
   async function refresh() {
     const admin = await loadAdmin()
     setUsers(admin.users)
-    setOrders(admin.orders)
-    setIssued(admin.issued)
+    setListings(admin.listings ?? [])
     setOutbox(admin.outbox)
     setMailPresets(
       (admin.mailPresets ?? []).flatMap((row) => {
@@ -52,8 +44,6 @@ export function AdminPage({
     setMail(admin.mail)
     setHosted(admin.hosted ?? null)
     setGeoPoints(admin.geoPoints ?? null)
-    setShop(admin.shop)
-    setKeygenReady(admin.keygen.canIssue)
     setFromEmail(admin.mail.fromEmail)
     setFromName(admin.mail.fromName)
   }
@@ -75,6 +65,8 @@ export function AdminPage({
         onViewAs={onViewAs}
       />
 
+      <AdminListings listings={listings} onListings={setListings} onError={setError} onMessage={setMessage} onGo={onGo} />
+
       <AdminEmail
         users={users}
         outbox={outbox}
@@ -85,187 +77,82 @@ export function AdminPage({
         onMessage={setMessage}
       />
 
-      <MapsSearchPanel
-        hosted={hosted}
-        onHosted={setHosted}
-        onError={setError}
-        onMessage={setMessage}
-      />
+      <MapsSearchPanel hosted={hosted} onHosted={setHosted} onError={setError} onMessage={setMessage} />
 
       <AdminGeoPoints initial={geoPoints} onError={setError} onMessage={setMessage} />
 
-      <section className="rounded-2xl border border-line bg-panel p-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Admin</p>
-        <h2 className="mt-1 font-display text-3xl text-paper">Licenses and email</h2>
-        <p className="mt-3 text-sm leading-6 text-muted">
-          Issue a Keygen license for a buyer and email the key with Resend. {shop.orderCount} orders · {shop.paidCount}{" "}
-          keyed · {shop.pendingCount} waiting.
+      <section className="rounded-2xl border border-line bg-panel p-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Transactional email</p>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          Save mail settings so welcome and password-reset messages can leave this server. Until then, messages stay
+          in the outbox on this computer.
         </p>
-        {!keygenReady && (
-          <p className="mt-3 text-sm text-clay">Connect Keygen on the Sell page before issuing keys.</p>
+        {mail?.configured && (
+          <p className="mt-2 text-sm text-moss">
+            Connected · {mail.keyHint} · {mail.fromEmail}
+          </p>
         )}
-        {error && <p className="mt-3 text-sm text-clay">{error}</p>}
-        {message && <p className="mt-3 text-sm text-moss">{message}</p>}
-      </section>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-line bg-panel p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Issue a license</p>
-          <label className="mt-4 grid gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Buyer name</span>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-            />
-          </label>
-          <label className="mt-3 grid gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Buyer email</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-            />
-          </label>
-          <label className="mt-3 flex items-center gap-2 text-sm text-paper/80">
-            <input type="checkbox" checked={sendEmail} onChange={(event) => setSendEmail(event.target.checked)} />
-            Email the key with Resend
-          </label>
+        <label className="mt-4 grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Mail key</span>
+          <input
+            type="password"
+            value={mailKey}
+            onChange={(event) => setMailKey(event.target.value)}
+            placeholder={mail?.keyHint || "Paste the outbound mail key"}
+            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+          />
+        </label>
+        <label className="mt-3 grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">From name</span>
+          <input
+            value={fromName}
+            onChange={(event) => setFromName(event.target.value)}
+            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+          />
+        </label>
+        <label className="mt-3 grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">From email</span>
+          <input
+            value={fromEmail}
+            onChange={(event) => setFromEmail(event.target.value)}
+            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+          />
+        </label>
+        <div className="mt-4 grid grid-cols-2 gap-3">
           <button
             type="button"
-            disabled={busy || !email}
             onClick={async () => {
-              setBusy(true)
               setError(null)
               try {
-                const result = await adminIssueLicense({ name, email, sendEmail })
-                setLatest(result.license)
-                setName("")
-                setEmail("")
-                setMessage(sendEmail ? "License created and queued for email." : "License created.")
-                await refresh()
+                const result = await testMail({ resendApiKey: mailKey, fromEmail, fromName })
+                setMessage(result.message)
+                if (!result.ok) setError(result.message)
               } catch (err) {
-                setError(err instanceof Error ? err.message : "Could not issue a license.")
-              } finally {
-                setBusy(false)
+                setError(err instanceof Error ? err.message : "Could not test mail.")
               }
             }}
-            className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brass font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
+            className="h-11 rounded-lg border border-brass text-sm font-semibold text-brass hover:bg-brass/10"
           >
-            {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
-            {busy ? "Issuing…" : "Issue Keygen license"}
+            Test mail
           </button>
-          {latest && (
-            <p className="mt-3 break-all font-mono text-sm text-brass">{latest.key}</p>
-          )}
-        </section>
-
-        <section className="rounded-2xl border border-line bg-panel p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Resend email</p>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            Paste a Resend API key to send welcome, license, and password reset emails. Until then, messages stay in the outbox on this
-            computer.
-          </p>
-          {mail?.configured && <p className="mt-2 text-sm text-moss">Connected · {mail.keyHint} · {mail.fromEmail}</p>}
-          <label className="mt-4 grid gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Resend API key</span>
-            <input
-              type="password"
-              value={resendKey}
-              onChange={(event) => setResendKey(event.target.value)}
-              placeholder={mail?.keyHint || "re_…"}
-              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-            />
-          </label>
-          <label className="mt-3 grid gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">From name</span>
-            <input
-              value={fromName}
-              onChange={(event) => setFromName(event.target.value)}
-              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-            />
-          </label>
-          <label className="mt-3 grid gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">From email</span>
-            <input
-              value={fromEmail}
-              onChange={(event) => setFromEmail(event.target.value)}
-              placeholder="onboarding@resend.dev"
-              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-            />
-          </label>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={async () => {
-                setError(null)
-                try {
-                  const result = await testMail({ resendApiKey: resendKey, fromEmail, fromName })
-                  setMessage(result.message)
-                  if (!result.ok) setError(result.message)
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Could not reach Resend.")
-                }
-              }}
-              className="h-11 rounded-lg border border-brass text-sm font-semibold text-brass hover:bg-brass/10"
-            >
-              Test Resend
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                setError(null)
-                try {
-                  setMail(await saveMail({ resendApiKey: resendKey, fromEmail, fromName }))
-                  setResendKey("")
-                  setMessage("Resend settings saved.")
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Could not save Resend.")
-                }
-              }}
-              className="h-11 rounded-lg bg-brass text-sm font-semibold text-ink hover:bg-[#ecc77a]"
-            >
-              Save Resend
-            </button>
-          </div>
-        </section>
-      </div>
-
-      <section className="rounded-2xl border border-line bg-panel p-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Orders and keys</p>
-        {orders.length === 0 && issued.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">No purchases or issued keys yet.</p>
-        ) : (
-          <ul className="mt-4 grid gap-2">
-            {orders.map((order) => (
-              <li key={order.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-ink px-4 py-3">
-                <div>
-                  <p className="text-sm text-paper">
-                    {order.name} · ${order.amount} · {order.status === "paid" ? "keyed" : "waiting"}
-                  </p>
-                  <p className="text-xs text-muted">{order.email}</p>
-                  {order.licenseKey && <p className="mt-1 break-all font-mono text-xs text-paper/80">{order.licenseKey}</p>}
-                </div>
-                {order.licenseKey && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(order.licenseKey ?? "")
-                      setCopied(order.id)
-                    }}
-                    className="inline-flex items-center gap-1 text-sm text-brass hover:underline"
-                  >
-                    {copied === order.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                    {copied === order.id ? "Copied" : "Copy"}
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+          <button
+            type="button"
+            onClick={async () => {
+              setError(null)
+              try {
+                setMail(await saveMail({ resendApiKey: mailKey, fromEmail, fromName }))
+                setMailKey("")
+                setMessage("Mail settings saved.")
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Could not save mail settings.")
+              }
+            }}
+            className="h-11 rounded-lg bg-brass text-sm font-semibold text-ink hover:bg-[#ecc77a]"
+          >
+            Save mail
+          </button>
+        </div>
       </section>
-
     </div>
   )
 }

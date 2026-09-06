@@ -42,7 +42,7 @@ describe("runWebsiteSearch", () => {
       (error: unknown) => {
         assert.ok(error instanceof VisitorSearchUsedError)
         assert.equal(error.message, sampleSearchUsedMessage())
-        assert.equal(error.message, "This sample search is already in use. Download PlaceFind to run unlimited lookups.")
+        assert.equal(error.message, "This sample search is already in use. Create a PlaceFind account to run more lookups.")
         assert.equal(leaksVendorTalk(error.message), false)
         assert.equal(/\bip\b|rate limit|tracking|log your|fingerprint/i.test(error.message), false)
         return true
