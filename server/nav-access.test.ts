@@ -26,7 +26,7 @@ describe("allowedPath", () => {
   it("keeps website test scan public and sends Join to Buy", () => {
     const guest = { desktop: false, store: true, admin: false, user: null } satisfies NavAccess
     assert.equal(allowedPath("/", guest), "/")
-    assert.equal(allowedPath("/track", guest), "/login")
+    assert.equal(allowedPath("/track", guest), "/track")
     assert.equal(allowedPath("/join", guest), "/buy")
     assert.equal(allowedPath("/download", guest), "/download")
   })

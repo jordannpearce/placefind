@@ -35,7 +35,7 @@ export function allowedPath(next: AppPath, access: NavAccess): AppPath {
     return store ? "/buy" : "/"
   }
   if (desktop && !user) return "/login"
-  if (next === "/track") return user ? "/track" : "/login"
+  if (next === "/track") return desktop && !user ? "/login" : "/track"
   if (next === "/account") return user ? "/account" : "/login"
   if (next === "/login") return user ? (desktop ? "/" : "/account") : "/login"
   if (next === "/download") return !desktop && (admin || store) ? "/download" : desktop ? "/" : "/"
