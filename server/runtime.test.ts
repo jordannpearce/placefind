@@ -1,11 +1,14 @@
 import assert from "node:assert/strict"
 import { afterEach, describe, it } from "node:test"
 import {
+  DEFAULT_PUBLIC_SITE_URL,
   isDesktopProcess,
   isDesktopRequest,
   isElectronUserAgent,
   isPackagedBuyer,
   isStoreEnabled,
+  passwordResetUrl,
+  publicSiteUrl,
 } from "./runtime.ts"
 
 describe("desktop runtime", () => {
@@ -47,5 +50,29 @@ describe("desktop runtime", () => {
     )
     assert.equal(isDesktopRequest({ headers: { "user-agent": "Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36" } }), false)
     assert.equal(isStoreEnabled(), true)
+  })
+})
+
+describe("public site URL", () => {
+  const previous = process.env.PLACEFIND_PUBLIC_URL
+
+  afterEach(() => {
+    if (previous == null) delete process.env.PLACEFIND_PUBLIC_URL
+    else process.env.PLACEFIND_PUBLIC_URL = previous
+  })
+
+  it("defaults to the Railway website and builds a reset link", () => {
+    delete process.env.PLACEFIND_PUBLIC_URL
+    assert.equal(publicSiteUrl(), DEFAULT_PUBLIC_SITE_URL)
+    assert.equal(
+      passwordResetUrl("abc/def"),
+      `${DEFAULT_PUBLIC_SITE_URL}/reset?token=${encodeURIComponent("abc/def")}`,
+    )
+  })
+
+  it("uses PLACEFIND_PUBLIC_URL when set", () => {
+    process.env.PLACEFIND_PUBLIC_URL = "https://example.test/"
+    assert.equal(publicSiteUrl(), "https://example.test")
+    assert.equal(passwordResetUrl("tok"), "https://example.test/reset?token=tok")
   })
 })

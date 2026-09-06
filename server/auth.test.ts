@@ -8,16 +8,21 @@ import {
   canManage,
   createManagedUser,
   createSession,
+  FORGOT_PASSWORD_MESSAGE,
   hashPassword,
+  hashResetToken,
+  issuePasswordReset,
   login,
   parseCookies,
+  resetForgotRateLimitForTests,
+  resetPasswordWithToken,
   setUserStatus,
   signup,
   userFromCookie,
   verifyPassword,
 } from "./auth.ts"
-import { reloadStoreFromDisk, resetStoreForTests, writeCollection } from "./store.ts"
-import type { User } from "./auth.ts"
+import { readCollection, reloadStoreFromDisk, resetStoreForTests, writeCollection } from "./store.ts"
+import type { PasswordReset, User } from "./auth.ts"
 
 describe("password hashing", () => {
   it("verifies a matching password and rejects a wrong one", () => {
@@ -148,5 +153,76 @@ describe("account status", () => {
     const signedIn = login({ email: "casey@example.com", password: "password12" })
     assert.equal(signedIn.user?.email, "casey@example.com")
     assert.equal(signedIn.error, undefined)
+  })
+})
+
+describe("password reset", () => {
+  function isolate() {
+    resetForgotRateLimitForTests()
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-auth-reset-")))
+  }
+
+  after(() => {
+    delete process.env.PLACEFIND_DATA_DIR
+    resetForgotRateLimitForTests()
+    reloadStoreFromDisk()
+  })
+
+  it("returns a generic message whether or not the email exists", () => {
+    isolate()
+    signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const missing = issuePasswordReset("nobody@example.com")
+    const found = issuePasswordReset("ada@example.com")
+    const suspendedUser = createManagedUser({
+      name: "Sam",
+      email: "sam@example.com",
+      password: "password12",
+      role: "customer",
+    })
+    setUserStatus(suspendedUser.user!.id, "suspended")
+    const suspended = issuePasswordReset("sam@example.com")
+    assert.equal(missing.message, FORGOT_PASSWORD_MESSAGE)
+    assert.equal(found.message, FORGOT_PASSWORD_MESSAGE)
+    assert.equal(suspended.message, FORGOT_PASSWORD_MESSAGE)
+    assert.equal(missing.rawToken, undefined)
+    assert.equal(suspended.rawToken, undefined)
+    assert.ok(found.rawToken)
+    const stored = readCollection<PasswordReset>("password_resets")
+    assert.equal(stored.some((row) => row.tokenHash === found.rawToken), false)
+    assert.equal(stored.some((row) => row.tokenHash === hashResetToken(found.rawToken!)), true)
+  })
+
+  it("rejects an expired token and leaves the password unchanged", () => {
+    isolate()
+    const created = signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    writeCollection("password_resets", [
+      {
+        tokenHash: hashResetToken("expired-token"),
+        userId: created.user!.id,
+        expiresAt: new Date(Date.now() - 60_000).toISOString(),
+        usedAt: null,
+      },
+    ])
+    const result = resetPasswordWithToken({ token: "expired-token", password: "newpassword1" })
+    assert.equal(result.user, undefined)
+    assert.equal(result.error, "This reset link is invalid or has expired.")
+    const stillOld = login({ email: "ada@example.com", password: "password12" })
+    assert.equal(stillOld.user?.email, "ada@example.com")
+    assert.equal(login({ email: "ada@example.com", password: "newpassword1" }).error, "Email or password is incorrect.")
+  })
+
+  it("changes the password for a valid token and rejects reuse", () => {
+    isolate()
+    signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const issued = issuePasswordReset("ada@example.com")
+    assert.ok(issued.rawToken)
+    const result = resetPasswordWithToken({ token: issued.rawToken!, password: "newpassword1" })
+    assert.equal(result.error, undefined)
+    assert.equal(result.user?.email, "ada@example.com")
+    assert.equal(login({ email: "ada@example.com", password: "newpassword1" }).user?.email, "ada@example.com")
+    assert.equal(login({ email: "ada@example.com", password: "password12" }).error, "Email or password is incorrect.")
+    const reused = resetPasswordWithToken({ token: issued.rawToken!, password: "anotherpass1" })
+    assert.equal(reused.user, undefined)
+    assert.equal(reused.error, "This reset link is invalid or has expired.")
   })
 })

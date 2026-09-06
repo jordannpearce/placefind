@@ -29,18 +29,6 @@ describe("licenseEmail", () => {
   })
 })
 
-describe("passwordResetEmail", () => {
-  it("includes the reset link and no vendor names", () => {
-    const message = passwordResetEmail({
-      name: "Jordan Pearce",
-      resetUrl: "https://placefind-production.up.railway.app/reset?token=abc",
-    })
-    assert.match(message.subject, /reset/i)
-    assert.equal(message.text.includes("https://placefind-production.up.railway.app/reset?token=abc"), true)
-    assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.text + message.html), false)
-  })
-})
-
 describe("welcomeEmail", () => {
   it("names the product and price", () => {
     const message = welcomeEmail({ name: "Jordan", product: "PlaceFind", price: "49" })
@@ -59,6 +47,7 @@ describe("passwordResetEmail", () => {
     assert.equal(message.text.includes(resetUrl), true)
     assert.equal(message.html.includes(resetUrl), true)
     assert.equal(message.text.includes("one hour"), true)
+    assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.text + message.html), false)
   })
 })
 

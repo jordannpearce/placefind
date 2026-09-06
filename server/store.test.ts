@@ -31,6 +31,16 @@ describe("store", () => {
     ])
     const users = readCollection<{ email: string }>("users")
     assert.equal(users[0]?.email, "pat@example.com")
+    writeCollection("password_resets", [
+      {
+        tokenHash: "abc",
+        userId: "u1",
+        expiresAt: "2026-01-01T01:00:00.000Z",
+        usedAt: null,
+      },
+    ])
+    const resets = readCollection<{ tokenHash: string }>("password_resets")
+    assert.equal(resets[0]?.tokenHash, "abc")
     if (previous == null) delete process.env.DATABASE_URL
     else process.env.DATABASE_URL = previous
   })
