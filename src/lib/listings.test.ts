@@ -73,6 +73,16 @@ describe("listing copy", () => {
     assert.equal(noStreet.zip, "78702")
     assert.equal(noStreet.category, "Food truck")
 
+    const fromDetail = listingFormFromPlace({
+      title: "Night Kitchen",
+      address: "Austin, TX",
+      hoursDetail: [
+        { day: "Mon", hours: "Closed" },
+        { day: "Tue", hours: "11:00 AM–8:00 PM" },
+      ],
+    })
+    assert.equal(fromDetail.hours, "Mon Closed; Tue 11:00 AM–8:00 PM")
+
     const match = listingMapsMatchFromPlace({
       title: "Maple Oven",
       address: "10 Congress St, Portland, ME 04101",

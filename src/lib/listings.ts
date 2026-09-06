@@ -37,8 +37,18 @@ export function mapsCategory(place: { category?: string | null; categories?: str
   return place.categories?.map((row) => row.trim()).find(Boolean) ?? ""
 }
 
+export function hoursFromPlace(place: { hours?: string | null; hoursDetail?: { day: string; hours: string }[] | null }): string {
+  if (place.hours?.trim()) return place.hours.trim()
+  const rows = place.hoursDetail ?? []
+  if (rows.length === 0) return ""
+  return rows
+    .map((row) => `${row.day} ${row.hours}`.trim())
+    .filter(Boolean)
+    .join("; ")
+}
+
 export function listingFormFromPlace(
-  place: Pick<BusinessListing, "title" | "address" | "phone" | "website" | "hours" | "category" | "categories"> & {
+  place: Pick<BusinessListing, "title" | "address" | "phone" | "website" | "hours" | "hoursDetail" | "category" | "categories"> & {
     city?: string | null
     state?: string | null
   },
@@ -59,7 +69,7 @@ export function listingFormFromPlace(
     phone: place.phone?.trim() || fallback.phone?.trim() || "",
     email: fallback.email ?? "",
     website: place.website?.trim() || fallback.website?.trim() || "",
-    hours: place.hours?.trim() || fallback.hours?.trim() || "",
+    hours: hoursFromPlace(place) || fallback.hours?.trim() || "",
   }
 }
 
@@ -71,7 +81,7 @@ export function listingMapsMatchFromPlace(place: BusinessListing): ListingMapsMa
     address: place.address,
     phone: place.phone ?? undefined,
     website: place.website ?? undefined,
-    hours: place.hours ?? undefined,
+    hours: hoursFromPlace(place) || undefined,
     category: mapsCategory(place) || undefined,
     categories: place.categories,
   }
