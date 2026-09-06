@@ -133,10 +133,23 @@ export function formatBytes(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export async function signup(input: { name: string; email: string; password: string }): Promise<AuthUser> {
+export async function signup(input: {
+  name: string
+  email: string
+  password: string
+  kind?: "business" | "member"
+}): Promise<AuthUser> {
   const payload = await request<{ user: AuthUser }>("/api/auth/signup", {
     method: "POST",
     body: JSON.stringify(input),
+  })
+  return payload.user
+}
+
+export async function becomeBusinessAccount(): Promise<AuthUser> {
+  const payload = await request<{ user: AuthUser }>("/api/account/kind", {
+    method: "POST",
+    body: JSON.stringify({ kind: "business" }),
   })
   return payload.user
 }
@@ -329,6 +342,7 @@ export async function createAdminUser(input: {
   email: string
   password: string
   role: "customer" | "admin"
+  kind?: "business" | "member"
 }): Promise<AuthUser> {
   const payload = await request<{ user: AuthUser }>("/api/admin/users", {
     method: "POST",
@@ -339,7 +353,14 @@ export async function createAdminUser(input: {
 
 export async function updateAdminUser(
   id: string,
-  input: { name?: string; email?: string; password?: string; role?: "customer" | "admin"; status?: "active" | "suspended" },
+  input: {
+    name?: string
+    email?: string
+    password?: string
+    role?: "customer" | "admin"
+    kind?: "business" | "member"
+    status?: "active" | "suspended"
+  },
 ): Promise<AuthUser> {
   const payload = await request<{ user: AuthUser }>(`/api/admin/users/${id}`, {
     method: "PATCH",

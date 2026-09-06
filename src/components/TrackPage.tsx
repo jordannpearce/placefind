@@ -599,6 +599,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       return
     }
 
+    setConfirmed(null)
+    setPreviewCenter(null)
     setSearching(true)
     try {
       const payload = await searchBusiness(nextQuery, keys, Boolean(hosted?.included && !seller))

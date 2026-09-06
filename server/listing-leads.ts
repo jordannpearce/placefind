@@ -29,8 +29,16 @@ export function registerListingLeadRoutes(
   })
 
   app.post("/api/listings/:id/quotes", async (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
     try {
-      await submitQuoteLead(String(req.params.id ?? ""), req.body ?? {})
+      const body = (req.body ?? {}) as { name?: string; email?: string; phone?: string; need?: string }
+      await submitQuoteLead(String(req.params.id ?? ""), {
+        name: body.name || user.name,
+        email: body.email,
+        phone: body.phone,
+        need: body.need,
+      })
       res.status(201).json({ ok: true })
     } catch (error) {
       if (error instanceof ListingError) {

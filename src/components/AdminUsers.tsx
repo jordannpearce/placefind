@@ -1,16 +1,18 @@
 import { LoaderCircle } from "lucide-react"
 import { useMemo, useState } from "react"
+import { accountKindOf } from "../lib/account.ts"
 import { createAdminUser, deleteAdminUser, impersonateAdminUser, setAdminUserStatus, updateAdminUser } from "../lib/api.ts"
-import type { AuthUser, DirectoryListing } from "../lib/types.ts"
+import type { AccountKind, AuthUser, DirectoryListing } from "../lib/types.ts"
 
 type Draft = {
   name: string
   email: string
   password: string
   role: "customer" | "admin"
+  kind: AccountKind
 }
 
-const emptyDraft = (): Draft => ({ name: "", email: "", password: "", role: "customer" })
+const emptyDraft = (): Draft => ({ name: "", email: "", password: "", role: "customer", kind: "business" })
 
 function formatCreated(value: string) {
   const date = new Date(value)
@@ -83,7 +85,8 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Users</p>
       <h2 className="mt-1 font-display text-3xl text-paper">Manage accounts</h2>
       <p className="mt-3 text-sm leading-6 text-muted">
-        Add, edit, suspend, or delete customer and admin accounts. Suspended accounts cannot sign in. Deleting an
+        Add, edit, suspend, or delete customer and admin accounts. Business accounts can list a shop for $150 per
+        month. Neighbor accounts are free for reviews and quotes. Suspended accounts cannot sign in. Deleting an
         account also removes that owner’s listings, crawls, and usage. Use View as user to open the site as that
         customer.
       </p>
@@ -137,6 +140,17 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
           >
             <option value="customer">Customer</option>
             <option value="admin">Admin</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Account type</span>
+          <select
+            value={createDraft.kind}
+            onChange={(event) => setCreateDraft({ ...createDraft, kind: event.target.value as Draft["kind"] })}
+            className="h-11 rounded-lg border border-line bg-panel px-3 text-paper outline-none focus:border-brass"
+          >
+            <option value="business">Business (listing)</option>
+            <option value="member">Neighbor (reviews & quotes)</option>
           </select>
         </label>
         <button
@@ -197,6 +211,7 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
                 <th className="pb-2 pr-3">Name</th>
                 <th className="pb-2 pr-3">Email</th>
                 <th className="pb-2 pr-3">Role</th>
+                <th className="pb-2 pr-3">Type</th>
                 <th className="pb-2 pr-3">Status</th>
                 <th className="pb-2 pr-3">Listings</th>
                 <th className="pb-2 pr-3">Created</th>
@@ -246,6 +261,22 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
                         row.role
                       )}
                     </td>
+                    <td className="py-3 pr-3 text-paper/80">
+                      {editing ? (
+                        <select
+                          value={editDraft.kind}
+                          onChange={(event) => setEditDraft({ ...editDraft, kind: event.target.value as Draft["kind"] })}
+                          className="h-10 rounded-lg border border-line bg-ink px-2 text-paper outline-none focus:border-brass"
+                        >
+                          <option value="business">Business</option>
+                          <option value="member">Neighbor</option>
+                        </select>
+                      ) : accountKindOf(row) === "member" ? (
+                        "Neighbor"
+                      ) : (
+                        "Business"
+                      )}
+                    </td>
                     <td className="py-3 pr-3">
                       <span className={row.status === "suspended" ? "text-clay" : "text-moss"}>
                         {row.status === "suspended" ? "Suspended" : "Active"}
@@ -274,6 +305,7 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
                                     name: editDraft.name,
                                     email: editDraft.email,
                                     role: editDraft.role,
+                                    kind: editDraft.kind,
                                     ...(editDraft.password ? { password: editDraft.password } : {}),
                                   })
                                   replaceUser(user)
@@ -315,7 +347,13 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
                             onClick={() => {
                               setConfirmDelete(null)
                               setEditId(row.id)
-                              setEditDraft({ name: row.name, email: row.email, password: "", role: row.role })
+                              setEditDraft({
+                                name: row.name,
+                                email: row.email,
+                                password: "",
+                                role: row.role,
+                                kind: accountKindOf(row),
+                              })
                             }}
                             className="rounded-lg border border-line px-3 py-1.5 text-xs text-paper/80 hover:border-brass"
                           >

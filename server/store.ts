@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS account_kind TEXT NOT NULL DEFAULT 'business';
 CREATE TABLE IF NOT EXISTS sessions (
   token TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -240,8 +241,17 @@ async function persistPostgres(name: StoreCollection) {
       await client.query("DELETE FROM users")
       for (const row of rows) {
         await client.query(
-          "INSERT INTO users (id, name, email, password_hash, role, status, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-          [row.id, row.name, row.email, row.passwordHash, row.role, row.status === "suspended" ? "suspended" : "active", row.createdAt],
+          "INSERT INTO users (id, name, email, password_hash, role, status, account_kind, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+          [
+            row.id,
+            row.name,
+            row.email,
+            row.passwordHash,
+            row.role,
+            row.status === "suspended" ? "suspended" : "active",
+            row.accountKind === "member" ? "member" : "business",
+            row.createdAt,
+          ],
         )
       }
     } else if (name === "sessions") {
@@ -353,7 +363,7 @@ async function persistPostgres(name: StoreCollection) {
 async function loadPostgres() {
   if (!pool) return
   const users = await pool.query(
-    "SELECT id, name, email, password_hash AS \"passwordHash\", role, COALESCE(status, 'active') AS status, created_at AS \"createdAt\" FROM users ORDER BY created_at DESC",
+    "SELECT id, name, email, password_hash AS \"passwordHash\", role, COALESCE(status, 'active') AS status, COALESCE(account_kind, 'business') AS \"accountKind\", created_at AS \"createdAt\" FROM users ORDER BY created_at DESC",
   )
   const sessions = await pool.query(
     "SELECT token, user_id AS \"userId\", created_at AS \"createdAt\" FROM sessions ORDER BY created_at DESC",

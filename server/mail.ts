@@ -239,8 +239,21 @@ export async function sendBroadcast(input: {
   }
 }
 
-export function welcomeEmail(input: { name: string; product: string; price: string }): MailMessage {
+export function welcomeEmail(input: {
+  name: string
+  product: string
+  price: string
+  kind?: string
+}): MailMessage {
   const first = input.name.split(" ")[0] || "there"
+  if (input.kind === "member") {
+    return {
+      to: "",
+      subject: `Welcome to ${input.product}`,
+      text: `Hi ${first},\n\nYour ${input.product} account is free. Leave reviews and request quotes. PlaceFind does not charge this account $150 — that fee is only for a business listing.\n`,
+      html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} account is free. Leave reviews and request quotes. PlaceFind does not charge this account $150 — that fee is only for a business listing.</p>`,
+    }
+  }
   return {
     to: "",
     subject: `Welcome to ${input.product}`,
