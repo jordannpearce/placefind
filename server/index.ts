@@ -44,6 +44,7 @@ import {
 } from "./campaigns.ts"
 import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
+import { initStore } from "./store.ts"
 import { testScrappey } from "./scrappey.ts"
 import { checkout, issueAndDeliver, listOrders, ordersForUser, publicOrder, shopSummary } from "./shop.ts"
 import { US_STATES } from "./states.ts"

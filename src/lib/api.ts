@@ -260,7 +260,11 @@ export async function testMail(input: { resendApiKey?: string; fromEmail?: strin
 }
 
 export async function loadCampaigns(): Promise<{ campaigns: Campaign[]; maxKeywords: number }> {
-  return request("/api/campaigns")
+  const payload = await request<{ campaigns?: Campaign[]; maxKeywords?: number }>("/api/campaigns")
+  return {
+    campaigns: Array.isArray(payload.campaigns) ? payload.campaigns : [],
+    maxKeywords: payload.maxKeywords ?? 20,
+  }
 }
 
 export async function createCampaign(input: CampaignInput): Promise<Campaign> {

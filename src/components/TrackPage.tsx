@@ -50,16 +50,17 @@ export function TrackPage({ keys, hosted, seller }: Props) {
   const [notice, setNotice] = useState<string | null>(null)
 
   const selected = useMemo(
-    () => campaigns.find((campaign) => campaign.id === selectedId) ?? null,
+    () => (campaigns ?? []).find((campaign) => campaign.id === selectedId) ?? null,
     [campaigns, selectedId],
   )
 
   async function refresh(nextId?: string | null) {
     const payload = await loadCampaigns()
-    setCampaigns(payload.campaigns)
+    const rows = payload.campaigns ?? []
+    setCampaigns(rows)
     setMaxKeywords(payload.maxKeywords)
     const keep = nextId !== undefined ? nextId : selectedId
-    const next = payload.campaigns.find((campaign) => campaign.id === keep) ?? payload.campaigns[0] ?? null
+    const next = rows.find((campaign) => campaign.id === keep) ?? rows[0] ?? null
     setSelectedId(next?.id ?? null)
     if (next) {
       setDraft({
@@ -80,7 +81,7 @@ export function TrackPage({ keys, hosted, seller }: Props) {
     void loadCampaigns()
       .then((payload) => {
         if (!active) return
-        setCampaigns(payload.campaigns)
+        setCampaigns(payload.campaigns ?? [])
         setMaxKeywords(payload.maxKeywords)
         const next = payload.campaigns[0] ?? null
         setSelectedId(next?.id ?? null)
