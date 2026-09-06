@@ -214,7 +214,7 @@ export default function App() {
             onGoLogin={() => go("/login")}
           />
         )}
-        {(needsDesktopLogin || needsTrackLogin || (path === "/login" && !user)) && path !== "/reset" && (
+        {(needsDesktopLogin || needsTrackLogin || (path === "/login" && !user)) && (
           <AuthPage
             desktop={desktop}
             publicUrl={publicUrl}
