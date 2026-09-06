@@ -1,6 +1,6 @@
 import type { AuthUser } from "./types.ts"
 
-export type AppPath = "/" | "/track" | "/sell" | "/download" | "/buy" | "/account" | "/login" | "/join" | "/admin"
+export type AppPath = "/" | "/track" | "/sell" | "/download" | "/buy" | "/account" | "/login" | "/join" | "/admin" | "/reset"
 
 export type NavAccess = {
   desktop: boolean
@@ -19,6 +19,7 @@ export function currentPath(): AppPath {
   if (path.startsWith("/login")) return "/login"
   if (path.startsWith("/join")) return "/join"
   if (path.startsWith("/admin")) return "/admin"
+  if (path.startsWith("/reset")) return "/reset"
   return "/"
 }
 
@@ -29,6 +30,7 @@ export function clientIsDesktop(): boolean {
 export function allowedPath(next: AppPath, access: NavAccess): AppPath {
   const { desktop, store, admin, user } = access
   if (next === "/admin") return "/admin"
+  if (next === "/reset") return "/reset"
   if (next === "/sell") return admin ? "/sell" : "/admin"
   if (next === "/join") {
     if (desktop) return user ? "/" : "/login"

@@ -1,3 +1,15 @@
+export const DEFAULT_PUBLIC_SITE_URL = "https://placefind-production.up.railway.app"
+
+export function publicSiteUrl() {
+  const raw = process.env.PLACEFIND_PUBLIC_URL?.trim()
+  if (raw) return raw.replace(/\/$/, "")
+  return DEFAULT_PUBLIC_SITE_URL
+}
+
+export function passwordResetUrl(token: string) {
+  return `${publicSiteUrl()}/reset?token=${encodeURIComponent(token)}`
+}
+
 export type RuntimeRequest = {
   headers?: {
     "user-agent"?: string

@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto"
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto"
 import { isPackagedBuyer } from "./runtime.ts"
 import { readCollection, writeCollection } from "./store.ts"
 
@@ -31,6 +31,27 @@ type Session = {
 }
 
 export const SESSION_COOKIE = "pf_session"
+export const FORGOT_PASSWORD_MESSAGE = "If that email is on file, we sent a reset link."
+export const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000
+const FORGOT_RATE_WINDOW_MS = 15 * 60 * 1000
+const FORGOT_RATE_LIMIT = 5
+
+export type PasswordReset = {
+  tokenHash: string
+  userId: string
+  expiresAt: string
+  usedAt: string | null
+}
+
+const forgotAttempts = new Map<string, number[]>()
+
+export function resetForgotRateLimitForTests() {
+  forgotAttempts.clear()
+}
+
+export function hashResetToken(token: string) {
+  return createHash("sha256").update(token).digest("hex")
+}
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
@@ -267,6 +288,7 @@ export function deleteManagedUser(id: string, actorId?: string): { ok?: boolean;
   }
   writeUsers(users.filter((user) => user.id !== id))
   revokeSessionsForUser(id)
+  writePasswordResets(readPasswordResets().filter((row) => row.userId !== id))
   return { ok: true }
 }
 
@@ -371,4 +393,88 @@ export function canManage(header?: string) {
 
 export function storeOpen() {
   return !isPackagedBuyer()
+}
+
+function readPasswordResets(): PasswordReset[] {
+  const rows = readCollection<PasswordReset>("password_resets")
+  return Array.isArray(rows) ? rows : []
+}
+
+function writePasswordResets(rows: PasswordReset[]) {
+  const now = Date.now()
+  const kept = rows.filter((row) => {
+    if (row.usedAt) return now - new Date(row.usedAt).getTime() < 24 * 60 * 60 * 1000
+    return new Date(row.expiresAt).getTime() > now - PASSWORD_RESET_TTL_MS
+  })
+  writeCollection("password_resets", kept.slice(0, 400))
+}
+
+function tooManyForgotAttempts(email: string) {
+  const now = Date.now()
+  const recent = (forgotAttempts.get(email) ?? []).filter((at) => now - at < FORGOT_RATE_WINDOW_MS)
+  if (recent.length >= FORGOT_RATE_LIMIT) {
+    forgotAttempts.set(email, recent)
+    return true
+  }
+  recent.push(now)
+  forgotAttempts.set(email, recent)
+  return false
+}
+
+export function issuePasswordReset(email: string): {
+  message: string
+  rawToken?: string
+  user?: User
+  skipped?: "invalid" | "unknown" | "suspended" | "rate_limited"
+} {
+  const message = FORGOT_PASSWORD_MESSAGE
+  const normalized = normalizeEmail(email)
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    return { message, skipped: "invalid" }
+  }
+  if (tooManyForgotAttempts(normalized)) {
+    return { message, skipped: "rate_limited" }
+  }
+  const user = findUserByEmail(normalized)
+  if (!user) return { message, skipped: "unknown" }
+  if (userStatus(user) === "suspended") return { message, skipped: "suspended" }
+  const rawToken = randomBytes(32).toString("hex")
+  const next: PasswordReset = {
+    tokenHash: hashResetToken(rawToken),
+    userId: user.id,
+    expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS).toISOString(),
+    usedAt: null,
+  }
+  const others = readPasswordResets().filter((row) => row.userId !== user.id || row.usedAt)
+  writePasswordResets([next, ...others])
+  return { message, rawToken, user }
+}
+
+export function resetPasswordWithToken(input: { token: string; password: string }): {
+  user?: PublicUser
+  error?: string
+} {
+  const token = input.token.trim()
+  const password = input.password
+  if (!token) return { error: "This reset link is invalid or has expired." }
+  if (password.length < 8) return { error: "Use a password with at least 8 characters." }
+  const tokenHash = hashResetToken(token)
+  const rows = readPasswordResets()
+  const row = rows.find((item) => item.tokenHash === tokenHash)
+  if (!row || row.usedAt) return { error: "This reset link is invalid or has expired." }
+  if (new Date(row.expiresAt).getTime() <= Date.now()) {
+    return { error: "This reset link is invalid or has expired." }
+  }
+  const users = readUsers()
+  const current = users.find((user) => user.id === row.userId)
+  if (!current || userStatus(current) === "suspended") {
+    return { error: "This reset link is invalid or has expired." }
+  }
+  const next: User = { ...current, passwordHash: hashPassword(password) }
+  writeUsers(users.map((user) => (user.id === current.id ? next : user)))
+  writePasswordResets(
+    rows.map((item) => (item.tokenHash === tokenHash ? { ...item, usedAt: new Date().toISOString() } : item)),
+  )
+  revokeSessionsForUser(current.id)
+  return { user: publicUser(next) }
 }

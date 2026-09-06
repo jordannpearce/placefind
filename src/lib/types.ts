@@ -156,6 +156,32 @@ export type MailStatus = {
   keyHint: string
 }
 
+export type MailCampaignType = "welcome" | "activation" | "marketing" | "info" | "updates"
+
+export type MailPreset = {
+  type: MailCampaignType
+  label: string
+  subject: string
+  text: string
+}
+
+export type OutboxRow = {
+  id: string
+  to: string
+  subject: string
+  createdAt?: string
+  delivered: boolean
+  detail: string
+}
+
+export type MailSendResult = {
+  sent: number
+  delivered: number
+  held: number
+  skipped: number
+  outbox: OutboxRow[]
+}
+
 export type RuntimeInfo = {
   seller: boolean
   store: boolean
@@ -166,6 +192,7 @@ export type RuntimeInfo = {
   hosted: HostedKeyStatus
   license: LicenseStatus
   keygen: KeygenStatus
+  publicUrl?: string
 }
 
 export type GeoPoint = {

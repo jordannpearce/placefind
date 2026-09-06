@@ -9,6 +9,7 @@ import type {
   KeygenStatus,
   KeyTestResult,
   LicenseStatus,
+  MailSendResult,
   MailStatus,
   OrderInfo,
   ProductInfo,
@@ -220,6 +221,21 @@ export async function logout(): Promise<void> {
   await request("/api/auth/logout", { method: "POST" })
 }
 
+export async function forgotPassword(email: string): Promise<{ message: string; hint?: string }> {
+  return request("/api/auth/forgot", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  })
+}
+
+export async function resetPassword(input: { token: string; password: string }): Promise<AuthUser> {
+  const payload = await request<{ user: AuthUser }>("/api/auth/reset", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+  return payload.user
+}
+
 export async function checkoutOrder(): Promise<{ order: OrderInfo; license: IssuedLicense | null; warning?: string }> {
   return request("/api/shop/checkout", { method: "POST" })
 }
@@ -238,6 +254,7 @@ export async function loadAdmin(): Promise<{
   orders: OrderInfo[]
   issued: IssuedLicense[]
   outbox: Array<{ id: string; to: string; subject: string; createdAt: string; delivered: boolean; detail: string }>
+  mailPresets?: Array<{ type: string; label: string; subject: string; text: string }>
 }> {
   return request("/api/admin")
 }
@@ -298,6 +315,18 @@ export async function testMail(input: { resendApiKey?: string; fromEmail?: strin
   message: string
 }> {
   return request("/api/admin/mail/test", { method: "POST", body: JSON.stringify(input) })
+}
+
+export async function sendAdminMail(input: {
+  type?: string
+  subject: string
+  text?: string
+  html?: string
+  userIds?: string[]
+  all?: boolean
+  includeSuspended?: boolean
+}): Promise<MailSendResult> {
+  return request("/api/admin/mail/send", { method: "POST", body: JSON.stringify(input) })
 }
 
 export async function loadCampaigns(): Promise<{

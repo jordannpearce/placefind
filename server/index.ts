@@ -10,9 +10,11 @@ import {
   createSession,
   deleteManagedUser,
   hasAdminUser,
+  issuePasswordReset,
   login,
   publicUser,
   readUsers,
+  resetPasswordWithToken,
   sessionCookie,
   setUserStatus,
   signup,
@@ -33,9 +35,21 @@ import {
   testKeygenConnection,
   writeKeygenConfig,
 } from "./keygen.ts"
-import { mailStatus, readOutbox, sendMail, testResendConnection, welcomeEmail, writeMailConfig } from "./mail.ts"
+import {
+  mailPresets,
+  mailStatus,
+  passwordResetEmail,
+  readOutbox,
+  resolveCampaignCopy,
+  selectMailRecipients,
+  sendBroadcast,
+  sendMail,
+  testResendConnection,
+  welcomeEmail,
+  writeMailConfig,
+} from "./mail.ts"
 import { readProduct, writeProduct } from "./product.ts"
-import { isDesktopRequest, isSellerMode } from "./runtime.ts"
+import { isDesktopRequest, isSellerMode, passwordResetUrl, publicSiteUrl } from "./runtime.ts"
 import {
   ALLOWED_GRID_SIZES,
   CampaignError,
@@ -143,6 +157,7 @@ async function start() {
       },
       license,
       keygen: keygenPublicStatus(),
+      publicUrl: publicSiteUrl(),
     })
   })
 
@@ -443,6 +458,37 @@ async function start() {
     res.json({ user: result.user, license })
   })
 
+  app.post("/api/auth/forgot", async (req, res) => {
+    const body = (req.body ?? {}) as { email?: string }
+    const result = issuePasswordReset(body.email ?? "")
+    let hint: string | undefined
+    if (result.rawToken && result.user) {
+      const mail = await sendMail({
+        ...passwordResetEmail({
+          name: result.user.name,
+          resetUrl: passwordResetUrl(result.rawToken),
+        }),
+        to: result.user.email,
+      })
+      if (canManage(req.headers.cookie) && !mail.delivered) {
+        hint = mail.detail
+      }
+    }
+    res.json({ message: result.message, ...(hint ? { hint } : {}) })
+  })
+
+  app.post("/api/auth/reset", async (req, res) => {
+    const body = (req.body ?? {}) as { token?: string; password?: string }
+    const result = resetPasswordWithToken({ token: body.token ?? "", password: body.password ?? "" })
+    if (result.error || !result.user) {
+      res.status(400).json({ error: result.error || "This reset link is invalid or has expired." })
+      return
+    }
+    const license = await attachUserLicense(result.user)
+    res.setHeader("Set-Cookie", sessionCookie(createSession(result.user.id)))
+    res.json({ user: result.user, license })
+  })
+
   app.post("/api/auth/logout", (req, res) => {
     const token = (req.headers.cookie || "").includes("pf_session=")
       ? (req.headers.cookie || "").split("pf_session=")[1]?.split(";")[0]
@@ -510,6 +556,7 @@ async function start() {
         delivered: row.delivered,
         detail: row.detail,
       })),
+      mailPresets: mailPresets(readProduct()),
     })
   })
 
@@ -619,6 +666,60 @@ async function start() {
     if (!manage(req, res)) return
     const body = (req.body ?? {}) as { resendApiKey?: string; fromEmail?: string; fromName?: string }
     res.json(await testResendConnection(body))
+  })
+
+  app.post("/api/admin/mail/send", async (req, res) => {
+    if (!manage(req, res)) return
+    const body = (req.body ?? {}) as {
+      type?: string
+      subject?: string
+      text?: string
+      html?: string
+      userIds?: string[]
+      all?: boolean
+      includeSuspended?: boolean
+    }
+    const copy = resolveCampaignCopy({
+      type: body.type,
+      subject: body.subject,
+      text: body.text,
+      html: body.html,
+      product: readProduct(),
+    })
+    if (copy.error) {
+      res.status(400).json({ error: copy.error })
+      return
+    }
+    const selected = selectMailRecipients({
+      users: readUsers(),
+      userIds: Array.isArray(body.userIds) ? body.userIds.map(String) : [],
+      all: Boolean(body.all),
+      includeSuspended: Boolean(body.includeSuspended),
+    })
+    if (selected.error) {
+      res.status(400).json({ error: selected.error })
+      return
+    }
+    const result = await sendBroadcast({
+      subject: copy.subject,
+      text: copy.text,
+      html: copy.html,
+      recipients: selected.recipients,
+    })
+    res.json({
+      sent: result.sent.length,
+      delivered: result.delivered,
+      held: result.held,
+      skipped: selected.skipped.length,
+      outbox: readOutbox().map((row) => ({
+        id: row.id,
+        to: row.to,
+        subject: row.subject,
+        createdAt: row.createdAt,
+        delivered: row.delivered,
+        detail: row.detail,
+      })),
+    })
   })
 
   app.get("/api/installer/download/:name", (req, res) => {

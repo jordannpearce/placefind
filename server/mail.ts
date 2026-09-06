@@ -23,6 +23,30 @@ export type OutboundMail = MailMessage & {
   detail: string
 }
 
+export const MAIL_TYPES = ["welcome", "activation", "marketing", "info", "updates"] as const
+export type MailType = (typeof MAIL_TYPES)[number]
+
+export type MailRecipient = {
+  id: string
+  name: string
+  email: string
+  status?: string
+}
+
+export type MailPreset = {
+  type: MailType
+  label: string
+  subject: string
+  text: string
+}
+
+export type SelectMailRecipientsInput = {
+  users: MailRecipient[]
+  userIds?: string[]
+  all?: boolean
+  includeSuspended?: boolean
+}
+
 const DATA_DIR = path.resolve(process.cwd(), ".data")
 const CONFIG_FILE = path.join(DATA_DIR, "mail.json")
 
@@ -72,7 +96,147 @@ export function readOutbox(): OutboundMail[] {
 }
 
 function writeOutbox(rows: OutboundMail[]) {
-  writeCollection("mail_outbox", rows.slice(0, 50))
+  writeCollection("mail_outbox", rows.slice(0, 200))
+}
+
+const BROADCAST_GAP_MS = 400
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function firstName(name: string) {
+  return name.trim().split(/\s+/)[0] || "there"
+}
+
+export function parseMailType(value?: string | null): MailType | "" {
+  const next = String(value ?? "").trim().toLowerCase()
+  if (next === "license" || next === "activation/license") return "activation"
+  return MAIL_TYPES.includes(next as MailType) ? (next as MailType) : ""
+}
+
+export function mailPresets(product = { name: "PlaceFind", price: "49" }): MailPreset[] {
+  return [
+    {
+      type: "welcome",
+      label: "Welcome",
+      subject: `Welcome to ${product.name}`,
+      text: `Hi {{first}},\n\nYour ${product.name} account is ready. Buy a license from your account page to get a license key and the Windows setup.\n\n${product.name} costs $${product.price} for one Windows license.\n`,
+    },
+    {
+      type: "activation",
+      label: "Activation / license",
+      subject: `Activate your ${product.name} license`,
+      text: `Hi {{first}},\n\nYour ${product.name} license is ready to unlock the Windows app.\n\n1. Sign in and open your account page.\n2. Copy your license key.\n3. Download the Windows setup.\n4. Paste the key when ${product.name} asks you to unlock.\n\nIf you have not bought a license yet, you can get one from your account page.\n`,
+    },
+    {
+      type: "marketing",
+      label: "Marketing",
+      subject: "Find any Maps listing from a name and city",
+      text: `Hi {{first}},\n\n${product.name} looks up a Google Maps listing from a business name, city, and state — then tracks ranks on a map grid.\n\nOpen your account, download the Windows app, and run a scan when you are ready.\n`,
+    },
+    {
+      type: "info",
+      label: "Info",
+      subject: `A note from ${product.name}`,
+      text: `Hi {{first}},\n\nA quick note from the ${product.name} team. Sign in to your account for your license, download, and scans.\n\nReply to this email if you need help with your account.\n`,
+    },
+    {
+      type: "updates",
+      label: "Updates",
+      subject: `What's new in ${product.name}`,
+      text: `Hi {{first}},\n\n${product.name} can look up a Maps listing and track keyword ranks on a grid around your business.\n\nSign in to review your campaigns and run a new scan.\n`,
+    },
+  ]
+}
+
+export function textToHtml(text: string) {
+  return text
+    .split(/\n\n+/)
+    .map((part) => `<p>${escapeHtml(part).replaceAll("\n", "<br>")}</p>`)
+    .join("")
+}
+
+export function personalizeMail(template: string, user: Pick<MailRecipient, "name" | "email">) {
+  return template
+    .replaceAll("{{name}}", user.name)
+    .replaceAll("{{first}}", firstName(user.name))
+    .replaceAll("{{email}}", user.email)
+}
+
+export function resolveCampaignCopy(input: {
+  type?: string
+  subject?: string
+  text?: string
+  html?: string
+  product?: { name: string; price: string }
+}): { type: MailType | ""; subject: string; text: string; html: string; error?: string } {
+  const type = parseMailType(input.type)
+  const preset = type ? mailPresets(input.product).find((row) => row.type === type) : undefined
+  const subject = (input.subject ?? "").trim() || preset?.subject || ""
+  const text = (input.text ?? "").trim() || preset?.text || ""
+  const html = (input.html ?? "").trim() || (text ? textToHtml(text) : "")
+  if (!subject) return { type, subject, text, html, error: "Enter a subject." }
+  if (!text && !html) return { type, subject, text, html, error: "Enter a message." }
+  return { type, subject, text: text || subject, html }
+}
+
+export function selectMailRecipients(input: SelectMailRecipientsInput): {
+  recipients: MailRecipient[]
+  skipped: MailRecipient[]
+  error?: string
+} {
+  const ids = Array.isArray(input.userIds) ? input.userIds.filter(Boolean) : []
+  if (!input.all && ids.length === 0) {
+    return { recipients: [], skipped: [], error: "Select at least one user, or send to all." }
+  }
+  const wanted = new Set(ids)
+  const pool = input.all ? input.users : input.users.filter((user) => wanted.has(user.id))
+  const skipped: MailRecipient[] = []
+  const recipients: MailRecipient[] = []
+  const seen = new Set<string>()
+  for (const user of pool) {
+    const email = user.email.trim().toLowerCase()
+    if (!email || seen.has(email)) continue
+    if (user.status === "suspended" && !input.includeSuspended) {
+      skipped.push(user)
+      continue
+    }
+    seen.add(email)
+    recipients.push({ ...user, email })
+  }
+  if (recipients.length === 0) {
+    return { recipients, skipped, error: "No matching users to email." }
+  }
+  return { recipients, skipped }
+}
+
+export async function sendBroadcast(input: {
+  subject: string
+  text: string
+  html: string
+  recipients: MailRecipient[]
+  delayMs?: number
+}): Promise<{ sent: OutboundMail[]; delivered: number; held: number }> {
+  const delayMs = input.delayMs ?? BROADCAST_GAP_MS
+  const sent: OutboundMail[] = []
+  for (let index = 0; index < input.recipients.length; index += 1) {
+    const user = input.recipients[index]
+    if (index > 0 && delayMs > 0) await sleep(delayMs)
+    sent.push(
+      await sendMail({
+        to: user.email,
+        subject: personalizeMail(input.subject, user),
+        text: personalizeMail(input.text, user),
+        html: personalizeMail(input.html, user),
+      }),
+    )
+  }
+  return {
+    sent,
+    delivered: sent.filter((row) => row.delivered).length,
+    held: sent.filter((row) => !row.delivered).length,
+  }
 }
 
 export function welcomeEmail(input: { name: string; product: string; price: string }): MailMessage {
@@ -97,6 +261,16 @@ export function licenseEmail(input: {
     subject: `Your ${input.product} license key`,
     text: `Hi ${first},\n\nThanks for buying ${input.product}. Here is your license key:\n\n${input.key}\n\n1. Download the Windows setup: ${input.downloadUrl}\n2. Install PlaceFind on Windows 10 or 11.\n3. Paste this key when the app asks you to unlock.\n\nKeep this email. The key is tied to your purchase.\n`,
     html: `<p>Hi ${escapeHtml(first)},</p><p>Thanks for buying ${escapeHtml(input.product)}. Here is your license key:</p><p style="font-family:ui-monospace,monospace;font-size:16px;padding:12px;border:1px solid #3d362c;background:#17140f;color:#f3ead8">${escapeHtml(input.key)}</p><ol><li>Download the Windows setup: <a href="${escapeHtml(input.downloadUrl)}">${escapeHtml(input.downloadUrl)}</a></li><li>Install PlaceFind on Windows 10 or 11.</li><li>Paste this key when the app asks you to unlock.</li></ol><p>Keep this email. The key is tied to your purchase.</p>`,
+  }
+}
+
+export function passwordResetEmail(input: { name: string; resetUrl: string }): MailMessage {
+  const first = input.name.split(" ")[0] || "there"
+  return {
+    to: "",
+    subject: "Reset your PlaceFind password",
+    text: `Hi ${first},\n\nWe received a request to reset your PlaceFind password. This one-time link expires in one hour:\n\n${input.resetUrl}\n\nIf you did not ask for this, you can ignore this email. Your password will stay the same.\n`,
+    html: `<p>Hi ${escapeHtml(first)},</p><p>We received a request to reset your PlaceFind password. This one-time link expires in one hour:</p><p><a href="${escapeHtml(input.resetUrl)}">${escapeHtml(input.resetUrl)}</a></p><p>If you did not ask for this, you can ignore this email. Your password will stay the same.</p>`,
   }
 }
 

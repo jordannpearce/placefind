@@ -6,6 +6,7 @@ import { AdminPage } from "./components/AdminPage.tsx"
 import { AppNav } from "./components/AppNav.tsx"
 import { AuthPage } from "./components/AuthPage.tsx"
 import { BuyPage } from "./components/BuyPage.tsx"
+import { ResetPage } from "./components/ResetPage.tsx"
 import { DownloadPage } from "./components/DownloadPage.tsx"
 import { LicenseGate } from "./components/LicenseGate.tsx"
 import { ResultPanel } from "./components/ResultPanel.tsx"
@@ -34,6 +35,7 @@ export default function App() {
   const [bootstrap, setBootstrap] = useState(false)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [license, setLicense] = useState<LicenseStatus | null>(null)
+  const [publicUrl, setPublicUrl] = useState("")
   const [runtimeReady, setRuntimeReady] = useState(false)
 
   const access = { desktop, store, admin, user }
@@ -56,6 +58,7 @@ export default function App() {
         setBootstrap(Boolean(runtime.bootstrap))
         setUser(runtime.user)
         setLicense(runtime.license)
+        setPublicUrl(runtime.publicUrl ?? "")
         const dest = allowedPath(currentPath(), {
           desktop: nextDesktop,
           store: Boolean(runtime.store) && !nextDesktop,
@@ -152,7 +155,7 @@ export default function App() {
   }
 
   const lookupBlocked = Boolean(license?.required && !license.valid && desktop)
-  const needsDesktopLogin = desktop && !user && path !== "/admin"
+  const needsDesktopLogin = desktop && !user && path !== "/admin" && path !== "/reset"
   const needsTrackLogin = !desktop && path === "/track" && !user
   const showLookup = path === "/" && !lookupBlocked && !needsDesktopLogin
   const showTrack = path === "/track" && !lookupBlocked && Boolean(user)
@@ -203,9 +206,18 @@ export default function App() {
             onBuy={desktop ? undefined : () => go("/buy")}
           />
         )}
-        {(needsDesktopLogin || needsTrackLogin || (path === "/login" && !user)) && (
+        {path === "/reset" && (
+          <ResetPage
+            desktop={desktop}
+            publicUrl={publicUrl}
+            onAuthed={onAuthed}
+            onGoLogin={() => go("/login")}
+          />
+        )}
+        {(needsDesktopLogin || needsTrackLogin || (path === "/login" && !user)) && path !== "/reset" && (
           <AuthPage
             desktop={desktop}
+            publicUrl={publicUrl}
             title={needsTrackLogin ? "Sign in to track ranks" : undefined}
             intro={
               needsTrackLogin

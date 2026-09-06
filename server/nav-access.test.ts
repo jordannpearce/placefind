@@ -22,6 +22,7 @@ describe("allowedPath", () => {
     assert.equal(allowedPath("/join", guest), "/login")
     assert.equal(allowedPath("/download", guest), "/login")
     assert.equal(allowedPath("/buy", guest), "/login")
+    assert.equal(allowedPath("/reset", guest), "/reset")
   })
 
   it("keeps website test scan public and sends Join to Buy", () => {
@@ -30,6 +31,7 @@ describe("allowedPath", () => {
     assert.equal(allowedPath("/track", guest), "/track")
     assert.equal(allowedPath("/join", guest), "/buy")
     assert.equal(allowedPath("/download", guest), "/download")
+    assert.equal(allowedPath("/reset", guest), "/reset")
   })
 
   it("lets a signed-in desktop customer use Lookup, Track, and Account", () => {

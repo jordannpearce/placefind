@@ -1,7 +1,8 @@
 import { Check, Copy, LoaderCircle } from "lucide-react"
 import { useEffect, useState } from "react"
 import { adminIssueLicense, loadAdmin, saveMail, testMail } from "../lib/api.ts"
-import type { AuthUser, HostedKeyStatus, IssuedLicense, MailStatus, OrderInfo } from "../lib/types.ts"
+import type { AuthUser, HostedKeyStatus, IssuedLicense, MailPreset, MailStatus, OrderInfo, OutboxRow } from "../lib/types.ts"
+import { AdminEmail } from "./AdminEmail.tsx"
 import { AdminUsers } from "./AdminUsers.tsx"
 import { MapsSearchPanel } from "./MapsSearchPanel.tsx"
 
@@ -9,7 +10,8 @@ export function AdminPage({ currentUserId }: { currentUserId?: string }) {
   const [users, setUsers] = useState<AuthUser[]>([])
   const [orders, setOrders] = useState<OrderInfo[]>([])
   const [issued, setIssued] = useState<IssuedLicense[]>([])
-  const [outbox, setOutbox] = useState<Array<{ id: string; to: string; subject: string; delivered: boolean; detail: string }>>([])
+  const [outbox, setOutbox] = useState<OutboxRow[]>([])
+  const [mailPresets, setMailPresets] = useState<MailPreset[]>([])
   const [mail, setMail] = useState<MailStatus | null>(null)
   const [hosted, setHosted] = useState<HostedKeyStatus | null>(null)
   const [shop, setShop] = useState({ orderCount: 0, paidCount: 0, pendingCount: 0 })
@@ -32,6 +34,13 @@ export function AdminPage({ currentUserId }: { currentUserId?: string }) {
     setOrders(admin.orders)
     setIssued(admin.issued)
     setOutbox(admin.outbox)
+    setMailPresets(
+      (admin.mailPresets ?? []).flatMap((row) => {
+        const type = row.type as MailPreset["type"]
+        if (!["welcome", "activation", "marketing", "info", "updates"].includes(type)) return []
+        return [{ type, label: row.label, subject: row.subject, text: row.text }]
+      }),
+    )
     setMail(admin.mail)
     setHosted(admin.hosted ?? null)
     setShop(admin.shop)
@@ -52,6 +61,16 @@ export function AdminPage({ currentUserId }: { currentUserId?: string }) {
         users={users}
         currentUserId={currentUserId}
         onUsers={setUsers}
+        onError={setError}
+        onMessage={setMessage}
+      />
+
+      <AdminEmail
+        users={users}
+        outbox={outbox}
+        mail={mail}
+        presets={mailPresets}
+        onOutbox={setOutbox}
         onError={setError}
         onMessage={setMessage}
       />
@@ -133,7 +152,7 @@ export function AdminPage({ currentUserId }: { currentUserId?: string }) {
         <section className="rounded-2xl border border-line bg-panel p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Resend email</p>
           <p className="mt-2 text-sm leading-6 text-muted">
-            Paste a Resend API key to send welcome and license emails. Until then, messages stay in the outbox on this
+            Paste a Resend API key to send welcome, license, and password reset emails. Until then, messages stay in the outbox on this
             computer.
           </p>
           {mail?.configured && <p className="mt-2 text-sm text-moss">Connected · {mail.keyHint} · {mail.fromEmail}</p>}
@@ -235,21 +254,6 @@ export function AdminPage({ currentUserId }: { currentUserId?: string }) {
         )}
       </section>
 
-      {outbox.length > 0 && (
-        <section className="rounded-2xl border border-line bg-panel p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Email outbox</p>
-          <ul className="mt-4 grid gap-2">
-            {outbox.map((row) => (
-              <li key={row.id} className="rounded-xl border border-line bg-ink px-4 py-3">
-                <p className="text-sm text-paper">{row.subject}</p>
-                <p className="text-xs text-muted">
-                  {row.to} · {row.delivered ? "Sent" : "Held"} · {row.detail}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   )
 }
