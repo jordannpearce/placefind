@@ -11,6 +11,7 @@ import {
   getListing,
   listPublicListings,
   listingsForUser,
+  publicListing,
   seedDirectoryListings,
   updateListing,
   verifyListingOnMaps,
@@ -37,6 +38,8 @@ describe("directory listings", () => {
     assert.ok(seeded.length >= 6)
     assert.ok(seeded.some((row) => row.name === "Harbor & Oak Bakery"))
     const harbor = seeded.find((row) => row.name === "Harbor & Oak Bakery")
+    assert.equal(harbor?.email, "hello@harborandoak.example")
+    assert.equal(seeded.find((row) => row.name === "Copper Bell Books")?.email, "")
     assert.equal(harbor?.slug, "harbor-oak-bakery")
     assert.equal(getListing("harbor-oak-bakery").id, harbor?.id)
     assert.equal(getListing("seed-1").slug, "harbor-oak-bakery")
@@ -62,10 +65,18 @@ describe("directory listings", () => {
     )
     assert.equal(created.mapsStatus, "pending")
     assert.equal(created.ownerUserId, "user-1")
+    assert.equal(created.email, "")
     assert.deepEqual(listingsForUser("user-1").map((row) => row.id), [created.id])
 
-    const renamed = updateListing(created.id, { name: "Joe's Pizza", city: "New York", state: "NY", category: "Pizza" }, "user-1")
+    const renamed = updateListing(created.id, { name: "Joe's Pizza", city: "New York", state: "NY", category: "Pizza", email: "hello@joespizza.example" }, "user-1")
     assert.equal(renamed.category, "Pizza")
+    assert.equal(renamed.email, "hello@joespizza.example")
+    const visible = publicListing(renamed, true)
+    const hidden = publicListing(renamed, false)
+    assert.equal(visible.email, "hello@joespizza.example")
+    assert.equal(visible.hasQuoteEmail, true)
+    assert.equal("email" in hidden, false)
+    assert.equal(hidden.hasQuoteEmail, true)
 
     const verified = await verifyListingOnMaps(created.id, "user-1", false, (query) => searchBusiness(query, emptyKeys))
     assert.ok(verified.candidates.length > 0)

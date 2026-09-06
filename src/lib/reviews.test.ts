@@ -9,5 +9,6 @@ describe("reviews", () => {
     assert.equal(validateReview({ authorName: "A", rating: 5, text: "Nice shop" }).error, "Enter your name.")
     assert.equal(validateReview({ authorName: "Maya", rating: 6, text: "Nice shop here" }).error, "Choose a rating from 1 to 5.")
     assert.ok(validateReview({ authorName: "Maya", rating: 5, text: "Warm bread every morning." }).value)
+    assert.ok(validateReview({ rating: 5, text: "Warm bread every morning." }).value)
   })
 })

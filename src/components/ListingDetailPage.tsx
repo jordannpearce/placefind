@@ -1,8 +1,9 @@
-import { ExternalLink, LoaderCircle, MapPin, Phone, Star } from "lucide-react"
+import { ExternalLink, LoaderCircle, Mail, MapPin, Phone, Star } from "lucide-react"
 import { useEffect, useState } from "react"
-import { createListingReview, loadListing } from "../lib/api.ts"
+import { createListingReview, loadListing, requestListingQuote } from "../lib/api.ts"
 import { listingLocation, listingPath, listingRedirectPath, mapsStatusDetail } from "../lib/listings.ts"
 import { LISTING_PRICE_LABEL } from "../lib/pricing.ts"
+import { MISSING_QUOTE_EMAIL_MESSAGE } from "../lib/quotes.ts"
 import type { AuthUser, DirectoryListing, ListingReview, ReviewSummary } from "../lib/types.ts"
 
 type Props = {
@@ -21,11 +22,17 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
   const [summary, setSummary] = useState<ReviewSummary>({ count: 0, average: null })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [authorName, setAuthorName] = useState(user?.name ?? "")
   const [rating, setRating] = useState(5)
   const [text, setText] = useState("")
   const [sending, setSending] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
+  const [quoteName, setQuoteName] = useState(user?.name ?? "")
+  const [quoteEmail, setQuoteEmail] = useState(user?.email ?? "")
+  const [quotePhone, setQuotePhone] = useState("")
+  const [quoteNeed, setQuoteNeed] = useState("")
+  const [quoteSending, setQuoteSending] = useState(false)
+  const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [quoteSent, setQuoteSent] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -51,7 +58,7 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
     setSending(true)
     setReviewError(null)
     try {
-      const payload = await createListingReview(listingId, { authorName, rating, text })
+      const payload = await createListingReview(listingId, { rating, text })
       setReviews(payload.reviews)
       setSummary(payload.reviewSummary)
       setText("")
@@ -59,6 +66,26 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
       setReviewError(err instanceof Error ? err.message : "Could not save that review.")
     } finally {
       setSending(false)
+    }
+  }
+
+  async function submitQuote() {
+    setQuoteSending(true)
+    setQuoteError(null)
+    setQuoteSent(false)
+    try {
+      await requestListingQuote(listingId, {
+        name: quoteName,
+        email: quoteEmail,
+        phone: quotePhone,
+        need: quoteNeed,
+      })
+      setQuoteSent(true)
+      setQuoteNeed("")
+    } catch (err) {
+      setQuoteError(err instanceof Error ? err.message : "Could not send that quote request.")
+    } finally {
+      setQuoteSending(false)
     }
   }
 
@@ -197,6 +224,12 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
               {listing.phone}
             </div>
           )}
+          {listing.email && (
+            <div className="flex items-center gap-2 text-paper">
+              <Mail className="h-4 w-4 text-muted" />
+              {listing.email}
+            </div>
+          )}
           {listing.website && (
             <a href={listing.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-brass hover:underline">
               <ExternalLink className="h-4 w-4" />
@@ -214,61 +247,156 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
         <h3 className="mt-2 font-display text-2xl text-paper">
           {summary.count === 0 ? "Be the first to review" : `${summary.count} review${summary.count === 1 ? "" : "s"}`}
         </h3>
-        <ul className="mt-4 grid gap-3">
-          {reviews.map((review) => (
-            <li key={review.id} className="rounded-xl border border-line bg-ink px-4 py-3">
-              <p className="text-sm text-brass">
-                {stars(review.rating)} <span className="text-paper">{review.authorName}</span>
-              </p>
-              <p className="mt-2 text-sm leading-6 text-muted">{review.text}</p>
-            </li>
-          ))}
-        </ul>
-        <form
-          className="mt-6 grid gap-3"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submitReview()
-          }}
-        >
-          <p className="text-sm text-paper">Leave a review</p>
-          {reviewError && <p className="text-sm text-clay">{reviewError}</p>}
-          <input
-            value={authorName}
-            onChange={(event) => setAuthorName(event.target.value)}
-            placeholder="Your name"
-            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-          />
-          <label className="grid gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Rating</span>
-            <select
-              value={rating}
-              onChange={(event) => setRating(Number(event.target.value))}
-              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-            >
-              {[5, 4, 3, 2, 1].map((value) => (
-                <option key={value} value={value}>
-                  {value} {value === 1 ? "star" : "stars"}
-                </option>
-              ))}
-            </select>
-          </label>
-          <textarea
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            rows={4}
-            placeholder="What should a neighbor know?"
-            className="rounded-lg border border-line bg-ink px-3 py-2 text-paper outline-none focus:border-brass"
-          />
-          <button
-            type="submit"
-            disabled={sending}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
+        {reviews.length === 0 ? (
+          <p className="mt-4 text-sm leading-6 text-muted">No reviews yet. Neighbors who sign in can leave the first one.</p>
+        ) : (
+          <ul className="mt-4 grid gap-3">
+            {reviews.map((review) => (
+              <li key={review.id} className="rounded-xl border border-line bg-ink px-4 py-3">
+                <p className="text-sm text-brass">
+                  {stars(review.rating)} <span className="text-paper">{review.authorName}</span>
+                </p>
+                <p className="mt-2 text-sm leading-6 text-muted">{review.text}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+        {user ? (
+          <form
+            className="mt-6 grid gap-3"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void submitReview()
+            }}
           >
-            {sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Star className="h-4 w-4" />}
-            Post review
-          </button>
-        </form>
+            <p className="text-sm text-paper">Leave a review as {user.name}</p>
+            {reviewError && <p className="text-sm text-clay">{reviewError}</p>}
+            <label className="grid gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Rating</span>
+              <select
+                value={rating}
+                onChange={(event) => setRating(Number(event.target.value))}
+                className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+              >
+                {[5, 4, 3, 2, 1].map((value) => (
+                  <option key={value} value={value}>
+                    {value} {value === 1 ? "star" : "stars"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <textarea
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              rows={4}
+              placeholder="What should a neighbor know?"
+              className="rounded-lg border border-line bg-ink px-3 py-2 text-paper outline-none focus:border-brass"
+            />
+            <button
+              type="submit"
+              disabled={sending}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
+            >
+              {sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Star className="h-4 w-4" />}
+              Post review
+            </button>
+          </form>
+        ) : (
+          <div className="mt-6 rounded-xl border border-line bg-ink px-4 py-4">
+            <p className="text-sm leading-6 text-paper">Reviews come from PlaceFind accounts so shops can trust the desk.</p>
+            <p className="mt-2 text-sm leading-6 text-muted">Sign in or join to leave a review. You can still request a quote below without an account.</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => onGo("/login")}
+                className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                onClick={() => onGo("/join")}
+                className="h-11 rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
+              >
+                Join
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-line bg-panel p-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Request a quote</p>
+        <h3 className="mt-2 font-display text-2xl text-paper">Ask this shop for a quote</h3>
+        {listing.hasQuoteEmail === false ? (
+          <p className="mt-3 text-sm leading-6 text-muted">{MISSING_QUOTE_EMAIL_MESSAGE}</p>
+        ) : (
+          <>
+            <p className="mt-3 text-sm leading-6 text-muted">
+              Tell them what you need. PlaceFind sends your note to the contact email on this listing. The shop writes you back themselves.
+            </p>
+            {quoteSent && (
+              <p className="mt-4 rounded-xl border border-moss/40 bg-moss/10 px-4 py-3 text-sm text-moss">
+                Sent. The shop can write you at the email you left.
+              </p>
+            )}
+            <form
+              className="mt-5 grid gap-3"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void submitQuote()
+              }}
+            >
+              {quoteError && <p className="text-sm text-clay">{quoteError}</p>}
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Your name</span>
+                <input
+                  value={quoteName}
+                  onChange={(event) => setQuoteName(event.target.value)}
+                  autoComplete="name"
+                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Email</span>
+                <input
+                  type="email"
+                  value={quoteEmail}
+                  onChange={(event) => setQuoteEmail(event.target.value)}
+                  autoComplete="email"
+                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Phone (optional)</span>
+                <input
+                  value={quotePhone}
+                  onChange={(event) => setQuotePhone(event.target.value)}
+                  autoComplete="tel"
+                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">What do you need?</span>
+                <textarea
+                  value={quoteNeed}
+                  onChange={(event) => setQuoteNeed(event.target.value)}
+                  rows={4}
+                  placeholder="Two dozen sandwich loaves for a Friday office lunch, ready before 10 a.m."
+                  className="rounded-lg border border-line bg-ink px-3 py-2 text-paper outline-none focus:border-brass"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={quoteSending}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
+              >
+                {quoteSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                Request a quote
+              </button>
+            </form>
+          </>
+        )}
       </section>
     </article>
   )

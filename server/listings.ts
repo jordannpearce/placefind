@@ -579,7 +579,7 @@ export function updateListing(id: string, input: ListingInput, userId: string, a
 export function deleteListing(id: string, userId: string, admin = false) {
   const current = getListing(id)
   assertCanEdit(current, userId, admin)
-  writeListings(readListings().filter((row) => row.id !== id))
+  writeListings(readListings().filter((row) => row.id !== current.id))
 }
 
 export function listingSearchQuery(listing: Pick<DirectoryListing, "name" | "city" | "state" | "keywords">): SearchQuery {
