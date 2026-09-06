@@ -28,11 +28,14 @@ export function robotsTxt(origin: string): string {
   ].join("\n")
 }
 
-export function sitemapXml(origin: string, listingIds: string[]): string {
+export function sitemapXml(origin: string, listingPaths: string[]): string {
   const base = origin.replace(/\/$/, "")
   const today = new Date().toISOString().slice(0, 10)
   const staticPaths = ["/", "/directory", "/join", "/terms", "/policy", "/email-policy", "/data-policy", "/refund"]
-  const urls = [...staticPaths, ...listingIds.map((id) => `/listings/${id}`)]
+  const urls = [
+    ...staticPaths,
+    ...listingPaths.map((path) => (path.startsWith("/") ? path : `/listings/${path}`)),
+  ]
   const body = urls
     .map(
       (path) =>

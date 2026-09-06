@@ -26,7 +26,7 @@ describe("admin account purge", () => {
       role: "customer",
     })
     const listing = createListing({ name: "Harbor Street Cafe", city: "Portland", state: "OR" }, customer.user!.id)
-    createReview(listing.id, { authorName: "Maya", rating: 5, text: "Strong coffee and a quiet corner." })
+    createReview(listing.id, { rating: 5, text: "Strong coffee and a quiet corner." }, { id: "reviewer-1", name: "Maya" })
     consumeMonthlyUsage(customer.user!.id, "rankScans")
     assert.equal(listingsForUser(customer.user!.id).length, 1)
     assert.equal(reviewsForListing(listing.id).length, 1)

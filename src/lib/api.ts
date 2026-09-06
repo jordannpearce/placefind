@@ -208,7 +208,7 @@ export async function loadListing(id: string): Promise<{
   reviewSummary: ReviewSummary
 }> {
   const payload = await request<{ listing: DirectoryListing; reviews?: ListingReview[]; reviewSummary?: ReviewSummary }>(
-    `/api/listings/${id}`,
+    `/api/listings/${encodeURIComponent(id)}`,
   )
   return {
     listing: {
@@ -222,9 +222,16 @@ export async function loadListing(id: string): Promise<{
 
 export async function createListingReview(
   id: string,
-  input: { authorName: string; rating: number; text: string },
+  input: { rating: number; text: string },
 ): Promise<{ review: ListingReview; reviews: ListingReview[]; reviewSummary: ReviewSummary }> {
-  return request(`/api/listings/${id}/reviews`, { method: "POST", body: JSON.stringify(input) })
+  return request(`/api/listings/${encodeURIComponent(id)}/reviews`, { method: "POST", body: JSON.stringify(input) })
+}
+
+export async function requestListingQuote(
+  id: string,
+  input: { name: string; email: string; phone?: string; need: string },
+): Promise<{ ok: boolean }> {
+  return request(`/api/listings/${encodeURIComponent(id)}/quotes`, { method: "POST", body: JSON.stringify(input) })
 }
 
 export async function loadCrawls(): Promise<CrawlJob[]> {
@@ -254,7 +261,7 @@ export async function createListing(input: ListingInput): Promise<DirectoryListi
 }
 
 export async function updateListing(id: string, input: ListingInput): Promise<DirectoryListing> {
-  const payload = await request<{ listing: DirectoryListing }>(`/api/listings/${id}`, {
+  const payload = await request<{ listing: DirectoryListing }>(`/api/listings/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(input),
   })
@@ -262,7 +269,7 @@ export async function updateListing(id: string, input: ListingInput): Promise<Di
 }
 
 export async function deleteListing(id: string): Promise<void> {
-  await request(`/api/listings/${id}`, { method: "DELETE" })
+  await request(`/api/listings/${encodeURIComponent(id)}`, { method: "DELETE" })
 }
 
 export async function verifyListing(id: string): Promise<{
@@ -270,7 +277,7 @@ export async function verifyListing(id: string): Promise<{
   result: SearchResponse
   candidates: BusinessListing[]
 }> {
-  return request(`/api/listings/${id}/verify`, { method: "POST", body: JSON.stringify({}) })
+  return request(`/api/listings/${encodeURIComponent(id)}/verify`, { method: "POST", body: JSON.stringify({}) })
 }
 
 export async function confirmListingMatch(
@@ -284,10 +291,11 @@ export async function confirmListingMatch(
     website?: string
     hours?: string
     category?: string
+    categories?: string[]
     mapsStatus?: "pending" | "found" | "not_found"
   },
 ): Promise<DirectoryListing> {
-  const payload = await request<{ listing: DirectoryListing }>(`/api/listings/${id}/confirm`, {
+  const payload = await request<{ listing: DirectoryListing }>(`/api/listings/${encodeURIComponent(id)}/confirm`, {
     method: "POST",
     body: JSON.stringify(input),
   })

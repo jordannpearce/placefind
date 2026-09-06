@@ -12,10 +12,10 @@ describe("robots and sitemap", () => {
   })
 
   it("lists home, directory, legal, and listing urls", () => {
-    const xml = sitemapXml("https://placefind.example", ["seed-1"])
+    const xml = sitemapXml("https://placefind.example", ["/listings/harbor-oak-bakery"])
     assert.match(xml, /<loc>https:\/\/placefind.example\/<\/loc>/)
     assert.match(xml, /<loc>https:\/\/placefind.example\/directory<\/loc>/)
-    assert.match(xml, /<loc>https:\/\/placefind.example\/listings\/seed-1<\/loc>/)
+    assert.match(xml, /<loc>https:\/\/placefind.example\/listings\/harbor-oak-bakery<\/loc>/)
     assert.match(xml, /<loc>https:\/\/placefind.example\/refund<\/loc>/)
   })
 })

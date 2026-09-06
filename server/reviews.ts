@@ -86,8 +86,14 @@ export function deleteReviewsForListings(listingIds: string[]) {
 
 export function reviewsForListing(listingId: string): ListingReview[] {
   seedDirectoryReviews()
+  let id = listingId
+  try {
+    id = getListing(listingId).id
+  } catch {
+    // Keep the given id when the listing row is gone.
+  }
   return readReviews()
-    .filter((row) => row.listingId === listingId)
+    .filter((row) => row.listingId === id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
@@ -98,15 +104,19 @@ export function listingReviewSummary(listingId: string) {
 export function createReview(
   listingId: string,
   input: { authorName?: string; rating?: number; text?: string },
+  author?: { id: string; name: string } | null,
 ): ListingReview {
-  getListing(listingId)
-  const parsed = validateReview(input)
+  if (!author?.id || !author.name?.trim()) {
+    throw new ListingError(401, "Sign in to leave a review.")
+  }
+  const listing = getListing(listingId)
+  const parsed = validateReview({ ...input, authorName: author.name })
   if (parsed.error || !parsed.value) throw new ListingError(400, parsed.error || "Could not save the review.")
-  const current = reviewsForListing(listingId)
+  const current = reviewsForListing(listing.id)
   if (current.length >= 200) throw new ListingError(400, "This listing already has a full set of reviews.")
   const review: ListingReview = {
     id: newId(),
-    listingId,
+    listingId: listing.id,
     authorName: parsed.value.authorName,
     rating: parsed.value.rating,
     text: parsed.value.text,

@@ -143,7 +143,7 @@ export function HomePage({ user, onGo }: Props) {
             <li key={listing.id}>
               <button
                 type="button"
-                onClick={() => onGo(listingPath(listing.id))}
+                onClick={() => onGo(listingPath(listing))}
                 className="h-full w-full rounded-2xl border border-line bg-panel p-5 text-left hover:border-brass/60"
               >
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">

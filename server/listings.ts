@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto"
 import { formatStreetAddress, parseStreetAddress } from "../src/lib/address.ts"
 import { normalizeKeywords } from "../src/lib/keywords.ts"
+import { listingSlugFromParts, mapsCategory } from "../src/lib/listings.ts"
 import { LISTING_MONTHLY_PRICE } from "../src/lib/pricing.ts"
 import { mapsPlaceUrl } from "./match.ts"
 import { toStateAbbr } from "./states.ts"
@@ -23,6 +24,7 @@ export type DirectoryListing = {
   category: string
   keywords: string[]
   phone: string
+  email: string
   website: string
   hours: string
   placeId: string
@@ -38,6 +40,7 @@ export type DirectoryListing = {
   profileContent: string
   crawlStatus: CrawlStatus
   lastCrawledAt: string
+  slug: string
   createdAt: string
   updatedAt: string
 }
@@ -51,6 +54,7 @@ export type ListingInput = {
   category?: string
   keywords?: string[] | string
   phone?: string
+  email?: string
   website?: string
   hours?: string
 }
@@ -64,6 +68,7 @@ export type MapsMatchInput = {
   website?: string
   hours?: string
   category?: string
+  categories?: string[]
   mapsStatus?: MapsStatus
 }
 
@@ -83,7 +88,7 @@ export class ListingError extends Error {
   }
 }
 
-const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] = [
+const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt" | "slug">[] = [
   {
     ownerUserId: SEED_OWNER_ID,
     name: "Harbor & Oak Bakery",
@@ -94,6 +99,7 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
     category: "Bakery",
     keywords: ["pastry", "coffee", "sourdough"],
     phone: "(207) 555-0142",
+    email: "hello@harborandoak.example",
     website: "https://harborandoak.example",
     hours: "Tue–Sun 7:00 AM–3:00 PM",
     placeId: "sample-harbor-oak",
@@ -121,6 +127,7 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
     category: "Dentist",
     keywords: ["family dentist", "teeth cleaning"],
     phone: "(505) 555-0198",
+    email: "front@redmesadental.example",
     website: "https://redmesadental.example",
     hours: "Mon–Thu 8:00 AM–5:00 PM",
     placeId: "sample-red-mesa",
@@ -148,6 +155,7 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
     category: "Bicycle shop",
     keywords: ["bike repair", "tune up"],
     phone: "(612) 555-0164",
+    email: "",
     website: "https://northsidebikes.example",
     hours: "Wed–Sat 10:00 AM–6:00 PM",
     placeId: "",
@@ -174,6 +182,7 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
     category: "Seafood restaurant",
     keywords: ["oysters", "grouper sandwich"],
     phone: "(813) 555-0117",
+    email: "hello@citrusandsalt.example",
     website: "https://citrusandsalt.example",
     hours: "Daily 11:30 AM–9:00 PM",
     placeId: "sample-citrus-salt",
@@ -201,6 +210,7 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
     category: "Bookstore",
     keywords: ["independent bookstore", "used books"],
     phone: "(828) 555-0133",
+    email: "",
     website: "",
     hours: "Thu–Mon 11:00 AM–7:00 PM",
     placeId: "",
@@ -228,6 +238,7 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt">[] 
     category: "Hardware store",
     keywords: ["keys", "paint", "garden"],
     phone: "(208) 555-0188",
+    email: "shop@lampposthardware.example",
     website: "https://lampposthardware.example",
     hours: "Mon–Sat 8:00 AM–6:00 PM",
     placeId: "sample-lamppost",
@@ -286,6 +297,7 @@ function asListing(row: Partial<DirectoryListing> | null | undefined): Directory
     category: String(row.category ?? ""),
     keywords: normalizeKeywords(row.keywords),
     phone: String(row.phone ?? ""),
+    email: String(row.email ?? "").trim().toLowerCase(),
     website: String(row.website ?? ""),
     hours: String(row.hours ?? ""),
     placeId: String(row.placeId ?? ""),
@@ -301,9 +313,24 @@ function asListing(row: Partial<DirectoryListing> | null | undefined): Directory
     profileContent: String(row.profileContent ?? ""),
     crawlStatus: crawlStatusOf(row.crawlStatus),
     lastCrawledAt: String(row.lastCrawledAt ?? ""),
+    slug: String(row.slug ?? "").trim() || listingSlugFromParts({
+      brand: String(row.brand ?? ""),
+      name: String(row.name),
+      category: String(row.category ?? ""),
+    }),
     createdAt: String(row.createdAt ?? nowIso()),
     updatedAt: String(row.updatedAt ?? row.createdAt ?? nowIso()),
   }
+}
+
+function uniqueSlug(base: string, id: string, rows: DirectoryListing[]): string {
+  const taken = rows.some((row) => row.id !== id && row.slug === base)
+  return taken ? `${base}-${id.slice(0, 6)}` : base
+}
+
+function withUniqueSlug(listing: DirectoryListing, rows: DirectoryListing[] = readListings()): DirectoryListing {
+  const base = listingSlugFromParts(listing)
+  return { ...listing, slug: uniqueSlug(base, listing.id, rows) }
 }
 
 function readListings(): DirectoryListing[] {
@@ -349,12 +376,16 @@ export function validateListing(input: ListingInput): { value?: ListingInput; er
   const category = input.category?.trim() ?? ""
   const keywords = normalizeKeywords(input.keywords)
   const phone = input.phone?.trim() ?? ""
+  const email = input.email?.trim() ?? ""
   const website = input.website?.trim() ?? ""
   const hours = input.hours?.trim() ?? ""
   if (name.length < 2) return { error: "Enter the business name." }
   if (city.length < 2) return { error: "Enter the city." }
   if (!state) return { error: "Choose a state." }
-  return { value: { name, street, city, state, zip, category, keywords, phone, website, hours } }
+  if (email && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 120)) {
+    return { error: "Enter a valid business email." }
+  }
+  return { value: { name, street, city, state, zip, category, keywords, phone, email: email.toLowerCase(), website, hours } }
 }
 
 export function publicListing(listing: DirectoryListing, includeOwner = false) {
@@ -368,6 +399,7 @@ export function publicListing(listing: DirectoryListing, includeOwner = false) {
     category: listing.category,
     keywords: listing.keywords,
     phone: listing.phone,
+    hasQuoteEmail: Boolean(listing.email.trim()),
     website: listing.website,
     hours: listing.hours,
     placeId: listing.placeId || null,
@@ -391,9 +423,10 @@ export function publicListing(listing: DirectoryListing, includeOwner = false) {
     profileContent: listing.profileContent,
     crawlStatus: listing.crawlStatus,
     lastCrawledAt: listing.lastCrawledAt || null,
+    slug: listing.slug,
     createdAt: listing.createdAt,
     updatedAt: listing.updatedAt,
-    ...(includeOwner ? { ownerUserId: listing.ownerUserId } : {}),
+    ...(includeOwner ? { ownerUserId: listing.ownerUserId, email: listing.email } : {}),
   }
 }
 
@@ -403,13 +436,18 @@ export function seedDirectoryListings(force = false): DirectoryListing[] {
     const seeded = new Map(
       SEED_LISTINGS.map((row, index) => [
         `seed-${index + 1}`,
-        { ...row, id: `seed-${index + 1}`, createdAt: existing.find((item) => item.id === `seed-${index + 1}`)?.createdAt ?? "2026-08-12T14:00:00.000Z", updatedAt: existing.find((item) => item.id === `seed-${index + 1}`)?.updatedAt ?? "2026-08-12T14:00:00.000Z" },
+        { ...row, id: `seed-${index + 1}`, slug: listingSlugFromParts(row), createdAt: existing.find((item) => item.id === `seed-${index + 1}`)?.createdAt ?? "2026-08-12T14:00:00.000Z", updatedAt: existing.find((item) => item.id === `seed-${index + 1}`)?.updatedAt ?? "2026-08-12T14:00:00.000Z" },
       ]),
     )
     let changed = false
     const next = existing.map((row) => {
       const fresh = seeded.get(row.id)
-      if (!fresh || row.profileContent) return row
+      if (!fresh) return row
+      if (!row.email && fresh.email) {
+        changed = true
+        return { ...row, email: fresh.email }
+      }
+      if (row.profileContent) return row
       changed = true
       return { ...row, ...fresh, id: row.id, createdAt: row.createdAt, updatedAt: row.updatedAt }
     })
@@ -420,6 +458,7 @@ export function seedDirectoryListings(force = false): DirectoryListing[] {
   const seeded = SEED_LISTINGS.map((row, index) => ({
     ...row,
     id: `seed-${index + 1}`,
+    slug: listingSlugFromParts(row),
     createdAt: at,
     updatedAt: at,
   }))
@@ -444,8 +483,9 @@ export function listPublicListings(query: ListingQuery = {}): DirectoryListing[]
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export function getListing(id: string): DirectoryListing {
-  const listing = readListings().find((row) => row.id === id)
+export function getListing(idOrSlug: string): DirectoryListing {
+  const rows = readListings()
+  const listing = rows.find((row) => row.id === idOrSlug) ?? rows.find((row) => row.slug === idOrSlug)
   if (!listing) throw new ListingError(404, "That listing is not in the directory.")
   return listing
 }
@@ -479,6 +519,7 @@ export function createListing(input: ListingInput, ownerUserId: string): Directo
     category: parsed.value.category ?? "",
     keywords: parsed.value.keywords ?? [],
     phone: parsed.value.phone ?? "",
+    email: parsed.value.email ?? "",
     website: parsed.value.website ?? "",
     hours: parsed.value.hours ?? "",
     placeId: "",
@@ -494,11 +535,14 @@ export function createListing(input: ListingInput, ownerUserId: string): Directo
     profileContent: "",
     crawlStatus: "idle",
     lastCrawledAt: "",
+    slug: "",
     createdAt: at,
     updatedAt: at,
   }
-  writeListings([listing, ...readListings()])
-  return listing
+  const existing = readListings()
+  const saved = withUniqueSlug(listing, existing)
+  writeListings([saved, ...existing])
+  return saved
 }
 
 function assertCanEdit(listing: DirectoryListing, userId: string, admin: boolean) {
@@ -521,12 +565,15 @@ export function updateListing(id: string, input: ListingInput, userId: string, a
     category: parsed.value.category ?? current.category,
     keywords: parsed.value.keywords ?? current.keywords,
     phone: parsed.value.phone ?? current.phone,
+    email: parsed.value.email ?? current.email,
     website: parsed.value.website ?? current.website,
     hours: parsed.value.hours ?? current.hours,
     updatedAt: nowIso(),
   }
-  writeListings(readListings().map((row) => (row.id === id ? next : row)))
-  return next
+  const rows = readListings()
+  const saved = withUniqueSlug(next, rows)
+  writeListings(rows.map((row) => (row.id === current.id ? saved : row)))
+  return saved
 }
 
 export function deleteListing(id: string, userId: string, admin = false) {
@@ -564,12 +611,14 @@ export function applyMapsMatch(
     phone: match?.phone?.trim() || listing.phone,
     website: match?.website?.trim() || listing.website,
     hours: match?.hours?.trim() || listing.hours,
-    category: match?.category?.trim() || listing.category,
+    category: mapsCategory({ category: match?.category, categories: match?.categories }) || listing.category,
     mapsStatus: status,
     updatedAt: nowIso(),
   }
-  writeListings(readListings().map((row) => (row.id === listing.id ? next : row)))
-  return next
+  const rows = readListings()
+  const saved = withUniqueSlug(next, rows)
+  writeListings(rows.map((row) => (row.id === listing.id ? saved : row)))
+  return saved
 }
 
 export function confirmListingMatch(
@@ -596,6 +645,7 @@ export function confirmListingMatch(
       website: match.website,
       hours: match.hours,
       category: match.category,
+      categories: match.categories,
     },
     "found",
   )
@@ -625,8 +675,10 @@ export function applyListingProfile(
     lastCrawledAt: input.lastCrawledAt ?? current.lastCrawledAt,
     updatedAt: nowIso(),
   }
-  writeListings(readListings().map((row) => (row.id === id ? next : row)))
-  return next
+  const rows = readListings()
+  const saved = withUniqueSlug(next, rows)
+  writeListings(rows.map((row) => (row.id === current.id ? saved : row)))
+  return saved
 }
 
 export async function verifyListingOnMaps(

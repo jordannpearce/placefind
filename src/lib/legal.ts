@@ -78,7 +78,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "Information you give us",
         body: [
-          "When you create an account we store your name, email, and a hashed password. When you add a listing we store the business name, city, state, category, keywords, and optional phone, website, and hours.",
+          "When you create an account we store your name, email, and a hashed password. When you add a listing we store the business name, city, state, category, keywords, and optional phone, email, website, and hours.",
           "If you run Track or save a campaign, we store the business name, city, state, keywords, and scan results you asked us to keep so you can come back to them.",
         ],
       },
@@ -120,7 +120,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "Transactional email",
         body: [
-          "We send mail that the product needs: account confirmation, password reset links, and notices about your listings. These are not marketing messages. You receive them because you created an account, reset a password, or asked the site to do something.",
+          "We send mail that the product needs: account confirmation, password reset links, notices about your listings, and quote requests a visitor asks us to pass to the email on a listing. These are not marketing messages. You receive them because you created an account, reset a password, or asked the site to do something.",
         ],
       },
       {
@@ -197,7 +197,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "The public directory is free to browse",
         body: [
-          "Visitors can browse listings and read profiles without paying. Leaving a review is free.",
+          "Visitors can browse listings, read profiles, and request a quote without paying. Leaving a review is free after you create an account.",
         ],
       },
       {

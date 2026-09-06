@@ -3,13 +3,14 @@ import { useEffect, useState } from "react"
 import {
   confirmListingMatch,
   createListing,
+  deleteListing,
   loadListing,
   updateListing,
   verifyListing,
 } from "../lib/api.ts"
 import { formatKeywordText } from "../lib/keywords.ts"
 import { listingPriceCopy, LISTING_PRICE_LABEL } from "../lib/pricing.ts"
-import { listingPath, mapsStatusLabel } from "../lib/listings.ts"
+import { listingPath, listingRedirectPath, mapsCategory, mapsStatusLabel } from "../lib/listings.ts"
 import type { AuthUser, BusinessListing, DirectoryListing, ListingInput } from "../lib/types.ts"
 import { CityStateFields } from "./CityStateFields.tsx"
 
@@ -28,6 +29,7 @@ const emptyForm = (): ListingInput => ({
   category: "",
   keywords: "",
   phone: "",
+  email: "",
   website: "",
   hours: "",
 })
@@ -42,6 +44,7 @@ function formFromListing(row: DirectoryListing): ListingInput {
     category: row.category,
     keywords: formatKeywordText(row.keywords),
     phone: row.phone,
+    email: row.email ?? "",
     website: row.website,
     hours: row.hours,
   }
@@ -64,6 +67,10 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
       .then(({ listing: row }) => {
         setListing(row)
         setForm(formFromListing(row))
+        const dest = listingRedirectPath(listingId, row)
+        if (dest && typeof window !== "undefined") {
+          window.history.replaceState({}, "", `${dest}/edit`)
+        }
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load that listing."))
       .finally(() => setLoading(false))
@@ -77,7 +84,7 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
       setListing(next)
       setForm(formFromListing(next))
       setNotice(listingId ? "Listing saved." : "Listing created. Open Crawl Website to write the public profile.")
-      if (!listingId) onGo(`/listings/${next.id}/edit`)
+      if (!listingId) onGo(`${listingPath(next)}/edit`)
       return next
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the listing.")
@@ -110,6 +117,8 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
 
   async function confirm(candidate: BusinessListing) {
     if (!listing) return
+    const category = mapsCategory(candidate)
+    setForm((current) => ({ ...current, category: category || current.category }))
     setSaving(true)
     setError(null)
     try {
@@ -121,11 +130,12 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
         phone: candidate.phone ?? undefined,
         website: candidate.website ?? undefined,
         hours: candidate.hours ?? undefined,
-        category: candidate.category ?? undefined,
+        category: category || undefined,
+        categories: candidate.categories,
       })
       setListing(next)
       setForm(formFromListing(next))
-      setNotice(`Confirmed ${next.mapsTitle || next.name} on Google Maps. Street, phone, and hours filled from that listing.`)
+      setNotice(`Confirmed ${next.mapsTitle || next.name} on Google Maps. Street, phone, hours, and category filled from that listing.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not confirm that place.")
     } finally {
@@ -142,6 +152,21 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
       setNotice("Marked as not found on Google Maps.")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update Maps status.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function removeListing() {
+    if (!listing) return
+    if (!window.confirm(`Remove ${listing.name} from the PlaceFind directory? This cannot be undone.`)) return
+    setSaving(true)
+    setError(null)
+    try {
+      await deleteListing(listing.id)
+      onGo("/account")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete that listing.")
     } finally {
       setSaving(false)
     }
@@ -233,6 +258,19 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
             />
           </label>
           <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Business email</span>
+            <input
+              type="email"
+              value={form.email ?? ""}
+              onChange={(event) => setForm({ ...form, email: event.target.value })}
+              placeholder="hello@yourshop.com"
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            />
+            <span className="text-xs leading-5 text-muted">
+              Quote requests from the public profile go to this address. Leave it blank if you are not ready to publish one.
+            </span>
+          </label>
+          <label className="grid gap-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Website</span>
             <input
               value={form.website ?? ""}
@@ -261,10 +299,20 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
             {listing && (
               <button
                 type="button"
-                onClick={() => onGo(listingPath(listing.id))}
+                onClick={() => onGo(listingPath(listing))}
                 className="h-11 rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
               >
                 View listing
+              </button>
+            )}
+            {listingId && listing && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void removeListing()}
+                className="h-11 rounded-lg border border-clay/40 px-4 text-sm text-clay hover:border-clay disabled:opacity-60"
+              >
+                Delete listing
               </button>
             )}
           </div>
@@ -313,6 +361,9 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
                   >
                     <span className="block font-display text-xl text-paper">{candidate.title}</span>
                     <span className="mt-1 block text-sm text-muted">{candidate.address}</span>
+                    {mapsCategory(candidate) && (
+                      <span className="mt-1 block text-sm text-brass">{mapsCategory(candidate)}</span>
+                    )}
                     {candidate.rating != null && (
                       <span className="mt-2 inline-flex items-center gap-1 text-sm text-brass">
                         <Star className="h-4 w-4 fill-current" />

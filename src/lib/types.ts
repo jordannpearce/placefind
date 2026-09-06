@@ -227,8 +227,10 @@ export type DirectoryListing = {
   category: string
   keywords: string[]
   phone: string
+  email?: string
   website: string
   hours: string
+  hasQuoteEmail?: boolean
   placeId: string | null
   cid: string | null
   mapsStatus: MapsStatus
@@ -244,8 +246,21 @@ export type DirectoryListing = {
   crawlStatus?: CrawlStatus
   lastCrawledAt?: string | null
   reviewSummary?: ReviewSummary
+  slug?: string
   createdAt: string
   updatedAt: string
+}
+
+export type CrawlPageResult = {
+  url: string
+  status: "ok" | "error"
+  title: string
+  snippet: string
+  brand: string
+  licenseInfo: string
+  yearsInBusiness: string
+  specialty: string
+  error: string
 }
 
 export type CrawlJob = {
@@ -255,6 +270,7 @@ export type CrawlJob = {
   status: "queued" | "running" | "ok" | "error"
   sitemapFound: boolean
   pagesCrawled: number
+  pages?: CrawlPageResult[]
   brand: string
   licenseInfo: string
   yearsInBusiness: string
@@ -274,6 +290,7 @@ export type ListingInput = {
   category?: string
   keywords?: string[] | string
   phone?: string
+  email?: string
   website?: string
   hours?: string
 }

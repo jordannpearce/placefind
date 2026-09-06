@@ -99,8 +99,9 @@ export function CrawlDashboard({ user, onGo }: Props) {
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Dashboard · Crawl</p>
         <h2 className="mt-2 font-display text-3xl text-paper">Crawl Website</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
-          This desk is separate from the public directory. Ask PlaceFind to read your site and sitemap, then we pull
-          brand, license, years in business, and what you specialize in — and write the profile visitors see.
+          This desk is separate from the public directory. Ask PlaceFind to read every page on the site, plus every URL
+          in the sitemap when one exists, then we pull brand, license, years in business, and what you specialize in —
+          and write the profile visitors see.
         </p>
         <p className="mt-2 text-sm text-muted">Signed in as {user.email}.</p>
         {error && <p className="mt-4 rounded-xl border border-clay/40 bg-clay/10 px-4 py-3 text-sm text-clay">{error}</p>}
@@ -212,11 +213,49 @@ export function CrawlDashboard({ user, onGo }: Props) {
           )}
           <button
             type="button"
-            onClick={() => onGo(listingPath(active.listingId))}
+            onClick={() => onGo(listingPath(listings.find((row) => row.id === active.listingId) ?? active.listingId))}
             className="mt-5 text-sm text-brass hover:underline"
           >
             Open the public profile
           </button>
+        </section>
+      )}
+
+      {active && (active.pages?.length ?? 0) > 0 && (
+        <section className="rounded-2xl border border-line bg-panel p-6" data-testid="crawl-pages">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Pages crawled</p>
+          <h3 className="mt-2 font-display text-2xl text-paper">
+            {active.pages?.length} page{(active.pages?.length ?? 0) === 1 ? "" : "s"} from this website
+          </h3>
+          <p className="mt-2 text-sm text-muted">
+            Every page PlaceFind opened is listed here — URL, whether it loaded, the title or snippet, and any facts
+            pulled from that page.
+          </p>
+          <ul className="mt-5 grid gap-3">
+            {active.pages?.map((page) => (
+              <li key={page.url} className="rounded-xl border border-line bg-ink px-4 py-3">
+                <p className="break-all text-sm text-paper">{page.url}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {page.status === "ok" ? "Opened" : "Could not open"}
+                  {page.title ? ` · ${page.title}` : ""}
+                </p>
+                {page.snippet && <p className="mt-2 text-sm leading-6 text-paper/80">{page.snippet}</p>}
+                {(page.brand || page.licenseInfo || page.yearsInBusiness || page.specialty) && (
+                  <p className="mt-2 text-xs text-muted">
+                    {[
+                      page.brand && `Brand: ${page.brand}`,
+                      page.licenseInfo,
+                      page.yearsInBusiness,
+                      page.specialty && `Specializes in ${page.specialty}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                )}
+                {page.error && <p className="mt-2 text-sm text-clay">{page.error}</p>}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

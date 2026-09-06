@@ -39,6 +39,66 @@ export function parseSitemapLocs(xml: string): string[] {
   return unique
 }
 
+export function isSitemapDocument(xml: string): boolean {
+  return /<(sitemapindex|urlset)[\s>]/i.test(xml)
+}
+
+export function parseSitemapDocument(xml: string): { pages: string[]; nested: string[] } {
+  const locs = parseSitemapLocs(xml)
+  if (/<sitemapindex[\s>]/i.test(xml)) return { pages: [], nested: locs }
+  const nested = locs.filter((loc) => /sitemap/i.test(loc) || /\.xml(?:$|\?)/i.test(loc))
+  const pages = locs.filter((loc) => !nested.includes(loc))
+  return { pages, nested }
+}
+
+export function extractPageTitle(markdown: string): string {
+  return firstTitle(markdown) || firstHeading(markdown)
+}
+
+export function extractPageSnippet(markdown: string, max = 220): string {
+  const text = markdown
+    .replace(/\r/g, "")
+    .replace(/^title:\s*.+$/gim, "")
+    .replace(/^#{1,6}\s+.+$/gm, "")
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[`*_>#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!text) return ""
+  return text.length > max ? `${text.slice(0, max).trim()}…` : text
+}
+
+export function extractSameOriginLinks(content: string, pageUrl: string): string[] {
+  let origin = ""
+  try {
+    origin = new URL(pageUrl).origin
+  } catch {
+    return []
+  }
+  const raw = [
+    ...content.matchAll(/href=["']([^"']+)["']/gi),
+    ...content.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g),
+    ...content.matchAll(/\bhttps?:\/\/[^\s"'<>)\]]+/gi),
+  ].map((row) => row[1] || row[0])
+  const seen = new Set<string>()
+  const links: string[] = []
+  for (const href of raw) {
+    try {
+      const url = new URL(href, pageUrl)
+      if (url.origin !== origin) continue
+      url.hash = ""
+      const normalized = url.href
+      if (seen.has(normalized)) continue
+      seen.add(normalized)
+      links.push(normalized)
+    } catch {
+      continue
+    }
+  }
+  return links
+}
+
 export function extractSiteFacts(markdown: string, fallbackName = ""): SiteFacts {
   const text = markdown.replace(/\r/g, "")
   const license = text.match(LICENSE_RE)?.[1]?.trim() ?? ""

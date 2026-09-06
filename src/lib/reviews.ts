@@ -25,7 +25,7 @@ export function validateReview(input: { authorName?: string; rating?: number; te
   const authorName = input.authorName?.trim() ?? ""
   const text = input.text?.trim() ?? ""
   const rating = Number(input.rating)
-  if (authorName.length < 2) return { error: "Enter your name." }
+  if (input.authorName !== undefined && authorName.length < 2) return { error: "Enter your name." }
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) return { error: "Choose a rating from 1 to 5." }
   if (text.length < 8) return { error: "Write a short review." }
   if (text.length > 1200) return { error: "Keep the review under 1,200 characters." }

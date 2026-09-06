@@ -274,6 +274,36 @@ export function passwordResetEmail(input: { name: string; resetUrl: string }): M
   }
 }
 
+export function quoteRequestEmail(input: {
+  businessName: string
+  name: string
+  email: string
+  phone?: string
+  need: string
+}): MailMessage {
+  const business = input.businessName.trim() || "this business"
+  const phone = input.phone?.trim() || "Not provided"
+  const text = `${business} received a quote request from PlaceFind.
+
+${input.name} is asking ${business} for a quote.
+
+Name: ${input.name}
+Email: ${input.email}
+Phone: ${phone}
+
+What they need:
+${input.need}
+
+Reply to ${input.name} at ${input.email}. PlaceFind does not take a cut of the work.
+`
+  return {
+    to: "",
+    subject: `Quote request for ${business}`,
+    text,
+    html: textToHtml(text),
+  }
+}
+
 export function pendingLicenseEmail(input: { name: string; product: string }): MailMessage {
   const first = input.name.split(" ")[0] || "there"
   return {

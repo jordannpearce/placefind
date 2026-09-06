@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { deleteListing } from "../lib/api.ts"
-import { listingLocation, mapsStatusLabel } from "../lib/listings.ts"
+import { listingLocation, listingPath, mapsStatusLabel } from "../lib/listings.ts"
 import type { DirectoryListing } from "../lib/types.ts"
 
 type Props = {
@@ -28,7 +28,7 @@ export function AdminListings({ listings, onListings, onError, onMessage, onGo }
           {listings.map((listing) => (
             <li key={listing.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-ink px-4 py-3">
               <div>
-                <button type="button" onClick={() => onGo(`/listings/${listing.id}`)} className="text-left text-sm text-paper hover:text-brass">
+                <button type="button" onClick={() => onGo(listingPath(listing))} className="text-left text-sm text-paper hover:text-brass">
                   {listing.name}
                 </button>
                 <p className="text-xs text-muted">
@@ -39,6 +39,7 @@ export function AdminListings({ listings, onListings, onError, onMessage, onGo }
                 type="button"
                 disabled={busy === listing.id}
                 onClick={() => {
+                  if (!window.confirm(`Remove ${listing.name} from the PlaceFind directory? This cannot be undone.`)) return
                   setBusy(listing.id)
                   onError(null)
                   void deleteListing(listing.id)

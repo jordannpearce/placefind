@@ -1,7 +1,7 @@
 import { ExternalLink, LoaderCircle, MapPin, Phone, Star } from "lucide-react"
 import { useEffect, useState } from "react"
 import { createListingReview, loadListing } from "../lib/api.ts"
-import { listingLocation, mapsStatusDetail } from "../lib/listings.ts"
+import { listingLocation, listingPath, listingRedirectPath, mapsStatusDetail } from "../lib/listings.ts"
 import { LISTING_PRICE_LABEL } from "../lib/pricing.ts"
 import type { AuthUser, DirectoryListing, ListingReview, ReviewSummary } from "../lib/types.ts"
 
@@ -35,6 +35,10 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
         setListing(payload.listing)
         setReviews(payload.reviews)
         setSummary(payload.reviewSummary)
+        const dest = listingRedirectPath(listingId, payload.listing)
+        if (dest && typeof window !== "undefined") {
+          window.history.replaceState({}, "", dest)
+        }
       })
       .catch((err) => {
         setListing(null)
@@ -125,7 +129,7 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
             <>
               <button
                 type="button"
-                onClick={() => onGo(`/listings/${listing.id}/edit`)}
+                onClick={() => onGo(`${listingPath(listing)}/edit`)}
                 className="h-11 rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
               >
                 Edit listing

@@ -64,7 +64,11 @@ const PATHS: AppPath[] = [
 export function listingIdFromPath(pathname = typeof window === "undefined" ? "/" : window.location.pathname): string | null {
   const match = pathname.match(/^\/listings\/([^/]+)/)
   if (!match || match[1] === "new") return null
-  return match[1]
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return match[1]
+  }
 }
 
 export function isListingCreatePath(pathname = typeof window === "undefined" ? "/" : window.location.pathname): boolean {

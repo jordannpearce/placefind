@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { allowedPath, navLinks, type NavAccess } from "../src/lib/nav.ts"
+import { allowedPath, listingIdFromPath, navLinks, type NavAccess } from "../src/lib/nav.ts"
 import type { AuthUser } from "../src/lib/types.ts"
 
 const user: AuthUser = {
@@ -52,6 +52,15 @@ describe("allowedPath", () => {
     assert.equal(allowedPath("/account", access), "/account")
     assert.equal(allowedPath("/download", access), "/")
     assert.equal(allowedPath("/buy", access), "/")
+  })
+})
+
+describe("listing path parsing", () => {
+  it("reads brand-and-category slugs and still recognizes the old id path", () => {
+    assert.equal(listingIdFromPath("/listings/harbor-oak-bakery"), "harbor-oak-bakery")
+    assert.equal(listingIdFromPath("/listings/seed-1/edit"), "seed-1")
+    assert.equal(listingIdFromPath("/listings/new"), null)
+    assert.equal(listingIdFromPath("/directory"), null)
   })
 })
 

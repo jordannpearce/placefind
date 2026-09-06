@@ -19,8 +19,43 @@ export function mapsStatusDetail(listing: Pick<DirectoryListing, "mapsStatus" | 
   return "This listing has not been cross-checked on Google Maps yet."
 }
 
-export function listingPath(id: string): string {
-  return `/listings/${id}`
+export function mapsCategory(place: { category?: string | null; categories?: string[] | null }): string {
+  const primary = place.category?.trim() ?? ""
+  if (primary) return primary
+  return place.categories?.map((row) => row.trim()).find(Boolean) ?? ""
+}
+
+export function slugifyListingPart(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48)
+}
+
+export function listingSlugFromParts(listing: { brand?: string; name?: string; category?: string }): string {
+  const brand = slugifyListingPart(listing.brand || listing.name || "")
+  const category = slugifyListingPart(listing.category || "")
+  if (brand && category && !brand.includes(category)) return `${brand}-${category}`
+  return brand || category || "listing"
+}
+
+export function listingPath(listing: string | { id: string; slug?: string }): string {
+  if (typeof listing === "string") return `/listings/${listing}`
+  const slug = listing.slug?.trim()
+  return `/listings/${slug || listing.id}`
+}
+
+export function listingRedirectPath(
+  requested: string,
+  listing: { id: string; slug?: string },
+): string | null {
+  const slug = listing.slug?.trim() ?? ""
+  if (slug && requested === listing.id && requested !== slug) return `/listings/${slug}`
+  return null
 }
 
 export function listingLocation(

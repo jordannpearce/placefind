@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { loadAccount, logout } from "../lib/api.ts"
+import { deleteListing, loadAccount, logout } from "../lib/api.ts"
 import { listingLocation, listingPath, mapsStatusLabel } from "../lib/listings.ts"
 import type { AccountUsage, AuthUser, DirectoryListing } from "../lib/types.ts"
 import { UsageCard } from "./UsageCard.tsx"
@@ -88,17 +88,38 @@ export function AccountPage({ user, onLogout, onGo }: Props) {
         ) : (
           <ul className="mt-4 grid gap-3">
             {listings.map((listing) => (
-              <li key={listing.id}>
+              <li key={listing.id} className="rounded-xl border border-line bg-ink px-4 py-3">
                 <button
                   type="button"
-                  onClick={() => onGo(listingPath(listing.id))}
-                  className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-left hover:border-brass/60"
+                  onClick={() => onGo(listingPath(listing))}
+                  className="w-full text-left hover:text-brass"
                 >
                   <p className="text-sm text-paper">{listing.name}</p>
                   <p className="mt-1 text-xs text-muted">
                     {listingLocation(listing)} · {mapsStatusLabel(listing.mapsStatus)}
                   </p>
                 </button>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => onGo(`${listingPath(listing)}/edit`)}
+                    className="text-xs text-brass hover:underline"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm(`Remove ${listing.name} from the PlaceFind directory? This cannot be undone.`)) return
+                      void deleteListing(listing.id)
+                        .then(() => setListings((rows) => rows.filter((row) => row.id !== listing.id)))
+                        .catch((err) => setError(err instanceof Error ? err.message : "Could not delete that listing."))
+                    }}
+                    className="text-xs text-clay hover:underline"
+                  >
+                    Delete
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

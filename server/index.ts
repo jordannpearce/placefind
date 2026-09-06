@@ -79,6 +79,7 @@ import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
 import { requestIp, runWebsiteSearch, VisitorSearchUsedError } from "./search-limit.ts"
 import { readSearchQuery } from "./search-query.ts"
+import { listingPath } from "../src/lib/listings.ts"
 import {
   confirmListingMatch,
   createListing,
@@ -92,7 +93,8 @@ import {
   updateListing,
   verifyListingOnMaps,
 } from "./listings.ts"
-import { createReview, listingReviewSummary, reviewsForListing, seedDirectoryReviews } from "./reviews.ts"
+import { registerListingLeadRoutes } from "./listing-leads.ts"
+import { listingReviewSummary, reviewsForListing, seedDirectoryReviews } from "./reviews.ts"
 import { robotsTxt, siteOrigin, sitemapXml } from "./robots.ts"
 import { crawlsForUser, getCrawl, publicCrawl, requestListingCrawl } from "./site-crawl.ts"
 import { initStore } from "./store.ts"
@@ -173,7 +175,7 @@ async function start() {
   })
 
   app.get("/sitemap.xml", (req, res) => {
-    res.type("application/xml").send(sitemapXml(siteOrigin(req), listPublicListings().map((row) => row.id)))
+    res.type("application/xml").send(sitemapXml(siteOrigin(req), listPublicListings().map((row) => listingPath(row))))
   })
 
   app.get("/api/health", (_req, res) => {
@@ -247,22 +249,7 @@ async function start() {
     }
   })
 
-  app.post("/api/listings/:id/reviews", (req, res) => {
-    try {
-      const review = createReview(String(req.params.id ?? ""), req.body ?? {})
-      res.status(201).json({
-        review,
-        reviews: reviewsForListing(review.listingId),
-        reviewSummary: listingReviewSummary(review.listingId),
-      })
-    } catch (error) {
-      if (error instanceof ListingError) {
-        res.status(error.status).json({ error: error.message })
-        return
-      }
-      res.status(500).json({ error: "Could not save that review." })
-    }
-  })
+  registerListingLeadRoutes(app, requireUser)
 
   app.get("/api/crawls", (req, res) => {
     const user = requireUser(req, res)
@@ -383,6 +370,7 @@ async function start() {
       website?: string
       hours?: string
       category?: string
+      categories?: string[]
       mapsStatus?: "pending" | "found" | "not_found"
     }
     try {
@@ -1155,6 +1143,22 @@ async function start() {
       return
     }
     res.download(full, name)
+  })
+
+  app.use((req, res, next) => {
+    if (req.method !== "GET") return next()
+    const match = req.path.match(/^\/listings\/([^/]+)(\/edit)?\/?$/)
+    if (!match || match[1] === "new") return next()
+    try {
+      const listing = getListing(decodeURIComponent(match[1]))
+      if (listing.slug && match[1] === listing.id && listing.slug !== listing.id) {
+        res.redirect(301, `/listings/${listing.slug}${match[2] || ""}`)
+        return
+      }
+    } catch {
+      // Let the public profile page render its own not-found state.
+    }
+    next()
   })
 
   const isProd = process.env.NODE_ENV === "production" || Boolean(process.env.PLACEFIND_STATIC)
