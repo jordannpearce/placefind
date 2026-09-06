@@ -644,4 +644,57 @@ describe("rank scan Maps keys", () => {
     assert.equal(result.grid.points.find((point) => point.row === 0 && point.col === 0)?.status, "error")
     assert.match(result.grid.points.find((point) => point.row === 0 && point.col === 0)?.error || "", /Could not reach Maps|timed out|could not finish/i)
   })
+
+  it("finalizes all 9 pins when only the center listing matches", async () => {
+    isolateKeys()
+    process.env.DATAFORSEO_LOGIN = "maps-login@example.test"
+    process.env.DATAFORSEO_PASSWORD = "maps-password-test"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-scan-one-rank-")))
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        placeId: "sample-franklin",
+        listingTitle: "Franklin Barbecue",
+        listingAddress: "900 E 11th St, Austin, TX 78702",
+        keywords: ["barbecue"],
+        gridSize: 3,
+        center: { lat: 30.2701, lng: -97.7313 },
+      },
+      "user-a",
+    )
+    const client: MapsGridClient = {
+      postTasks: async (tasks) => tasks.map((task) => ({ id: `task-${task.tag}`, tag: task.tag || "" })),
+      getTask: async (id) => {
+        const center = id === "task-1:1"
+        return {
+          id,
+          status_code: 20000,
+          result: [
+            {
+              items: center
+                ? [{ type: "maps_search", rank_group: 1, title: "Franklin Barbecue", place_id: "sample-franklin" }]
+                : [{ type: "maps_search", rank_group: 1, title: "Other BBQ", place_id: "other" }],
+            },
+          ],
+        }
+      },
+      liveAtCoordinate: async () => {
+        throw new Error("live fallback should not run")
+      },
+    }
+    const result = await scanCampaign(campaign.id, emptyApiKeys(), ["barbecue"], "user-a", {
+      client,
+      pollTimeoutMs: 20,
+      sleep: async () => {},
+    })
+    assert.equal(result.grid.points.length, 9)
+    assert.ok(result.grid.points.every((point) => point.status === "rank" || point.status === "not_found" || point.status === "error"))
+    assert.equal(result.grid.points.filter((point) => point.status === "rank").length, 1)
+    assert.equal(result.grid.points.filter((point) => point.status === "not_found").length, 8)
+    assert.equal(result.grid.zoom, 14)
+    assert.ok(result.grid.points.every((point) => (point.locationCoordinate || "").endsWith(",14z")))
+  })
 })

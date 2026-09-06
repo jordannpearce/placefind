@@ -170,13 +170,11 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     const scanMatches =
       Boolean(grid) &&
       grid!.gridSize === gridSize &&
-      Math.abs(grid!.spacingMiles - spacingMiles) < 1e-6 &&
-      Boolean(mapCenter) &&
-      Math.abs(grid!.center.lat - mapCenter!.lat) < 1e-6 &&
-      Math.abs(grid!.center.lng - mapCenter!.lng) < 1e-6
+      Math.abs(grid!.spacingMiles - spacingMiles) < 1e-6
     if (scanMatches && grid) {
       if (!activeKeyword) return grid.points
-      return grid.points.filter((point) => point.keyword.toLowerCase() === activeKeyword.toLowerCase())
+      const keyed = grid.points.filter((point) => point.keyword.toLowerCase() === activeKeyword.toLowerCase())
+      return keyed.length > 0 ? keyed : grid.points
     }
     if (!mapCenter || !confirmed) return []
     return buildPreviewPoints(mapCenter, gridSize, spacingMiles, keyword)

@@ -237,6 +237,7 @@ export type GridPointResult = GridPoint & {
   address: string | null
   domain?: string | null
   placeId?: string | null
+  cid?: string | null
   mapsUrl: string | null
   scannedAt: string
   error?: string

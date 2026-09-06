@@ -2,7 +2,14 @@ export const MAX_GRID_SIZE = 7
 export const MIN_GRID_SIZE = 1
 export const DEFAULT_GRID_SIZE = 5
 export const DEFAULT_SPACING_MILES = 1
+/** DataForSEO omitted-zoom default (street-level "this area"). Too tight for 1-mile grid cells. */
 export const DEFAULT_ZOOM = 17
+export const DFS_DEFAULT_ZOOM = 17
+/**
+ * Viewport zoom for one grid cell. Docs allow 3–21; 17z is the API default when omitted.
+ * 14z is ~2–3 miles — the usual city-grid setting so neighboring 1-mile pins can still see the listing.
+ */
+export const GRID_CELL_ZOOM = 14
 export const MIN_ZOOM = 3
 export const MAX_ZOOM = 21
 export const MAX_COORD_DECIMALS = 7
@@ -30,6 +37,19 @@ export type GridSpec = {
 export function clampZoom(zoom?: number): number {
   const value = Number.isFinite(zoom) ? Math.round(Number(zoom)) : DEFAULT_ZOOM
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
+}
+
+/** Maps zoom for a geo-grid cell. Treats DataForSEO's 17z default as unset so 1-mile cells are not street-level. */
+export function gridCellZoom(spacingMiles = DEFAULT_SPACING_MILES, requested?: number): number {
+  if (requested != null && Number.isFinite(requested)) {
+    const zoom = clampZoom(requested)
+    if (zoom !== DFS_DEFAULT_ZOOM) return zoom
+  }
+  const spacing = clampSpacingMiles(spacingMiles)
+  if (spacing >= 1.5) return 13
+  if (spacing >= 0.75) return 14
+  if (spacing >= 0.4) return 15
+  return 16
 }
 
 export function clampGridSize(size?: number): number {
@@ -74,7 +94,7 @@ export function parseLocationCoordinate(value: string): { lat: number; lng: numb
 export function buildGrid(spec: GridSpec): GridPoint[] {
   const size = clampGridSize(spec.size)
   const spacingMiles = clampSpacingMiles(spec.spacingMiles)
-  const zoom = clampZoom(spec.zoom)
+  const zoom = spec.zoom == null ? gridCellZoom(spec.spacingMiles) : clampZoom(spec.zoom)
   const centerLat = Number(spec.centerLat)
   const centerLng = Number(spec.centerLng)
   if (!Number.isFinite(centerLat) || !Number.isFinite(centerLng)) {

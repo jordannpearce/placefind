@@ -122,6 +122,22 @@ describe("rankFromMapsItems", () => {
     assert.equal(hit.listing, null)
   })
 
+  it("matches by CID then exact title when place_id is absent", () => {
+    const byCid = rankFromMapsItems(
+      [
+        { type: "maps_search", rank_group: 1, title: "Other BBQ", place_id: "x", cid: "999" },
+        { type: "maps_search", rank_group: 4, title: "Franklin Barbecue", place_id: "y", cid: "555" },
+      ],
+      { name: "Franklin Barbecue", cid: "555" },
+    )
+    assert.equal(byCid.rank, 4)
+    const byTitle = rankFromMapsItems(
+      [{ type: "maps_search", rank_group: 2, title: "Franklin Barbecue", place_id: "other" }],
+      { name: "Franklin Barbecue", placeId: "ChIJ-missing" },
+    )
+    assert.equal(byTitle.rank, 2)
+  })
+
   it("returns not found when the business is missing from that coordinate's items", () => {
     const hit = rankFromMapsItems(mapsFixture, {
       name: "Avis",

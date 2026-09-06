@@ -20,6 +20,7 @@ export type MapsSerpItem = {
   domain?: string | null
   url?: string | null
   place_id?: string | null
+  cid?: string | number | null
   rating?: { value?: number | null; votes_count?: number | null } | null
   address_info?: { address?: string | null; city?: string | null; region?: string | null } | null
 }
@@ -27,6 +28,7 @@ export type MapsSerpItem = {
 export type MapsRankTarget = {
   name: string
   placeId?: string | null
+  cid?: string | number | null
   city?: string
   state?: string
 }
@@ -43,6 +45,16 @@ function placeIdsMatch(left?: string | null, right?: string | null): boolean {
   const a = left?.trim()
   const b = right?.trim()
   return Boolean(a && b && a === b)
+}
+
+function cidsMatch(left?: string | number | null, right?: string | number | null): boolean {
+  const a = left == null ? "" : String(left).trim()
+  const b = right == null ? "" : String(right).trim()
+  return Boolean(a && b && a === b)
+}
+
+function organicRank(item: MapsSerpItem, index: number): number {
+  return item.rank_group && item.rank_group > 0 ? item.rank_group : index + 1
 }
 
 export function rankOfBusiness<T extends Pick<BusinessListing, "title" | "address" | "city" | "state" | "placeId">>(
@@ -86,6 +98,7 @@ export function rankOfBusiness<T extends Pick<BusinessListing, "title" | "addres
 export function rankFromMapsItems(items: MapsSerpItem[] | null | undefined, target: MapsRankTarget): RankHit<MapsSerpItem> {
   const organic = organicMapsItems(items)
   const placeId = target.placeId?.trim() || null
+  const cid = target.cid == null ? "" : String(target.cid).trim()
   const city = target.city ?? ""
   const state = target.state ?? ""
 
@@ -93,8 +106,24 @@ export function rankFromMapsItems(items: MapsSerpItem[] | null | undefined, targ
     const index = organic.findIndex((item) => placeIdsMatch(item.place_id, placeId))
     if (index >= 0) {
       const listing = organic[index]!
-      const rank = listing.rank_group && listing.rank_group > 0 ? listing.rank_group : index + 1
-      return { rank, index, listing, matchScore: 100 }
+      return { rank: organicRank(listing, index), index, listing, matchScore: 100 }
+    }
+  }
+
+  if (cid) {
+    const index = organic.findIndex((item) => cidsMatch(item.cid, cid))
+    if (index >= 0) {
+      const listing = organic[index]!
+      return { rank: organicRank(listing, index), index, listing, matchScore: 100 }
+    }
+  }
+
+  const exactName = target.name.trim()
+  if (exactName) {
+    const index = organic.findIndex((item) => titlesEqual(item, exactName))
+    if (index >= 0) {
+      const listing = organic[index]!
+      return { rank: organicRank(listing, index), index, listing, matchScore: 95 }
     }
   }
 
@@ -124,6 +153,12 @@ export function rankFromMapsItems(items: MapsSerpItem[] | null | undefined, targ
   }
 
   const listing = organic[bestIndex]!
-  const rank = listing.rank_group && listing.rank_group > 0 ? listing.rank_group : bestIndex + 1
-  return { rank, index: bestIndex, listing, matchScore: bestScore }
+  return { rank: organicRank(listing, bestIndex), index: bestIndex, listing, matchScore: bestScore }
+}
+
+function titlesEqual(item: MapsSerpItem, targetName: string): boolean {
+  const expected = targetName.trim().toLowerCase()
+  const title = (item.title || "").trim().toLowerCase()
+  const original = (item.original_title || "").trim().toLowerCase()
+  return Boolean(expected && (title === expected || original === expected))
 }

@@ -143,6 +143,8 @@ On Railway, keep a **single web replica**. Multiple copies would each fire the s
 
 Rank scans use the same Maps search as the test scan. If Maps search is not set up, the scan returns an error instead of inventing ranks.
 
+Grid cells call DataForSEO Maps with `location_coordinate` as `latitude,longitude,zoom` (max 7 decimals; zoom 3–21). One task per pin, batched up to 100 per `task_post`. DataForSEO applies **17z** when zoom is omitted — that is street-level “search this area,” so a 1-mile neighbor often omits the listing. PlaceFind uses **14z** for 1-mile cells (~2–3 mile viewport; 13z when spacing is 1.5+ miles, 15z at 0.5 mile). Every finished pin is rank, not found (red), or error — never left blank.
+
 Keygen and Resend on **Admin** / **Sell** are separate: they issue and email Windows licenses. They are not required to create a campaign.
 
 ## Sample searches

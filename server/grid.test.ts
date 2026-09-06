@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+  GRID_CELL_ZOOM,
   MAX_COORD_DECIMALS,
   MAX_GRID_SIZE,
   MAX_TASKS_PER_POST,
@@ -8,6 +9,7 @@ import {
   chunkTasks,
   formatCoordinatePart,
   formatLocationCoordinate,
+  gridCellZoom,
   gridTaskCount,
   mapsGridTask,
   parseLocationCoordinate,
@@ -62,6 +64,16 @@ describe("parseLocationCoordinate", () => {
   })
 })
 
+describe("gridCellZoom", () => {
+  it("uses 14z for 1-mile cells instead of DataForSEO's 17z default", () => {
+    assert.equal(gridCellZoom(1), GRID_CELL_ZOOM)
+    assert.equal(gridCellZoom(1, 17), 14)
+    assert.equal(gridCellZoom(1, 15), 15)
+    assert.equal(gridCellZoom(2), 13)
+    assert.equal(gridCellZoom(0.5), 15)
+  })
+})
+
 describe("buildGrid", () => {
   it("builds one unique coordinate task per cell, capped at 7×7", () => {
     const points = buildGrid({
@@ -78,6 +90,8 @@ describe("buildGrid", () => {
     assert.equal(center?.locationCoordinate, "40.689199,-73.975035,17z")
     assert.ok(points.every((point) => /^[-.\d]+,[-.\d]+,17z$/.test(point.locationCoordinate)))
     assert.equal(buildGrid({ centerLat: 30, centerLng: -97, size: 99, spacingMiles: 1 }).length, MAX_GRID_SIZE ** 2)
+    const cityGrid = buildGrid({ centerLat: 30.27, centerLng: -97.74, size: 3, spacingMiles: 1 })
+    assert.ok(cityGrid.every((point) => point.locationCoordinate.endsWith(",14z")))
   })
 
   it("places north rows at higher latitude and east columns at higher longitude", () => {

@@ -2,7 +2,8 @@ import type { GeoPoint, GridPoint, GridPointResult } from "./types.ts"
 
 export const DEFAULT_GRID_SIZE = 5
 export const DEFAULT_SPACING_MILES = 1
-export const DEFAULT_ZOOM = 17
+/** Grid-cell Maps zoom. DataForSEO defaults to 17z when omitted; 14z keeps 1-mile "this area" usable. */
+export const DEFAULT_ZOOM = 14
 export const ALLOWED_GRID_SIZES = [3, 5, 7] as const
 
 export function gridPinId(point: Pick<GridPoint, "row" | "col">): string {

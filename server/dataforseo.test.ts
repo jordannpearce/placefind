@@ -6,6 +6,7 @@ import {
   dataForSeoErrorMessage,
   finalizeGridCells,
   isEmptySerpMessage,
+  pinIdForCollectedCell,
   postedTasksFromResponse,
   scanMapsGrid,
   type MapsGridClient,
@@ -54,6 +55,24 @@ describe("empty SERP handling", () => {
 })
 
 describe("postedTasksFromResponse", () => {
+  it("maps a task back to its pin by location_coordinate when tag is missing", () => {
+    const requested = [
+      { language_code: "en" as const, location_coordinate: "30.27,-97.74,14z", keyword: "barbecue", depth: 20, search_places: false, search_this_area: true, tag: "0:0" },
+      { language_code: "en" as const, location_coordinate: "30.28,-97.74,14z", keyword: "barbecue", depth: 20, search_places: false, search_this_area: true, tag: "1:1" },
+    ]
+    const mapped = postedTasksFromResponse(requested, [
+      { id: "task-b", status_code: 20100, data: { location_coordinate: "30.28,-97.74,14z" } },
+      { id: "task-a", status_code: 20100, data: { location_coordinate: "30.27,-97.74,14z" } },
+    ])
+    assert.deepEqual(
+      mapped.posted.map((row) => [row.id, row.tag]),
+      [
+        ["task-a", "0:0"],
+        ["task-b", "1:1"],
+      ],
+    )
+  })
+
   it("keeps our request tag when the response omits data.tag", () => {
     const requested = [
       { language_code: "en" as const, location_coordinate: "30.27,-97.74,17z", keyword: "barbecue", depth: 20, search_places: false, search_this_area: true, tag: "0:0" },
@@ -237,6 +256,15 @@ describe("scanMapsGrid", () => {
     assert.equal(liveCalls, 2)
     assert.equal(cells[0]?.items.length, 1)
     assert.equal(cells[0]?.error, null)
+  })
+})
+
+describe("pinIdForCollectedCell", () => {
+  it("falls back to location_coordinate when the tag is empty", () => {
+    const points = buildGrid({ centerLat: 30.2701, centerLng: -97.7313, size: 3, spacingMiles: 1, zoom: 14 })
+    const center = points.find((point) => point.row === 1 && point.col === 1)!
+    assert.equal(pinIdForCollectedCell("", { items: [], error: null, locationCoordinate: center.locationCoordinate }, points), center.id)
+    assert.equal(pinIdForCollectedCell("1:1", { items: [], error: null }, points), "1:1")
   })
 })
 

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto"
 import { scanMapsGrid, searchDataForSeo, type MapsGridClient } from "./dataforseo.ts"
 import { geocodeCityState } from "./geocode.ts"
-import { formatLocationCoordinate, type GridPoint as MapsGridPoint } from "./grid.ts"
+import { formatLocationCoordinate, GRID_CELL_ZOOM, gridCellZoom, type GridPoint as MapsGridPoint } from "./grid.ts"
 import { mapsScanConfigured, mergeHostedKeys } from "./hosted-keys.ts"
 import { mapsPlaceUrl } from "./match.ts"
 import {
@@ -40,7 +40,7 @@ export const DEFAULT_GRID_SIZE = 5
 export const DEFAULT_SPACING_MILES = 1
 export const MIN_SPACING_MILES = 0.25
 export const MAX_SPACING_MILES = 10
-export const DEFAULT_ZOOM = 17
+export const DEFAULT_ZOOM = GRID_CELL_ZOOM
 
 export type GeoPoint = {
   lat: number
@@ -92,6 +92,7 @@ export type GridPointResult = GridPoint & {
   address: string | null
   domain?: string | null
   placeId?: string | null
+  cid?: string | null
   mapsUrl: string | null
   scannedAt: string
   error?: string
@@ -256,10 +257,11 @@ export function normalizeCenter(raw: unknown): GeoPoint | null {
   return { lat, lng }
 }
 
-export function normalizeZoom(raw: unknown): number {
+export function normalizeZoom(raw: unknown, spacingMiles = DEFAULT_SPACING_MILES): number {
+  if (raw == null || raw === "") return gridCellZoom(spacingMiles)
   const zoom = Number(raw)
-  if (!Number.isFinite(zoom)) return DEFAULT_ZOOM
-  return Math.min(21, Math.max(3, Math.round(zoom)))
+  if (!Number.isFinite(zoom)) return gridCellZoom(spacingMiles)
+  return gridCellZoom(spacingMiles, Math.min(21, Math.max(3, Math.round(zoom))))
 }
 
 
@@ -304,7 +306,7 @@ export function validateCampaign(input: CampaignInput): {
       keywords,
       gridSize: grid.value,
       spacingMiles: spacing.value,
-      zoom: normalizeZoom(input.zoom),
+      zoom: normalizeZoom(input.zoom, spacing.value),
       center: input.center === undefined ? null : normalizeCenter(input.center),
     },
   }
@@ -313,7 +315,7 @@ export function validateCampaign(input: CampaignInput): {
 export function buildGridPoints(center: GeoPoint, gridSize: number, spacingMiles: number, zoom = DEFAULT_ZOOM): GridPoint[] {
   const size = normalizeGridSize(gridSize).value ?? DEFAULT_GRID_SIZE
   const spacing = normalizeSpacingMiles(spacingMiles).value ?? DEFAULT_SPACING_MILES
-  const z = normalizeZoom(zoom)
+  const z = Number.isFinite(zoom) ? Math.min(21, Math.max(3, Math.round(zoom))) : gridCellZoom(spacing)
   const half = (size - 1) / 2
   const latDegPerMile = 1 / 69
   const cosLat = Math.cos((center.lat * Math.PI) / 180)
@@ -416,7 +418,7 @@ function normalizeStoredScanRun(row: GridScanRun): GridScanRun {
     keyword: row.keyword ?? "",
     gridSize: row.gridSize,
     spacingMiles: row.spacingMiles,
-    zoom: normalizeZoom(row.zoom),
+    zoom: normalizeZoom(row.zoom, row.spacingMiles),
     center: normalizeCenter(row.center) ?? { lat: 0, lng: 0 },
     placeId: row.placeId ?? null,
     pointCount: row.pointCount ?? row.points?.length ?? 0,
@@ -560,7 +562,7 @@ function normalizeStoredCampaign(row: Campaign): Campaign {
     keywords: normalizeKeywords(row.keywords),
     gridSize: grid.value ?? DEFAULT_GRID_SIZE,
     spacingMiles: spacing.value ?? DEFAULT_SPACING_MILES,
-    zoom: normalizeZoom(row.zoom),
+    zoom: normalizeZoom(row.zoom, spacing.value ?? DEFAULT_SPACING_MILES),
     center: normalizeCenter(row.center),
     createdAt: row.createdAt || new Date().toISOString(),
     updatedAt: row.updatedAt || row.createdAt || new Date().toISOString(),
@@ -787,14 +789,15 @@ function pinResultFromCell(
     address: listing?.address ?? null,
     domain: listing?.domain ?? null,
     placeId: listing?.place_id ?? null,
+    cid: listing?.cid != null ? String(listing.cid) : null,
     mapsUrl: listing
       ? mapsPlaceUrl({
           title: listing.title || input.businessName,
           address: listing.address || "",
           placeId: listing.place_id,
-          lat: cell.point.lat,
-          lng: cell.point.lng,
-          cid: null,
+          lat: listing.latitude ?? cell.point.lat,
+          lng: listing.longitude ?? cell.point.lng,
+          cid: listing.cid != null ? String(listing.cid) : null,
         })
       : null,
     scannedAt: input.scannedAt,
@@ -849,7 +852,7 @@ export async function scanCampaign(
     }
     const placeId = campaign.placeId.trim()
     const targetName = campaign.listingTitle.trim() || campaign.businessName
-    const zoom = normalizeZoom(campaign.zoom)
+    const zoom = gridCellZoom(campaign.spacingMiles, campaign.zoom)
     const gridPoints = buildGridPoints(center, campaign.gridSize, campaign.spacingMiles, zoom)
     const mapsPoints = gridPoints.map(
       (point): MapsGridPoint => ({

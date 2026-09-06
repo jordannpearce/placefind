@@ -125,6 +125,24 @@ export function isEmptySerpMessage(message?: string | null): boolean {
   return /no search results/i.test(message || "")
 }
 
+export function itemsFromMapsTask(task: MapsTaskSnapshot | null | undefined): MapsItem[] {
+  return task?.result?.[0]?.items ?? []
+}
+
+export function pinIdForCollectedCell(
+  tag: string,
+  cell: CollectedCell,
+  points: GridPoint[],
+): string | null {
+  if (tag && points.some((point) => point.id === tag)) return tag
+  const coord = cell.locationCoordinate?.trim()
+  if (coord) {
+    const match = points.find((point) => point.locationCoordinate === coord)
+    if (match) return match.id
+  }
+  return tag || null
+}
+
 export function isFailedMapsStatus(code?: number | null, message?: string | null): boolean {
   if (isEmptySerpMessage(message)) return false
   return Boolean(code && code >= 40000 && !TASK_PENDING.has(code))
@@ -213,13 +231,14 @@ export type PostedMapsTask = {
 export type CollectedCell = {
   items: MapsItem[] | null
   error: string | null
+  locationCoordinate?: string
 }
 
 export type MapsTaskSnapshot = {
   id?: string
   status_code?: number
   status_message?: string
-  data?: { tag?: string }
+  data?: { tag?: string; location_coordinate?: string }
   result?: Array<{ items?: MapsItem[] | null } | null> | null
 }
 
@@ -351,7 +370,8 @@ export function postedTasksFromResponse(
   }
   requested.forEach((row, index) => {
     const tag = row.tag || ""
-    const task = (tag && byTag.get(tag)) || tasks?.[index]
+    const byCoord = (tasks ?? []).find((task) => task.data?.location_coordinate === row.location_coordinate)
+    const task = (tag && byTag.get(tag)) || byCoord || tasks?.[index]
     if (task?.id && !isFailedMapsStatus(task.status_code, task.status_message)) {
       posted.push({ id: task.id, tag: tag || task.data?.tag || "" })
       return
@@ -434,7 +454,11 @@ export async function collectPostedTasks(
       const code = task?.status_code ?? 0
       if (code === TASK_READY || isEmptySerpMessage(task?.status_message)) {
         pending.delete(id)
-        await store(tag, { items: task?.result?.[0]?.items ?? [], error: null })
+        await store(tag, {
+          items: itemsFromMapsTask(task),
+          error: null,
+          locationCoordinate: task?.data?.location_coordinate,
+        })
         return
       }
       if (isFailedMapsStatus(code, task?.status_message)) {
@@ -442,6 +466,7 @@ export async function collectPostedTasks(
         await store(tag, {
           items: null,
           error: task?.status_message || "Maps search could not finish this point.",
+          locationCoordinate: task?.data?.location_coordinate,
         })
       }
     })
@@ -466,7 +491,11 @@ async function retryFailedGets(
     const task = await settle(() => getTask(row.id), null)
     const code = task?.status_code ?? 0
     if (code === TASK_READY || isEmptySerpMessage(task?.status_message)) {
-      collected.set(row.tag, { items: task?.result?.[0]?.items ?? [], error: null })
+      collected.set(row.tag, {
+        items: itemsFromMapsTask(task),
+        error: null,
+        locationCoordinate: task?.data?.location_coordinate,
+      })
     }
   })
 }
@@ -549,7 +578,8 @@ export async function scanMapsGrid(
         options?.pollTimeoutMs ?? gridPollTimeoutMs(points.length),
         wait,
         async (tag, cell) => {
-          const point = points.find((row) => row.id === tag)
+          const pinId = pinIdForCollectedCell(tag, cell, points)
+          const point = points.find((row) => row.id === pinId)
           if (point && cell.items != null) await mark(point, cell.items, null)
         },
       ),
@@ -558,7 +588,9 @@ export async function scanMapsGrid(
   await settle(() => retryFailedGets(posted, collected, (id) => client.getTask(id)), undefined)
   for (const point of points) {
     if (results.has(point.id)) continue
-    const entry = collected.get(point.id)
+    const entry =
+      collected.get(point.id) ||
+      [...collected.entries()].find(([, cell]) => cell.locationCoordinate === point.locationCoordinate)?.[1]
     if (entry && entry.items != null) await mark(point, entry.items, null)
   }
 
