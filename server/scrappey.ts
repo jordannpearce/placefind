@@ -1,4 +1,5 @@
-import { mapsPlaceUrl, mapsSearchUrl } from "./match.ts"
+import { mapsPlaceUrl } from "./match.ts"
+import { mapsKeywordFromQuery } from "./search-query.ts"
 import { toStateAbbr } from "./states.ts"
 import type { BusinessListing, KeyTestResult, SearchQuery } from "./types.ts"
 
@@ -158,7 +159,7 @@ export async function enrichWithScrappey(key: string, listing: BusinessListing):
 }
 
 export async function searchScrappey(query: SearchQuery, key: string): Promise<{ hits: BusinessListing[]; error: string | null }> {
-  const url = mapsSearchUrl(query)
+  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsKeywordFromQuery(query))}`
   const page = await scrappeyGet(key, url)
   if (page.error) return { hits: [], error: page.error }
   const hits = parseMapsMarkdown(page.text, query, page.currentUrl)

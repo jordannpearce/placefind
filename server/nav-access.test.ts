@@ -25,13 +25,21 @@ describe("allowedPath", () => {
     assert.equal(allowedPath("/reset", guest), "/reset")
   })
 
-  it("keeps website test scan public and sends Join to Buy", () => {
+  it("keeps the marketing home public and sends Join to Buy", () => {
     const guest = { desktop: false, store: true, admin: false, user: null } satisfies NavAccess
     assert.equal(allowedPath("/", guest), "/")
     assert.equal(allowedPath("/track", guest), "/track")
+    assert.equal(allowedPath("/try", guest), "/try")
+    assert.equal(allowedPath("/demo", guest), "/demo")
     assert.equal(allowedPath("/join", guest), "/buy")
     assert.equal(allowedPath("/download", guest), "/download")
     assert.equal(allowedPath("/reset", guest), "/reset")
+    assert.equal(allowedPath("/terms", guest), "/terms")
+    assert.equal(allowedPath("/policy", guest), "/policy")
+    assert.equal(allowedPath("/privacy", guest), "/privacy")
+    assert.equal(allowedPath("/email-policy", guest), "/email-policy")
+    assert.equal(allowedPath("/data-policy", guest), "/data-policy")
+    assert.equal(allowedPath("/refund", guest), "/refund")
   })
 
   it("lets a signed-in desktop customer use Lookup, Track, and Account", () => {
@@ -53,12 +61,14 @@ describe("navLinks", () => {
     assert.equal(labels.includes("Buy"), false)
   })
 
-  it("hides Join on the public website and keeps Download there", () => {
+  it("uses a marketing nav on the public website and hides Test scan", () => {
     const guest = navLinks({ desktop: false, store: true, admin: false, user: null }).map((link) => link.label)
-    assert.deepEqual(guest, ["Test scan", "Track", "Buy", "Download", "Sign in"])
+    assert.deepEqual(guest, ["Home", "How it works", "Buy", "Download", "Sign in"])
+    assert.equal(guest.includes("Test scan"), false)
     assert.equal(guest.includes("Join"), false)
     const labels = navLinks({ desktop: false, store: true, admin: false, user }).map((link) => link.label)
-    assert.deepEqual(labels, ["Test scan", "Track", "Buy", "Download", "Account"])
+    assert.deepEqual(labels, ["Home", "Test scan", "Track", "Buy", "Download", "Account"])
+    assert.equal(labels.includes("Join"), false)
   })
 
   it("shows Admin only for admin users", () => {

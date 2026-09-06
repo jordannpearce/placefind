@@ -51,7 +51,7 @@ export function DownloadPage({ onTryScan }: Props) {
               onClick={onTryScan}
               className="inline-flex h-12 items-center rounded-lg border border-line px-5 text-sm text-paper hover:border-brass"
             >
-              Run a test scan
+              See a sample listing
             </button>
           )}
         </div>

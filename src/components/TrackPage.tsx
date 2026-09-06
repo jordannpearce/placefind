@@ -57,6 +57,16 @@ import {
   trafficSearchHelpCopy,
   trafficStartConfirmCopy,
 } from "../lib/traffic-plan.ts"
+import {
+  formatKeywordText,
+  keywordCapMessage,
+  keywordHelpCopy,
+  mergeKeywordLists,
+  parseKeywordText,
+  parseKeywordsOrError,
+  scanKeywordsLabel,
+  trafficKeywordTypeHelpCopy,
+} from "../lib/keywords.ts"
 import type {
   ApiKeys,
   BusinessListing,
@@ -1890,7 +1900,7 @@ function ScanHistoryPanel({
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Scan history</p>
           <h5 className="font-display text-xl text-paper">Saved grid scans</h5>
-          <p className="mt-1 text-sm text-muted">Every finished scan is kept. Rerun uses the same keywords, grid, and center.</p>
+          <p className="mt-1 text-sm text-muted">Every finished scan is kept. Rerun uses the same keyword, grid, and center.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1921,7 +1931,7 @@ function ScanHistoryPanel({
         <ul className="mt-3 grid gap-1 text-sm text-muted" data-testid="scan-history-list">
           {scans.map((run) => (
             <li key={run.id}>
-              {scanWhen(run)} · {scanKeywordsLabel(run)} · {run.gridSize}×{run.gridSize} · {run.foundCount} of {run.pointCount} found
+              {scanWhen(run)} · {run.keyword} · {run.gridSize}×{run.gridSize} · {run.foundCount} of {run.pointCount} found
             </li>
           ))}
         </ul>
@@ -1938,7 +1948,7 @@ function ScanHistoryPanel({
             >
               {scans.map((run) => (
                 <option key={run.id} value={run.id}>
-                  {scanWhen(run)} · {scanKeywordsLabel(run)}
+                  {scanWhen(run)} · {run.keyword}
                 </option>
               ))}
             </select>
@@ -1952,7 +1962,7 @@ function ScanHistoryPanel({
             >
               {scans.map((run) => (
                 <option key={run.id} value={run.id}>
-                  {scanWhen(run)} · {scanKeywordsLabel(run)}
+                  {scanWhen(run)} · {run.keyword}
                 </option>
               ))}
             </select>
@@ -2163,7 +2173,7 @@ function SchedulePanel({
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ScheduleFieldset
           title="Scan schedule"
-          detail="Rerun the latest keywords and grid at this time."
+          detail="Rerun the latest keyword and grid at this time."
           schedule={scanSchedule}
           onChange={onScanChange}
         />
