@@ -12,8 +12,13 @@ type Props = {
 
 const emptyQuery = () => ({ name: "", city: "", state: "", keyword: "" })
 
+function hasDirectoryFilters(query: { name: string; city: string; state: string; keyword: string }) {
+  return Boolean(query.name.trim() || query.city.trim() || query.state.trim() || query.keyword.trim())
+}
+
 export function DirectoryPage({ user, onGo }: Props) {
   const [query, setQuery] = useState(emptyQuery)
+  const [applied, setApplied] = useState(emptyQuery)
   const [listings, setListings] = useState<DirectoryListing[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -21,6 +26,7 @@ export function DirectoryPage({ user, onGo }: Props) {
   async function runSearch(next = query) {
     setLoading(true)
     setError(null)
+    setApplied(next)
     try {
       setListings(await searchDirectory(next))
     } catch (err) {
@@ -56,7 +62,7 @@ export function DirectoryPage({ user, onGo }: Props) {
               <input
                 value={query.name}
                 onChange={(event) => setQuery({ ...query, name: event.target.value })}
-                placeholder="Harbor & Oak"
+                placeholder="Shop name"
                 className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
               />
             </label>
@@ -104,10 +110,28 @@ export function DirectoryPage({ user, onGo }: Props) {
           ) : listings.length === 0 ? (
             <div className="rounded-2xl border border-line bg-panel px-5 py-10 text-center">
               <MapPinned className="mx-auto h-6 w-6 text-brass" />
-              <p className="mt-3 font-display text-2xl text-paper">No listings matched</p>
-              <p className="mt-2 text-sm leading-6 text-muted">
-                Try a city and state, or clear the filters to browse every PlaceFind profile.
-              </p>
+              {hasDirectoryFilters(applied) ? (
+                <>
+                  <p className="mt-3 font-display text-2xl text-paper">No listings matched</p>
+                  <p className="mt-2 text-sm leading-6 text-muted">
+                    Nothing in the directory matches that search. Try another name, city, or keyword.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-3 font-display text-2xl text-paper">No listings yet</p>
+                  <p className="mt-2 text-sm leading-6 text-muted">
+                    The directory is empty until a business owner publishes a listing. There are no sample shops here.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onGo(user ? "/listings/new" : "/join")}
+                    className="mt-5 text-sm text-brass hover:underline"
+                  >
+                    {user ? "Create a listing" : "List your business"}
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             <ul className="grid gap-3 sm:grid-cols-2">

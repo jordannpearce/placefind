@@ -70,6 +70,7 @@ function writeReviews(rows: ListingReview[]) {
   writeCollection("reviews", rows)
 }
 
+/** Test helper only. Do not call from server startup or live store reads. */
 export function seedDirectoryReviews(force = false): ListingReview[] {
   const existing = readReviews()
   if (existing.length > 0 && !force) return existing
@@ -85,7 +86,6 @@ export function deleteReviewsForListings(listingIds: string[]) {
 }
 
 export function reviewsForListing(listingId: string): ListingReview[] {
-  seedDirectoryReviews()
   let id = listingId
   try {
     id = getListing(listingId).id

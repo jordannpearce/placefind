@@ -89,12 +89,11 @@ import {
   listPublicListings,
   listingsForUser,
   publicListing,
-  seedDirectoryListings,
   updateListing,
   verifyListingOnMaps,
 } from "./listings.ts"
 import { registerListingLeadRoutes } from "./listing-leads.ts"
-import { listingReviewSummary, reviewsForListing, seedDirectoryReviews } from "./reviews.ts"
+import { listingReviewSummary, reviewsForListing } from "./reviews.ts"
 import { robotsTxt, siteOrigin, sitemapXml } from "./robots.ts"
 import { crawlsForUser, getCrawl, publicCrawl, requestListingCrawl } from "./site-crawl.ts"
 import { initStore } from "./store.ts"
@@ -127,8 +126,6 @@ function readQuery(body: Partial<SearchQuery>): { query: SearchQuery; error?: st
 
 async function start() {
   await initStore()
-  seedDirectoryListings()
-  seedDirectoryReviews()
   await initGeoPoints()
   await hydrateHostedKeys()
   recoverStaleTrafficJobs()

@@ -18,11 +18,13 @@ function stars(average: number | null | undefined) {
 
 export function HomePage({ user, onGo }: Props) {
   const [featured, setFeatured] = useState<DirectoryListing[]>([])
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     void searchDirectory({})
       .then((rows) => setFeatured(rows.slice(0, 4)))
       .catch(() => setFeatured([]))
+      .finally(() => setLoaded(true))
   }, [])
 
   return (
@@ -129,38 +131,64 @@ export function HomePage({ user, onGo }: Props) {
         </div>
       </section>
 
-      <section id="sample" className="scroll-mt-8">
+      <section id="directory" className="scroll-mt-8">
         <div className="mb-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">In the directory</p>
-          <h3 className="mt-2 font-display text-3xl text-paper">Sample listings you can open today</h3>
+          <h3 className="mt-2 font-display text-3xl text-paper">
+            {loaded && featured.length === 0 ? "No listings yet" : "Businesses on PlaceFind"}
+          </h3>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-            These are live PlaceFind profiles — name, city, written copy, and reviews. Browse the full directory when
-            you want a city or keyword.
+            {loaded && featured.length === 0
+              ? "The directory is empty until a business owner publishes a listing. Create an account to add yours."
+              : "Live PlaceFind profiles with a name, city, written copy, and reviews. Open the full directory to search by city or keyword."}
           </p>
         </div>
-        <ul className="grid gap-4 sm:grid-cols-2">
-          {featured.map((listing) => (
-            <li key={listing.id}>
+        {!loaded ? (
+          <p className="rounded-2xl border border-line bg-panel px-5 py-8 text-sm text-muted">Loading listings…</p>
+        ) : featured.length === 0 ? (
+          <div className="rounded-2xl border border-line bg-panel px-5 py-8">
+            <p className="font-display text-2xl text-paper">No businesses listed yet</p>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-muted">
+              PlaceFind does not ship with sample shops. When an owner publishes a listing, it will appear here and in
+              the directory.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => onGo(listingPath(listing))}
-                className="h-full w-full rounded-2xl border border-line bg-panel p-5 text-left hover:border-brass/60"
+                onClick={() => onGo(user ? "/listings/new" : "/join")}
+                className="inline-flex h-11 items-center rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
               >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">
-                  {listing.category || "Business"}
-                </p>
-                <h4 className="mt-1 font-display text-2xl text-paper">{listing.brand || listing.name}</h4>
-                <p className="mt-1 text-sm text-muted">{listingLocation(listing)}</p>
-                {listing.specialty && <p className="mt-2 text-sm text-paper/80">{listing.specialty}</p>}
-                <p className="mt-3 text-xs text-brass">{stars(listing.reviewSummary?.average)}</p>
+                {user ? "Create a listing" : "List your business"}
               </button>
-            </li>
-          ))}
-        </ul>
-        {featured.length === 0 && (
-          <p className="rounded-2xl border border-line bg-panel px-5 py-8 text-sm text-muted">
-            The directory is still loading. Open Browse to see every listing.
-          </p>
+              <button
+                type="button"
+                onClick={() => onGo("/directory")}
+                className="inline-flex h-11 items-center rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
+              >
+                Open the directory
+              </button>
+            </div>
+          </div>
+        ) : (
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {featured.map((listing) => (
+              <li key={listing.id}>
+                <button
+                  type="button"
+                  onClick={() => onGo(listingPath(listing))}
+                  className="h-full w-full rounded-2xl border border-line bg-panel p-5 text-left hover:border-brass/60"
+                >
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">
+                    {listing.category || "Business"}
+                  </p>
+                  <h4 className="mt-1 font-display text-2xl text-paper">{listing.brand || listing.name}</h4>
+                  <p className="mt-1 text-sm text-muted">{listingLocation(listing)}</p>
+                  {listing.specialty && <p className="mt-2 text-sm text-paper/80">{listing.specialty}</p>}
+                  <p className="mt-3 text-xs text-brass">{stars(listing.reviewSummary?.average)}</p>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

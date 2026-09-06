@@ -10,7 +10,7 @@ import { createSession, signup, userFromCookie } from "./auth.ts"
 import { createListing, seedDirectoryListings } from "./listings.ts"
 import { registerListingLeadRoutes } from "./listing-leads.ts"
 import { ListingError } from "./listings.ts"
-import { createReview, reviewsForListing } from "./reviews.ts"
+import { createReview, reviewsForListing, seedDirectoryReviews } from "./reviews.ts"
 import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
 
 async function withLeadServer(run: (port: number) => Promise<void>) {
@@ -40,6 +40,13 @@ describe("signed-in reviews", () => {
   after(() => {
     delete process.env.PLACEFIND_DATA_DIR
     reloadStoreFromDisk()
+  })
+
+  it("does not seed reviews when the live store is empty", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-reviews-empty-")))
+    assert.deepEqual(reviewsForListing("seed-1"), [])
+    const seeded = seedDirectoryReviews()
+    assert.ok(seeded.some((row) => row.id === "seed-review-1"))
   })
 
   it("rejects an anonymous review and saves a signed-in review", async () => {

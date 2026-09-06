@@ -430,6 +430,7 @@ export function publicListing(listing: DirectoryListing, includeOwner = false) {
   }
 }
 
+/** Test helper only. Do not call from server startup or live store reads. */
 export function seedDirectoryListings(force = false): DirectoryListing[] {
   const existing = readListings()
   if (existing.length > 0 && !force) {
@@ -467,7 +468,6 @@ export function seedDirectoryListings(force = false): DirectoryListing[] {
 }
 
 export function listPublicListings(query: ListingQuery = {}): DirectoryListing[] {
-  seedDirectoryListings()
   const name = query.name?.trim().toLowerCase() ?? ""
   const city = query.city?.trim().toLowerCase() ?? ""
   const state = (toStateAbbr(query.state?.trim() ?? "") || query.state?.trim() || "").toLowerCase()

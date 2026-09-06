@@ -32,6 +32,12 @@ describe("directory listings", () => {
     reloadStoreFromDisk()
   })
 
+  it("does not seed the public directory from an empty store", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-listings-empty-")))
+    assert.deepEqual(listPublicListings(), [])
+    assert.equal(listPublicListings({ city: "Portland" }).length, 0)
+  })
+
   it("seeds local businesses and filters by city, state, and keyword", () => {
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-listings-")))
     const seeded = seedDirectoryListings()
