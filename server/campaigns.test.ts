@@ -729,4 +729,84 @@ describe("rank scan Maps keys", () => {
     assert.equal(result.grid.zoom, 14)
     assert.ok(result.grid.points.every((point) => (point.locationCoordinate || "").endsWith(",14z")))
   })
+
+  it("does not treat a same-title placeId mismatch as rank 1 and stores competitors", async () => {
+    isolateKeys()
+    process.env.DATAFORSEO_LOGIN = "maps-login@example.test"
+    process.env.DATAFORSEO_PASSWORD = "maps-password-test"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-scan-placeid-")))
+    resetGeoPointsForTests()
+    importGeoPoints([
+      { city: "Austin", state: "TX", lat: 30.2672, lng: -97.7431 },
+      { city: "Ava", state: "TX", lat: 30.28, lng: -97.74 },
+      { city: "Dallas", state: "TX", lat: 32.7767, lng: -96.797 },
+    ])
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        placeId: "sample-franklin",
+        listingTitle: "Franklin Barbecue",
+        listingAddress: "900 E 11th St, Austin, TX 78702",
+        keywords: ["barbecue"],
+        gridSize: 3,
+        center: { lat: 30.2701, lng: -97.7313 },
+      },
+      "user-a",
+    )
+    const items: MapsItem[] = [
+      {
+        type: "maps_search",
+        rank_group: 1,
+        rank_absolute: 1,
+        title: "Austin Barbecue",
+        place_id: "austin-bbq",
+        address: "100 Main St, Austin, TX",
+        rating: { value: 4.4, votes_count: 80 },
+      },
+      {
+        type: "maps_search",
+        rank_group: 2,
+        title: "Joe's TX Grill",
+        place_id: "joes-tx",
+        address: "200 Main St, Austin, TX",
+        rating: { value: 4.1, votes_count: 22 },
+      },
+      {
+        type: "maps_search",
+        rank_group: 3,
+        title: "Franklin Barbecue",
+        place_id: "other-franklin",
+        address: "900 E 11th St, Austin, TX 78702",
+      },
+    ]
+    const client: MapsGridClient = {
+      postTasks: async (tasks) => tasks.map((task) => ({ id: `task-${task.tag}`, tag: task.tag || "" })),
+      getTask: async (id) => ({ id, status_code: 20000, result: [{ items }] }),
+      liveAtCoordinate: async () => {
+        throw new Error("live fallback should not run")
+      },
+    }
+    const result = await scanCampaign(campaign.id, emptyApiKeys(), ["barbecue"], "user-a", {
+      client,
+      pollTimeoutMs: 20,
+      sleep: async () => {},
+    })
+    const center = result.grid.points.find((point) => point.row === 1 && point.col === 1)
+    assert.equal(center?.rank, null)
+    assert.equal(center?.status, "not_found")
+    assert.equal(result.grid.foundCount, 0)
+    assert.ok((center?.competitors?.length ?? 0) >= 2)
+    const austin = center?.competitors?.find((row) => row.title === "Austin Barbecue")
+    const joes = center?.competitors?.find((row) => row.title === "Joe's TX Grill")
+    assert.deepEqual(austin?.geoCities, ["Austin"])
+    assert.equal(austin?.rank, 1)
+    assert.equal(joes?.usesStateAbbr, true)
+    assert.ok(result.grid.nearbyCities?.includes("Austin"))
+    assert.ok(result.grid.nearbyCities?.includes("Ava"))
+    assert.equal(result.grid.nearbyCities?.includes("Dallas"), false)
+    assert.ok(result.grid.competitors?.some((row) => row.title === "Austin Barbecue" && row.geoCities.includes("Austin")))
+  })
 })

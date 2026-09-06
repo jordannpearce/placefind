@@ -2,6 +2,7 @@ import type {
   BusinessListing,
   Campaign,
   CampaignInput,
+  CompetitorListing,
   ConfirmedListing,
   SearchQuery,
   SearchResponse,
@@ -187,4 +188,32 @@ export function campaignInputFromListing(
 
 export function searchChanged(previous: SearchQuery, next: SearchQuery): boolean {
   return previous.name !== next.name || previous.city !== next.city || previous.state !== next.state
+}
+
+export function competitorHasGeo(
+  row: Pick<CompetitorListing, "geoCities" | "usesStateName" | "usesStateAbbr">,
+): boolean {
+  return row.geoCities.length > 0 || row.usesStateName || row.usesStateAbbr
+}
+
+export function filterCompetitors(rows: CompetitorListing[] | null | undefined, geoOnly: boolean): CompetitorListing[] {
+  const list = rows ?? []
+  return geoOnly ? list.filter(competitorHasGeo) : list
+}
+
+export function rollupCompetitors(points: Array<{ competitors?: CompetitorListing[] }>): CompetitorListing[] {
+  const byKey = new Map<string, CompetitorListing>()
+  for (const point of points) {
+    for (const row of point.competitors ?? []) {
+      const key = (row.placeId || "").trim() || row.title.trim().toLowerCase()
+      if (!key) continue
+      const prev = byKey.get(key)
+      if (!prev || row.rank < prev.rank) byKey.set(key, row)
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.rank - b.rank || a.title.localeCompare(b.title))
+}
+
+export function competitorsGeoFilterLabel() {
+  return "Has geo in name"
 }

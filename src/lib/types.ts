@@ -239,6 +239,24 @@ export type GridPoint = {
 
 export type RankChange = "up" | "down" | "same" | "new" | "lost"
 
+export type GeoNameFlags = {
+  geoCities: string[]
+  usesStateName: boolean
+  usesStateAbbr: boolean
+}
+
+export type CompetitorListing = GeoNameFlags & {
+  title: string
+  rank: number
+  rating: number | null
+  address: string | null
+  placeId: string | null
+}
+
+export type OwnGeoFlags = GeoNameFlags & {
+  title: string
+}
+
 export type GridPointResult = GridPoint & {
   keyword: string
   rank: number | null
@@ -255,6 +273,7 @@ export type GridPointResult = GridPoint & {
   status?: "rank" | "not_found" | "error" | "pending" | "unset"
   change?: RankChange
   previousRank?: number | null
+  competitors?: CompetitorListing[]
 }
 
 export type ScanRun = {
@@ -283,6 +302,9 @@ export type GridScanRun = {
   status?: "running" | "ok" | "error"
   pinSource?: PinSource
   usedCityGps?: boolean
+  competitors?: CompetitorListing[]
+  ownGeo?: OwnGeoFlags | null
+  nearbyCities?: string[]
 }
 
 export type ScanComparePin = {

@@ -5,7 +5,10 @@ import {
   campaignScanFinished,
   countFinishedScanPins,
   confirmedListingFromCampaign,
+  competitorHasGeo,
+  competitorsGeoFilterLabel,
   confirmedListingFromSearch,
+  filterCompetitors,
   listingsFromSearch,
   scanBusinessEnabled,
   searchChanged,
@@ -22,6 +25,7 @@ import {
   trafficKeywordHelpCopy,
   trafficLogEmptyCopy,
 } from "./track.ts"
+import { isPublicVendorLeak } from "./public-copy.ts"
 import type { BusinessListing, Campaign, SearchResponse, TrafficJob } from "./types.ts"
 
 const franklin: BusinessListing = {
@@ -232,6 +236,48 @@ describe("live scan status", () => {
       ),
       false,
     )
+  })
+})
+
+describe("competitor geo filter", () => {
+  it("keeps listings that use a nearby city or state name", () => {
+    const rows = [
+      {
+        title: "Austin Barbecue",
+        rank: 1,
+        rating: 4.4,
+        address: "100 Main",
+        placeId: "a",
+        geoCities: ["Austin"],
+        usesStateName: false,
+        usesStateAbbr: false,
+      },
+      {
+        title: "Plain Smokehouse",
+        rank: 2,
+        rating: 4.0,
+        address: "200 Main",
+        placeId: "b",
+        geoCities: [],
+        usesStateName: false,
+        usesStateAbbr: false,
+      },
+      {
+        title: "Joe's TX Grill",
+        rank: 3,
+        rating: 4.1,
+        address: "300 Main",
+        placeId: "c",
+        geoCities: [],
+        usesStateName: false,
+        usesStateAbbr: true,
+      },
+    ]
+    assert.equal(competitorHasGeo(rows[0]!), true)
+    assert.equal(competitorHasGeo(rows[1]!), false)
+    assert.equal(filterCompetitors(rows, true).map((row) => row.title).join(","), "Austin Barbecue,Joe's TX Grill")
+    assert.equal(competitorsGeoFilterLabel(), "Has geo in name")
+    assert.equal(isPublicVendorLeak(competitorsGeoFilterLabel()), false)
   })
 })
 

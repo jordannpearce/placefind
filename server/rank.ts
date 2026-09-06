@@ -1,13 +1,19 @@
-import { namesMatch, scoreListing } from "./match.ts"
-import type { BusinessListing, SearchQuery } from "./types.ts"
+import { titlesMatchExactly } from "./match.ts"
+import type { BusinessListing } from "./types.ts"
 
 export const RANK_MATCH_THRESHOLD = 50
+export const MAX_COMPETITORS_PER_PIN = 20
+export const ORGANIC_RANK_FIELD = "rank_group"
+export const ORGANIC_RANK_FALLBACK_FIELD = "organic_index"
+
+export type OrganicRankField = typeof ORGANIC_RANK_FIELD | typeof ORGANIC_RANK_FALLBACK_FIELD
 
 export type RankHit<T> = {
   rank: number | null
   index: number
   listing: T | null
   matchScore: number
+  rankField?: OrganicRankField | null
 }
 
 export type MapsSerpItem = {
@@ -33,6 +39,28 @@ export type MapsRankTarget = {
   state?: string
 }
 
+export type CompetitorRow = {
+  title: string
+  rank: number
+  rating: number | null
+  address: string | null
+  placeId: string | null
+}
+
+let loggedOrganicRankField = false
+
+function logOrganicRankField(field: OrganicRankField) {
+  if (loggedOrganicRankField) return
+  loggedOrganicRankField = true
+  console.info(
+    `PlaceFind organic rank uses ${field} among maps_search items. Paid listings are ignored. rank_absolute is not used because it includes ads.`,
+  )
+}
+
+export function resetRankFieldLogForTests() {
+  loggedOrganicRankField = false
+}
+
 export function isOrganicMapsItem(item: Pick<MapsSerpItem, "type">): boolean {
   return item.type === "maps_search"
 }
@@ -53,45 +81,53 @@ function cidsMatch(left?: string | number | null, right?: string | number | null
   return Boolean(a && b && a === b)
 }
 
-function organicRank(item: MapsSerpItem, index: number): number {
-  return item.rank_group && item.rank_group > 0 ? item.rank_group : index + 1
+function itemTitle(item: Pick<MapsSerpItem, "title" | "original_title">): string {
+  return (item.title || item.original_title || "").trim()
+}
+
+function organicRank(item: MapsSerpItem, index: number): { rank: number; field: OrganicRankField } {
+  if (item.rank_group && item.rank_group > 0) {
+    logOrganicRankField(ORGANIC_RANK_FIELD)
+    return { rank: item.rank_group, field: ORGANIC_RANK_FIELD }
+  }
+  logOrganicRankField(ORGANIC_RANK_FALLBACK_FIELD)
+  return { rank: index + 1, field: ORGANIC_RANK_FALLBACK_FIELD }
+}
+
+function confirmedHit<T extends MapsSerpItem>(organic: T[], index: number, matchScore: number): RankHit<T> {
+  const listing = organic[index]!
+  const { rank, field } = organicRank(listing, index)
+  return { rank, index, listing, matchScore, rankField: field }
+}
+
+function missedHit<T>(): RankHit<T> {
+  return { rank: null, index: -1, listing: null, matchScore: 0, rankField: null }
+}
+
+function isTargetItem(item: MapsSerpItem, target: MapsRankTarget): boolean {
+  const placeId = target.placeId?.trim() || null
+  const cid = target.cid == null ? "" : String(target.cid).trim()
+  if (placeId && placeIdsMatch(item.place_id, placeId)) return true
+  if (cid && cidsMatch(item.cid, cid)) return true
+  return false
 }
 
 export function rankOfBusiness<T extends Pick<BusinessListing, "title" | "address" | "city" | "state" | "placeId">>(
   listings: T[],
   businessName: string,
-  city: string,
-  state: string,
+  _city: string,
+  _state: string,
   placeId?: string | null,
 ): RankHit<T> {
-  const query: SearchQuery = { name: businessName, city, state }
-  let bestIndex = -1
-  let bestScore = 0
-
-  listings.forEach((listing, index) => {
-    if (placeIdsMatch(listing.placeId, placeId)) {
-      bestIndex = index
-      bestScore = 1000
-      return
-    }
-    if (bestScore >= 1000) return
-    const score = scoreListing(listing, query)
-    if (score > bestScore) {
-      bestScore = score
-      bestIndex = index
-    }
-  })
-
-  if (bestIndex < 0 || (bestScore < RANK_MATCH_THRESHOLD && bestScore < 1000)) {
-    return { rank: null, index: -1, listing: null, matchScore: bestScore >= 1000 ? 100 : bestScore }
+  if (placeId?.trim()) {
+    const index = listings.findIndex((listing) => placeIdsMatch(listing.placeId, placeId))
+    if (index < 0) return missedHit()
+    return { rank: index + 1, index, listing: listings[index] ?? null, matchScore: 100, rankField: ORGANIC_RANK_FALLBACK_FIELD }
   }
 
-  return {
-    rank: bestIndex + 1,
-    index: bestIndex,
-    listing: listings[bestIndex] ?? null,
-    matchScore: bestScore >= 1000 ? 100 : bestScore,
-  }
+  const index = listings.findIndex((listing) => titlesMatchExactly(listing.title, businessName))
+  if (index < 0) return missedHit()
+  return { rank: index + 1, index, listing: listings[index] ?? null, matchScore: 100, rankField: ORGANIC_RANK_FALLBACK_FIELD }
 }
 
 /** 1-based organic Maps position for the campaign business, or not found. Paid items are ignored. */
@@ -99,66 +135,55 @@ export function rankFromMapsItems(items: MapsSerpItem[] | null | undefined, targ
   const organic = organicMapsItems(items)
   const placeId = target.placeId?.trim() || null
   const cid = target.cid == null ? "" : String(target.cid).trim()
-  const city = target.city ?? ""
-  const state = target.state ?? ""
+  const exactName = target.name.trim()
 
   if (placeId) {
     const index = organic.findIndex((item) => placeIdsMatch(item.place_id, placeId))
-    if (index >= 0) {
-      const listing = organic[index]!
-      return { rank: organicRank(listing, index), index, listing, matchScore: 100 }
+    if (index >= 0) return confirmedHit(organic, index, 100)
+    if (cid) {
+      const cidIndex = organic.findIndex((item) => cidsMatch(item.cid, cid))
+      if (cidIndex >= 0) return confirmedHit(organic, cidIndex, 100)
     }
+    return missedHit()
   }
 
   if (cid) {
     const index = organic.findIndex((item) => cidsMatch(item.cid, cid))
-    if (index >= 0) {
-      const listing = organic[index]!
-      return { rank: organicRank(listing, index), index, listing, matchScore: 100 }
-    }
+    if (index >= 0) return confirmedHit(organic, index, 100)
+    return missedHit()
   }
 
-  const exactName = target.name.trim()
   if (exactName) {
-    const index = organic.findIndex((item) => titlesEqual(item, exactName))
-    if (index >= 0) {
-      const listing = organic[index]!
-      return { rank: organicRank(listing, index), index, listing, matchScore: 95 }
-    }
+    const index = organic.findIndex((item) => {
+      const title = itemTitle(item)
+      return titlesMatchExactly(title, exactName) || titlesMatchExactly(item.original_title || "", exactName)
+    })
+    if (index >= 0) return confirmedHit(organic, index, 95)
   }
 
-  let bestIndex = -1
-  let bestScore = 0
-  organic.forEach((item, index) => {
-    const title = item.title || item.original_title || ""
-    if (namesMatch(title, target.name)) {
-      const score = scoreListing(
-        {
-          title,
-          address: item.address || item.address_info?.address || "",
-          city: item.address_info?.city || city,
-          state: item.address_info?.region || state,
-        },
-        { name: target.name, city, state },
-      )
-      if (score > bestScore) {
-        bestScore = score
-        bestIndex = index
-      }
-    }
-  })
-
-  if (bestIndex < 0 || bestScore < RANK_MATCH_THRESHOLD) {
-    return { rank: null, index: -1, listing: null, matchScore: bestScore }
-  }
-
-  const listing = organic[bestIndex]!
-  return { rank: organicRank(listing, bestIndex), index: bestIndex, listing, matchScore: bestScore }
+  return missedHit()
 }
 
-function titlesEqual(item: MapsSerpItem, targetName: string): boolean {
-  const expected = targetName.trim().toLowerCase()
-  const title = (item.title || "").trim().toLowerCase()
-  const original = (item.original_title || "").trim().toLowerCase()
-  return Boolean(expected && (title === expected || original === expected))
+export function competitorsFromMapsItems(
+  items: MapsSerpItem[] | null | undefined,
+  target: MapsRankTarget,
+  cap = MAX_COMPETITORS_PER_PIN,
+): CompetitorRow[] {
+  const organic = organicMapsItems(items)
+  const limit = Math.max(0, Math.floor(Number(cap) || 0))
+  const rows: CompetitorRow[] = []
+  organic.forEach((item, index) => {
+    if (isTargetItem(item, target)) return
+    const title = itemTitle(item)
+    if (!title) return
+    const { rank } = organicRank(item, index)
+    rows.push({
+      title,
+      rank,
+      rating: item.rating?.value ?? null,
+      address: item.address || item.address_info?.address || null,
+      placeId: item.place_id ?? null,
+    })
+  })
+  return rows.slice(0, limit)
 }

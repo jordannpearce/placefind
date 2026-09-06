@@ -29,6 +29,13 @@ export function namesMatch(listingTitle: string, target: string): boolean {
   return tokenOverlap(listing, query) >= 0.7
 }
 
+/** High-confidence title match for rank: normalized equality only, no substring or token overlap. */
+export function titlesMatchExactly(listingTitle: string, target: string): boolean {
+  const listing = normalizeName(listingTitle)
+  const query = normalizeName(target)
+  return Boolean(listing && query && listing === query)
+}
+
 export function scoreListing(listing: Pick<BusinessListing, "title" | "address" | "city" | "state">, query: SearchQuery): number {
   let score = 0
   const title = normalizeName(listing.title)

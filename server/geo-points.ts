@@ -74,6 +74,36 @@ export function milesBetween(a: GeoPoint, b: GeoPoint): number {
   return Math.hypot(dLat, dLng)
 }
 
+const EARTH_RADIUS_MILES = 3958.7613
+
+export function haversineMiles(a: GeoPoint, b: GeoPoint): number {
+  const toRad = (degrees: number) => (degrees * Math.PI) / 180
+  const dLat = toRad(b.lat - a.lat)
+  const dLng = toRad(b.lng - a.lng)
+  const lat1 = toRad(a.lat)
+  const lat2 = toRad(b.lat)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
+  return 2 * EARTH_RADIUS_MILES * Math.asin(Math.min(1, Math.sqrt(h)))
+}
+
+/** Unique city names from the US cities GPS file within `miles` of the listing (haversine). */
+export function uniqueCityNamesWithinMiles(origin: GeoPoint, miles: number): string[] {
+  ensureLoaded()
+  const radius = Number.isFinite(miles) ? miles : 0
+  if (radius <= 0) return []
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const point of points) {
+    if (haversineMiles(origin, point) > radius) continue
+    const name = point.city.trim()
+    const key = name.toLowerCase()
+    if (!name || seen.has(key)) continue
+    seen.add(key)
+    names.push(name)
+  }
+  return names
+}
+
 export function nearestGeoPoints<T extends GeoPoint>(origin: GeoPoint, candidates: T[], limit: number): T[] {
   const n = Math.max(0, Math.floor(Number(limit) || 0))
   if (n === 0 || candidates.length === 0) return []

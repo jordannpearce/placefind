@@ -23,9 +23,12 @@ import { mapsKeysMissingAdminMessage, publicPinScanMessage, publicSearchMessage,
 import { CityStateFields } from "./CityStateFields.tsx"
 import {
   campaignInputFromListing,
+  competitorsGeoFilterLabel,
   confirmedListingFromCampaign,
   confirmedListingFromSearch,
+  filterCompetitors,
   listingsFromSearch,
+  rollupCompetitors,
   campaignScanFinished,
   countFinishedScanPins,
   listedTrafficKeywords,
@@ -58,6 +61,7 @@ import type {
   ApiKeys,
   BusinessListing,
   Campaign,
+  CompetitorListing,
   ConfirmedListing,
   GeoPoint,
   GridPoint,
@@ -67,6 +71,7 @@ import type {
   SearchQuery,
   SearchResponse,
   GridScanRun,
+  OwnGeoFlags,
   ScanCompare,
   ScanSchedule,
   TrafficJob,
@@ -154,6 +159,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [rerunning, setRerunning] = useState(false)
   const [scanScheduleDraft, setScanScheduleDraft] = useState<ScanSchedule>(emptyScanSchedule)
   const [trafficScheduleDraft, setTrafficScheduleDraft] = useState<TrafficSchedule>(emptyTrafficSchedule)
+  const [competitorsGeoOnly, setCompetitorsGeoOnly] = useState(false)
+  const [competitorsScope, setCompetitorsScope] = useState<"all" | "pin">("all")
 
   const selected = useMemo(
     () => (campaigns ?? []).find((campaign) => campaign.id === selectedId) ?? null,
@@ -1574,6 +1581,21 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             </div>
           )}
 
+          {(grid || campaignScanFinished(selected)) && (
+            <CompetitorsPanel
+              ownTitle={grid?.ownGeo?.title || confirmed?.title || selected?.listingTitle || ""}
+              ownGeo={grid?.ownGeo ?? null}
+              nearbyCityCount={grid?.nearbyCities?.length ?? 0}
+              pinCompetitors={selectedPoint?.competitors}
+              allCompetitors={grid?.competitors?.length ? grid.competitors : rollupCompetitors(grid?.points ?? [])}
+              geoOnly={competitorsGeoOnly}
+              scope={selectedPoint?.competitors?.length ? competitorsScope : "all"}
+              pinAvailable={Boolean(selectedPoint?.competitors?.length)}
+              onGeoOnly={setCompetitorsGeoOnly}
+              onScope={setCompetitorsScope}
+            />
+          )}
+
           <ScanHistoryPanel
             scans={scans}
             compare={compare}
@@ -1594,6 +1616,145 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
           />
         </section>
       </main>
+    </div>
+  )
+}
+
+function geoMark(label: string, on: boolean) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
+        on ? "bg-brass/15 text-brass" : "bg-raised text-muted"
+      }`}
+    >
+      {label}
+    </span>
+  )
+}
+
+function CompetitorsPanel({
+  ownTitle,
+  ownGeo,
+  nearbyCityCount,
+  pinCompetitors,
+  allCompetitors,
+  geoOnly,
+  scope,
+  pinAvailable,
+  onGeoOnly,
+  onScope,
+}: {
+  ownTitle: string
+  ownGeo: OwnGeoFlags | null
+  nearbyCityCount: number
+  pinCompetitors?: CompetitorListing[]
+  allCompetitors: CompetitorListing[]
+  geoOnly: boolean
+  scope: "all" | "pin"
+  pinAvailable: boolean
+  onGeoOnly: (value: boolean) => void
+  onScope: (value: "all" | "pin") => void
+}) {
+  const rows = filterCompetitors(scope === "pin" && pinAvailable ? pinCompetitors : allCompetitors, geoOnly)
+  const ownHits = ownGeo?.geoCities ?? []
+  return (
+    <div className="mx-5 mt-6 rounded-xl border border-line bg-ink px-4 py-4 sm:mx-0" data-testid="competitors-panel">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Competitors</p>
+          <h5 className="font-display text-xl text-paper">Other Maps listings at these pins</h5>
+          <p className="mt-1 text-sm text-muted">
+            Names are checked against {nearbyCityCount || "nearby"} cities within 50 miles, plus the state name and
+            abbreviation.
+          </p>
+        </div>
+        <label className="inline-flex items-center gap-2 text-sm text-paper/80">
+          <input
+            type="checkbox"
+            data-testid="competitors-geo-filter"
+            checked={geoOnly}
+            onChange={(event) => onGeoOnly(event.target.checked)}
+            className="h-4 w-4 accent-brass"
+          />
+          {competitorsGeoFilterLabel()}
+        </label>
+      </div>
+
+      {ownTitle && (
+        <p className="mt-3 text-sm text-paper/80" data-testid="own-geo-flags">
+          {ownHits.length || ownGeo?.usesStateName || ownGeo?.usesStateAbbr
+            ? `${ownTitle} uses ${[
+                ...ownHits,
+                ownGeo?.usesStateName ? "the state name" : "",
+                ownGeo?.usesStateAbbr ? "the state abbreviation" : "",
+              ]
+                .filter(Boolean)
+                .join(", ")} in its name.`
+            : `${ownTitle} does not use a nearby city or state name.`}
+        </p>
+      )}
+
+      {pinAvailable && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onScope("all")}
+            className={`inline-flex h-8 items-center rounded-lg border px-3 text-xs font-semibold ${
+              scope === "all" ? "border-brass text-brass" : "border-line text-paper hover:border-brass"
+            }`}
+          >
+            All pins
+          </button>
+          <button
+            type="button"
+            onClick={() => onScope("pin")}
+            className={`inline-flex h-8 items-center rounded-lg border px-3 text-xs font-semibold ${
+              scope === "pin" ? "border-brass text-brass" : "border-line text-paper hover:border-brass"
+            }`}
+          >
+            This pin
+          </button>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="mt-4 text-sm text-muted">
+          {geoOnly ? "No listings in this set use a nearby city or state name." : "No competitor listings stored for this scan yet."}
+        </p>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[40rem] text-left text-sm">
+            <thead className="text-[11px] uppercase tracking-[0.12em] text-muted">
+              <tr>
+                <th className="pb-3 pr-3 font-semibold">Name</th>
+                <th className="pb-3 pr-3 font-semibold">Rank</th>
+                <th className="pb-3 pr-3 font-semibold">Rating</th>
+                <th className="pb-3 pr-3 font-semibold">Geo cities</th>
+                <th className="pb-3 font-semibold">State</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={`${row.placeId || row.title}-${row.rank}`} className="border-t border-line">
+                  <td className="py-2.5 pr-3 text-paper/80">
+                    {row.title}
+                    {row.address && <span className="block text-xs text-muted">{row.address}</span>}
+                  </td>
+                  <td className="py-2.5 pr-3 text-paper">#{row.rank}</td>
+                  <td className="py-2.5 pr-3 text-paper/80">{row.rating != null ? row.rating.toFixed(1) : "—"}</td>
+                  <td className="py-2.5 pr-3 text-paper/80">{row.geoCities.length ? row.geoCities.join(", ") : "—"}</td>
+                  <td className="py-2.5">
+                    <span className="inline-flex flex-wrap gap-1">
+                      {geoMark("Name", row.usesStateName)}
+                      {geoMark("Abbr", row.usesStateAbbr)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

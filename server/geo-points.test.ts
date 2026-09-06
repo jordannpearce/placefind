@@ -10,8 +10,10 @@ import {
   importGeoPoints,
   listGeoPointsForCity,
   listNearbyGeoPoints,
+  haversineMiles,
   milesBetween,
   nearestGeoPoints,
+  uniqueCityNamesWithinMiles,
   normalizePinSource,
   resetGeoPointsForTests,
   resolveScanPoints,
@@ -193,6 +195,24 @@ describe("city GPS store", () => {
       false,
     )
     assert.equal(backup.points.some((point) => Math.abs(point.lat - 30.2801) < 1e-6), true)
+  })
+})
+
+describe("uniqueCityNamesWithinMiles", () => {
+  it("returns unique city names within 50 haversine miles", () => {
+    resetGeoPointsForTests()
+    importGeoPoints([
+      { city: "Austin", state: "TX", lat: 30.2672, lng: -97.7431 },
+      { city: "Ava", state: "TX", lat: 30.28, lng: -97.74 },
+      { city: "Round Rock", state: "TX", lat: 30.5082, lng: -97.6789 },
+      { city: "Dallas", state: "TX", lat: 32.7767, lng: -96.797 },
+    ])
+    const names = uniqueCityNamesWithinMiles(franklin, 50)
+    assert.ok(names.includes("Austin"))
+    assert.ok(names.includes("Ava"))
+    assert.ok(names.includes("Round Rock"))
+    assert.equal(names.includes("Dallas"), false)
+    assert.ok(haversineMiles(franklin, { lat: 32.7767, lng: -96.797 }) > 50)
   })
 })
 

@@ -10,7 +10,8 @@ import {
   publicPinScanMessage,
   publicSearchMessage,
 } from "./public-copy.ts"
-import { rankFromMapsItems, rankOfBusiness } from "./rank.ts"
+import { flagGeoInName, GEO_NAME_RADIUS_MILES, type GeoNameFlags } from "./geo-names.ts"
+import { competitorsFromMapsItems, rankFromMapsItems, rankOfBusiness } from "./rank.ts"
 import { isSellerMode } from "./runtime.ts"
 import { compareScanRuns } from "../src/lib/scan-compare.ts"
 import { finalizeGridPointResults } from "./scan-finalize.ts"
@@ -24,7 +25,7 @@ import {
   type ScanSchedule,
   type TrafficSchedule,
 } from "./schedule.ts"
-import { normalizePinSource, resolveScanPoints, type PinSource } from "./geo-points.ts"
+import { normalizePinSource, resolveScanPoints, uniqueCityNamesWithinMiles, type PinSource } from "./geo-points.ts"
 import { readCollection, writeCollection } from "./store.ts"
 import type { ApiKeys } from "./types.ts"
 import type { ScanCompare } from "../src/lib/types.ts"
@@ -87,6 +88,18 @@ export type GridPoint = {
   locationCoordinate?: string
 }
 
+export type CompetitorListing = GeoNameFlags & {
+  title: string
+  rank: number
+  rating: number | null
+  address: string | null
+  placeId: string | null
+}
+
+export type OwnGeoFlags = GeoNameFlags & {
+  title: string
+}
+
 export type GridPointResult = GridPoint & {
   keyword: string
   rank: number | null
@@ -101,6 +114,7 @@ export type GridPointResult = GridPoint & {
   scannedAt: string
   error?: string
   status?: "rank" | "not_found" | "error" | "pending" | "unset"
+  competitors?: CompetitorListing[]
 }
 
 export type ScanRun = {
@@ -129,6 +143,9 @@ export type GridScanRun = {
   status?: "running" | "ok" | "error"
   pinSource?: PinSource
   usedCityGps?: boolean
+  competitors?: CompetitorListing[]
+  ownGeo?: OwnGeoFlags | null
+  nearbyCities?: string[]
 }
 
 export type Campaign = {
@@ -504,7 +521,54 @@ function normalizeStoredScanRun(row: GridScanRun): GridScanRun {
     status: row.status === "running" || row.status === "ok" || row.status === "error" ? row.status : undefined,
     pinSource: normalizePinSource(row.pinSource),
     usedCityGps: Boolean(row.usedCityGps),
+    competitors: normalizeCompetitors(row.competitors),
+    ownGeo: normalizeOwnGeo(row.ownGeo),
+    nearbyCities: Array.isArray(row.nearbyCities) ? row.nearbyCities.map((city) => String(city)).filter(Boolean) : [],
   }
+}
+
+function normalizeGeoFlags(row: Partial<GeoNameFlags> | null | undefined): GeoNameFlags {
+  return {
+    geoCities: Array.isArray(row?.geoCities) ? row.geoCities.map((city) => String(city)).filter(Boolean) : [],
+    usesStateName: Boolean(row?.usesStateName),
+    usesStateAbbr: Boolean(row?.usesStateAbbr),
+  }
+}
+
+function normalizeCompetitors(raw: unknown): CompetitorListing[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((row): row is CompetitorListing => Boolean(row && typeof row === "object" && String((row as CompetitorListing).title || "").trim()))
+    .map((row) => ({
+      title: String(row.title || "").trim(),
+      rank: Number(row.rank) || 0,
+      rating: row.rating == null ? null : Number(row.rating),
+      address: row.address == null ? null : String(row.address),
+      placeId: row.placeId == null ? null : String(row.placeId),
+      ...normalizeGeoFlags(row),
+    }))
+}
+
+function normalizeOwnGeo(raw: unknown): OwnGeoFlags | null {
+  if (!raw || typeof raw !== "object") return null
+  const title = String((raw as OwnGeoFlags).title || "").trim()
+  if (!title) return null
+  return { title, ...normalizeGeoFlags(raw as GeoNameFlags) }
+}
+
+export function rollupCompetitors(points: Array<{ competitors?: CompetitorListing[] }>): CompetitorListing[] {
+  const byKey = new Map<string, CompetitorListing>()
+  for (const point of points) {
+    for (const row of point.competitors ?? []) {
+      const key = (row.placeId || "").trim() || row.title.trim().toLowerCase()
+      if (!key) continue
+      const prev = byKey.get(key)
+      if (!prev || row.rank < prev.rank || (row.rank === prev.rank && row.title.localeCompare(prev.title) < 0)) {
+        byKey.set(key, row)
+      }
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.rank - b.rank || a.title.localeCompare(b.title))
 }
 
 export function saveScanRun(run: GridScanRun): GridScanRun {
@@ -842,15 +906,30 @@ export function saveCampaign(next: Campaign): Campaign {
 
 function pinResultFromCell(
   cell: { point: MapsGridPoint; items: import("./dataforseo.ts").MapsItem[]; error: string | null },
-  input: { keyword: string; targetName: string; placeId: string; city: string; state: string; businessName: string; scannedAt: string },
+  input: {
+    keyword: string
+    targetName: string
+    placeId: string
+    city: string
+    state: string
+    businessName: string
+    scannedAt: string
+    nearbyCities: string[]
+  },
 ): GridPointResult {
-  const hit = rankFromMapsItems(cell.items, {
+  const target = {
     name: input.targetName,
     placeId: input.placeId,
     city: input.city,
     state: input.state,
-  })
+  }
+  const hit = rankFromMapsItems(cell.items, target)
   const listing = hit.listing
+  const geo = { cities: input.nearbyCities, campaignCity: input.city, state: input.state }
+  const competitors = competitorsFromMapsItems(cell.items, target).map((row) => ({
+    ...row,
+    ...flagGeoInName(row.title, geo),
+  }))
   const publicError = cell.error
     ? isSellerMode()
       ? publicPinScanMessage(cell.error)
@@ -883,6 +962,7 @@ function pinResultFromCell(
       : null,
     scannedAt: input.scannedAt,
     error: publicError,
+    competitors,
   }
 }
 
@@ -933,6 +1013,11 @@ export async function scanCampaign(
     }
     const placeId = campaign.placeId.trim()
     const targetName = campaign.listingTitle.trim() || campaign.businessName
+    const nearbyCities = uniqueCityNamesWithinMiles(center, GEO_NAME_RADIUS_MILES)
+    const ownGeo: OwnGeoFlags = {
+      title: targetName,
+      ...flagGeoInName(targetName, { cities: nearbyCities, campaignCity: campaign.city, state: campaign.state }),
+    }
     const resolved = resolveCampaignScanPoints(campaign, center)
     const zoom = resolved.zoom
     const gridPoints = resolved.points
@@ -947,7 +1032,16 @@ export async function scanCampaign(
         locationCoordinate: point.locationCoordinate || formatLocationCoordinate(point.lat, point.lng, zoom),
       }),
     )
-    const pinContext = { keyword, targetName, placeId, city: campaign.city, state: campaign.state, businessName: campaign.businessName, scannedAt }
+    const pinContext = {
+      keyword,
+      targetName,
+      placeId,
+      city: campaign.city,
+      state: campaign.state,
+      businessName: campaign.businessName,
+      scannedAt,
+      nearbyCities,
+    }
     const scanId = newId()
     const pendingPoints: GridPointResult[] = mapsPoints.map((point) => ({
       row: point.row,
@@ -981,6 +1075,9 @@ export async function scanCampaign(
       status: "running",
       pinSource: resolved.pinSource,
       usedCityGps: resolved.usedCityGps,
+      competitors: [],
+      ownGeo,
+      nearbyCities,
     }
     persistLiveGrid(campaign.id, liveGrid)
 
@@ -991,14 +1088,14 @@ export async function scanCampaign(
       onCell: (cell) => {
         const [finished] = finalizeGridPointResults([pinResultFromCell(cell, pinContext)], scannedAt)
         if (!finished) return
+        const nextPoints = liveGrid.points.map((point) =>
+          point.row === finished.row && point.col === finished.col ? finished : point,
+        )
         liveGrid = {
           ...liveGrid,
-          points: liveGrid.points.map((point) =>
-            point.row === finished.row && point.col === finished.col ? finished : point,
-          ),
-          foundCount: liveGrid.points.filter((row) =>
-            row.row === finished.row && row.col === finished.col ? finished.rank != null : row.rank != null,
-          ).length,
+          points: nextPoints,
+          foundCount: nextPoints.filter((row) => row.rank != null).length,
+          competitors: rollupCompetitors(nextPoints),
         }
         persistLiveGrid(campaign.id, liveGrid)
       },
@@ -1028,6 +1125,9 @@ export async function scanCampaign(
       status: allFailed ? "error" : "ok",
       pinSource: resolved.pinSource,
       usedCityGps: resolved.usedCityGps,
+      competitors: rollupCompetitors(points),
+      ownGeo,
+      nearbyCities,
     }
 
     const keywordRank: KeywordRank = {

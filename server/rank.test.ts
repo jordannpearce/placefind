@@ -1,18 +1,26 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { RANK_MATCH_THRESHOLD, rankFromMapsItems, rankOfBusiness, type MapsSerpItem } from "./rank.ts"
+import {
+  ORGANIC_RANK_FIELD,
+  RANK_MATCH_THRESHOLD,
+  competitorsFromMapsItems,
+  rankFromMapsItems,
+  rankOfBusiness,
+  type MapsSerpItem,
+} from "./rank.ts"
 
-function listing(title: string, city = "Austin", state = "TX") {
+function listing(title: string, city = "Austin", state = "TX", placeId?: string) {
   return {
     title,
     address: `100 Main St, ${city}, ${state}`,
     city,
     state,
+    placeId,
   }
 }
 
 describe("rankOfBusiness", () => {
-  it("returns a 1-based Maps position for the best matching listing", () => {
+  it("returns a 1-based Maps position for the exact matching listing", () => {
     const listings = [
       listing("Salt Lick BBQ"),
       listing("La Barbecue"),
@@ -45,11 +53,18 @@ describe("rankOfBusiness", () => {
     assert.equal(hit.listing?.title, "Blue Bottle Coffee")
   })
 
-  it("ignores a weak token overlap below the match threshold", () => {
-    const listings = [listing("House of Pizza")]
+  it("does not assign rank 1 from a weak partial name", () => {
+    const listings = [listing("Barbecue"), listing("Austin Barbecue")]
     const hit = rankOfBusiness(listings, "Franklin Barbecue", "Austin", "TX")
     assert.equal(hit.rank, null)
     assert.ok(hit.matchScore < RANK_MATCH_THRESHOLD)
+  })
+
+  it("does not treat a placeId mismatch as rank 1", () => {
+    const listings = [listing("Franklin Barbecue", "Austin", "TX", "other-place")]
+    const hit = rankOfBusiness(listings, "Franklin Barbecue", "Austin", "TX", "sample-franklin")
+    assert.equal(hit.rank, null)
+    assert.equal(hit.listing, null)
   })
 })
 
@@ -108,9 +123,29 @@ describe("rankFromMapsItems", () => {
     assert.equal(hit.listing?.place_id, "ChIJd8BlQ2BZwokRAFUEcm_qrcA")
     assert.equal(hit.listing?.domain, "libertycars.example")
     assert.equal(hit.listing?.rating?.votes_count, 1543)
+    assert.equal(hit.rankField, ORGANIC_RANK_FIELD)
   })
 
-  it("matches by business name when place_id is absent", () => {
+  it("uses rank_group among organic maps_search items, not rank_absolute", () => {
+    const hit = rankFromMapsItems(
+      [
+        { type: "maps_paid_item", rank_group: 1, rank_absolute: 1, title: "Ad BBQ", place_id: "ad" },
+        {
+          type: "maps_search",
+          rank_group: 4,
+          rank_absolute: 1,
+          title: "Franklin Barbecue",
+          place_id: "sample-franklin",
+        },
+      ],
+      { name: "Franklin Barbecue", placeId: "sample-franklin" },
+    )
+    assert.equal(hit.rank, 4)
+    assert.equal(hit.rankField, "rank_group")
+    assert.notEqual(hit.rank, hit.listing?.rank_absolute)
+  })
+
+  it("matches by exact normalized title when place_id is absent", () => {
     const hit = rankFromMapsItems(mapsFixture, { name: "Hertz", city: "New York", state: "NY" })
     assert.equal(hit.rank, 2)
     assert.equal(hit.listing?.title, "Hertz")
@@ -122,7 +157,7 @@ describe("rankFromMapsItems", () => {
     assert.equal(hit.listing, null)
   })
 
-  it("matches by CID then exact title when place_id is absent", () => {
+  it("matches by CID when place_id is absent", () => {
     const byCid = rankFromMapsItems(
       [
         { type: "maps_search", rank_group: 1, title: "Other BBQ", place_id: "x", cid: "999" },
@@ -131,11 +166,32 @@ describe("rankFromMapsItems", () => {
       { name: "Franklin Barbecue", cid: "555" },
     )
     assert.equal(byCid.rank, 4)
-    const byTitle = rankFromMapsItems(
-      [{ type: "maps_search", rank_group: 2, title: "Franklin Barbecue", place_id: "other" }],
-      { name: "Franklin Barbecue", placeId: "ChIJ-missing" },
+  })
+
+  it("does not assign rank 1 when placeId does not match", () => {
+    const firstOrganicSameName = rankFromMapsItems(
+      [{ type: "maps_search", rank_group: 1, title: "Franklin Barbecue", place_id: "other-place" }],
+      { name: "Franklin Barbecue", placeId: "sample-franklin" },
     )
-    assert.equal(byTitle.rank, 2)
+    assert.equal(firstOrganicSameName.rank, null)
+    assert.equal(firstOrganicSameName.listing, null)
+
+    const weakPartial = rankFromMapsItems(
+      [
+        { type: "maps_search", rank_group: 1, title: "Barbecue", place_id: "generic" },
+        { type: "maps_search", rank_group: 2, title: "Austin Barbecue", place_id: "austin-bbq" },
+      ],
+      { name: "Franklin Barbecue", placeId: "sample-franklin" },
+    )
+    assert.equal(weakPartial.rank, null)
+  })
+
+  it("does not assign rank from a weak partial title when ids are missing", () => {
+    const hit = rankFromMapsItems(
+      [{ type: "maps_search", rank_group: 1, title: "Barbecue", place_id: "generic" }],
+      { name: "Franklin Barbecue" },
+    )
+    assert.equal(hit.rank, null)
   })
 
   it("returns not found when the business is missing from that coordinate's items", () => {
@@ -147,5 +203,35 @@ describe("rankFromMapsItems", () => {
     })
     assert.equal(hit.rank, null)
     assert.equal(hit.listing, null)
+  })
+})
+
+describe("competitorsFromMapsItems", () => {
+  it("lists other organic Maps listings and skips the confirmed place and ads", () => {
+    const rows = competitorsFromMapsItems(mapsFixture, {
+      name: "Statue of Liberty Car Rental",
+      placeId: "ChIJd8BlQ2BZwokRAFUEcm_qrcA",
+    })
+    assert.deepEqual(
+      rows.map((row) => ({ title: row.title, rank: row.rank, placeId: row.placeId })),
+      [
+        { title: "Enterprise Rent-A-Car", rank: 1, placeId: "ChIJ-enterprise" },
+        { title: "Hertz", rank: 2, placeId: "ChIJ-hertz" },
+      ],
+    )
+    assert.equal(rows[0]?.rating, 4.3)
+  })
+
+  it("caps competitors per pin", () => {
+    const items: MapsSerpItem[] = Array.from({ length: 25 }, (_, index) => ({
+      type: "maps_search",
+      rank_group: index + 1,
+      title: `Place ${index + 1}`,
+      place_id: `p-${index + 1}`,
+    }))
+    const rows = competitorsFromMapsItems(items, { name: "Place 1", placeId: "p-1" }, 20)
+    assert.equal(rows.length, 20)
+    assert.equal(rows[0]?.title, "Place 2")
+    assert.equal(rows.at(-1)?.title, "Place 21")
   })
 })

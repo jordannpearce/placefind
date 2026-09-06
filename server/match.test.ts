@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { namesMatch, scoreListing } from "./match.ts"
+import { namesMatch, scoreListing, titlesMatchExactly } from "./match.ts"
 
 describe("namesMatch", () => {
   it("matches exact and partial business names", () => {
@@ -8,6 +8,15 @@ describe("namesMatch", () => {
     assert.equal(namesMatch("Franklin Barbecue", "Franklin BBQ"), false)
     assert.equal(namesMatch("Joe's Pizza", "Joes Pizza"), true)
     assert.equal(namesMatch("Blue Bottle Coffee", "Blue Bottle"), true)
+  })
+})
+
+describe("titlesMatchExactly", () => {
+  it("matches normalized titles and rejects substring hits", () => {
+    assert.equal(titlesMatchExactly("Joe's Pizza", "Joes Pizza"), true)
+    assert.equal(titlesMatchExactly("Franklin Barbecue", "Franklin Barbecue"), true)
+    assert.equal(titlesMatchExactly("Barbecue", "Franklin Barbecue"), false)
+    assert.equal(titlesMatchExactly("Austin Barbecue", "Franklin Barbecue"), false)
   })
 })
 
