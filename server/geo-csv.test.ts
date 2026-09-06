@@ -1,6 +1,8 @@
 import assert from "node:assert/strict"
+import { existsSync } from "node:fs"
+import path from "node:path"
 import { describe, it } from "node:test"
-import { mapGeoCsvColumns, parseGeoCsv, parseLatLngPair, splitCsvLine } from "./geo-csv.ts"
+import { mapGeoCsvColumns, parseGeoCsv, parseGeoCsvFile, parseLatLngPair, splitCsvLine } from "./geo-csv.ts"
 
 describe("mapGeoCsvColumns", () => {
   it("maps city, state, lat, and lng", () => {
@@ -114,5 +116,22 @@ Austin,TX,Texas,30.2672,-97.7431,961855,FALSE,TRUE,78701 78702`)
     assert.equal(parsed.points[0]?.zip, "11232 10110")
     assert.equal(parsed.points[0]?.population, 19268388)
     assert.equal(parsed.points[1]?.state, "TX")
+  })
+
+  it("streams the bundled US cities file from the real headers", async () => {
+    const file = path.resolve(process.cwd(), "data/uscities.csv")
+    if (!existsSync(file)) {
+      assert.ok(true, "bundled US cities file is not in this checkout")
+      return
+    }
+    const parsed = await parseGeoCsvFile(file)
+    assert.equal(parsed.columns.city, "city")
+    assert.equal(parsed.columns.state, "state abbreviation")
+    assert.equal(parsed.columns.lat, "latitude")
+    assert.equal(parsed.columns.lng, "longitude")
+    assert.equal(parsed.columns.zip, "zips")
+    assert.equal(parsed.columns.population, "population")
+    assert.ok(parsed.points.length > 30_000)
+    assert.equal(parsed.points[0]?.state.length, 2)
   })
 })

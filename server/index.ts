@@ -77,6 +77,7 @@ import {
 import {
   geoPointsMeta,
   importBundledSampleGeoPoints,
+  importBundledUscitiesGeoPoints,
   importGeoCsvText,
   initGeoPoints,
   usingCityGpsBackupNote,
@@ -857,6 +858,15 @@ async function start() {
       res.json(importBundledSampleGeoPoints())
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "Could not load the sample city GPS file." })
+    }
+  })
+
+  app.post("/api/admin/geo-points/uscities", async (req, res) => {
+    if (!manage(req, res)) return
+    try {
+      res.json(await importBundledUscitiesGeoPoints())
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Could not load the US cities GPS file." })
     }
   })
 

@@ -1,6 +1,6 @@
 import { LoaderCircle } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
-import { loadAdminGeoPoints, loadSampleGeoPoints, uploadGeoPointsCsv } from "../lib/api.ts"
+import { loadAdminGeoPoints, loadSampleGeoPoints, loadUscitiesGeoPoints, uploadGeoPointsCsv } from "../lib/api.ts"
 import type { GeoPointsStatus } from "../lib/types.ts"
 
 function formatWhen(value: string | null) {
@@ -57,8 +57,10 @@ export function AdminGeoPoints({
       <h3 className="mt-1 font-display text-2xl text-paper">US city GPS file</h3>
       <p className="mt-2 text-sm leading-6 text-muted">
         Upload a CSV of GPS points for US cities. Track can use those coordinates as a backup when building a rank
-        scan. Required columns: city, state, latitude, and longitude. Aliases such as lat, lng, gps, and coord also
-        work. Optional zip and name columns are kept. Rankings still come from Maps — this file only supplies points.
+        scan. This copy maps the real file headers: city, state abbreviation (or state name / state_id), latitude,
+        and longitude. Optional zips and population are kept. Aliases such as lat, lng, gps, city_ascii, and coord
+        also work. Rankings still come from Maps — this file only supplies points. On Railway, re-upload the same
+        CSV here if the server disk was reset.
       </p>
       <p className="mt-3 text-sm text-paper/80">
         {status && status.pointCount > 0
@@ -84,6 +86,28 @@ export function AdminGeoPoints({
         >
           {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
           {busy ? "Importing…" : "Upload CSV"}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true)
+            onError(null)
+            try {
+              const next = await loadUscitiesGeoPoints()
+              setStatus(next)
+              onMessage(
+                `Loaded the US cities GPS file: ${next.pointCount.toLocaleString()} points across ${next.cityCount.toLocaleString()} cities.`,
+              )
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Could not load the US cities file.")
+            } finally {
+              setBusy(false)
+            }
+          }}
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-line px-4 text-sm font-semibold text-paper hover:border-brass disabled:opacity-60"
+        >
+          Load US cities file
         </button>
         <button
           type="button"

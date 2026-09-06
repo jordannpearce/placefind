@@ -65,6 +65,14 @@ The public site boots without them, but Track rank scans return “Maps search i
 
 `railway.toml` and `Dockerfile` are in the repo. Health check: `/api/health`.
 
+## City GPS backup
+
+`data/uscities.csv` is the US city GPS point file (about 2 MB, ~31k cities). On boot PlaceFind streams that file into the city GPS backup — it is not loaded as one JSON blob. Track can place a regular grid around the confirmed listing, or use the nearest N CSV points for that city/state (same-state cities when the file has one row per city).
+
+Admin → **City GPS backup** shows the imported point count and accepts a re-upload. Railway disk is not durable; if the bundled file is missing after a redeploy, upload the same CSV there (or click **Load US cities file**). When `DATABASE_URL` is set, imported points are also stored in Postgres (`geo_points` / `geo_imports`).
+
+The file’s headers are `city`, `state abbreviation`, `state name`, `latitude`, `longitude`, `population`, `military`, `incorporated`, `zips`. PlaceFind maps city, the 2-letter state, lat, lng, zips, and population from those names.
+
 ## Sell it and create a Windows setup
 
 1. Open **Sell**.

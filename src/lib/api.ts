@@ -449,6 +449,10 @@ export async function loadSampleGeoPoints(): Promise<GeoPointsStatus> {
   return request<GeoPointsStatus>("/api/admin/geo-points/sample", { method: "POST", body: JSON.stringify({}) })
 }
 
+export async function loadUscitiesGeoPoints(): Promise<GeoPointsStatus> {
+  return request<GeoPointsStatus>("/api/admin/geo-points/uscities", { method: "POST", body: JSON.stringify({}) })
+}
+
 export async function geocodePlace(city: string, state: string): Promise<GeoPoint> {
   const query = new URLSearchParams({ city, state })
   const payload = await request<{ center: GeoPoint }>(`/api/geocode?${query}`)

@@ -9,6 +9,7 @@ import {
   importGeoCsvText,
   importGeoPoints,
   listGeoPointsForCity,
+  listNearbyGeoPoints,
   milesBetween,
   nearestGeoPoints,
   normalizePinSource,
@@ -100,6 +101,39 @@ describe("city GPS store", () => {
     const { meta } = importGeoCsvText(csv, "us-cities-sample.csv")
     assert.ok(meta.pointCount >= 8)
     assert.ok(listGeoPointsForCity("Austin", "TX").length >= 3)
+  })
+
+  it("uses the nearest N city or state CSV points when the file is one row per city", () => {
+    resetGeoPointsForTests()
+    importGeoPoints([
+      { city: "Austin", state: "TX", lat: 30.2672, lng: -97.7431, population: 900000 },
+      { city: "Round Rock", state: "TX", lat: 30.5082, lng: -97.6789 },
+      { city: "Pflugerville", state: "TX", lat: 30.4394, lng: -97.62 },
+      { city: "Cedar Park", state: "TX", lat: 30.5052, lng: -97.8203 },
+      { city: "Dallas", state: "TX", lat: 32.7767, lng: -96.797 },
+      { city: "Seattle", state: "WA", lat: 47.6097, lng: -122.3331 },
+    ])
+    const nearby = listNearbyGeoPoints(franklin, "Austin", "TX", 4)
+    assert.equal(nearby.length, 4)
+    assert.equal(nearby[0]?.city, "Austin")
+    assert.ok(nearby.every((point) => point.state === "TX"))
+    const backup = resolveScanPoints({
+      center: franklin,
+      city: "Austin",
+      state: "TX",
+      gridSize: 2,
+      spacingMiles: 1,
+      pinSource: "city_gps",
+      buildGrid: (origin) => [
+        gridCell(0, 0, origin.lat + 0.01, origin.lng - 0.01),
+        gridCell(0, 1, origin.lat + 0.01, origin.lng + 0.01),
+        gridCell(1, 0, origin.lat - 0.01, origin.lng - 0.01),
+        gridCell(1, 1, origin.lat, origin.lng),
+      ],
+    })
+    assert.equal(backup.usedCityGps, true)
+    assert.equal(backup.points.length, 4)
+    assert.ok(backup.points.some((point) => Math.abs(point.lat - 30.2672) < 1e-6))
   })
 
   it("uses city GPS points only in city_gps mode", () => {

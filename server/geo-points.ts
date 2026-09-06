@@ -498,17 +498,21 @@ export function resolveScanPoints(input: {
   }
 
   const nearby = listNearbyGeoPoints(input.center, input.city, input.state, needed)
+  if (nearby.length >= needed) {
+    return {
+      points: layoutGeoPoints(nearby, zoom),
+      usedCityGps: true,
+      snappedCount: nearby.length,
+      cityPointCount: nearby.length,
+      pinSource,
+      zoom,
+    }
+  }
   if (nearby.length === 0) {
     return { points: grid, usedCityGps: false, snappedCount: 0, cityPointCount: exact.length, pinSource, zoom }
   }
-  return {
-    points: layoutGeoPoints(nearby, zoom),
-    usedCityGps: true,
-    snappedCount: nearby.length,
-    cityPointCount: nearby.length,
-    pinSource,
-    zoom,
-  }
+  const applied = applyCityGpsBackup(grid, nearby, zoom, input.spacingMiles)
+  return { ...applied, cityPointCount: nearby.length, pinSource, zoom }
 }
 
 function ensureLoaded() {
