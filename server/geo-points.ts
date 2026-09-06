@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { pipeline } from "node:stream/promises"
 import path from "node:path"
 import { randomBytes } from "node:crypto"
@@ -122,6 +122,25 @@ function importedCsvPath() {
 
 function bundledUscitiesPath() {
   return path.resolve(process.cwd(), "data/uscities.csv")
+}
+
+function fileSize(filePath: string) {
+  try {
+    return statSync(filePath).size
+  } catch {
+    return 0
+  }
+}
+
+function pickCsvSource() {
+  const imported = importedCsvPath()
+  const bundled = bundledUscitiesPath()
+  const importedSize = fileSize(imported)
+  const bundledSize = fileSize(bundled)
+  if (bundledSize > importedSize) return bundled
+  if (importedSize > 0) return imported
+  if (bundledSize > 0) return bundled
+  return ""
 }
 
 function sampleCsvPath() {
@@ -326,13 +345,7 @@ export function listNearbyGeoPoints(origin: GeoPoint, city: string, state: strin
   ensureLoaded()
   const n = Math.max(0, Math.floor(Number(limit) || 0))
   if (n === 0) return []
-  const exact = listGeoPointsForCity(city, state)
-  if (exact.length >= n) return nearestGeoPoints(origin, exact, n)
-  const stateKey = toStateAbbr(state).toLowerCase()
-  const sameState = stateKey ? (byState.get(stateKey) ?? []) : []
-  if (sameState.length >= n) return nearestGeoPoints(origin, sameState, n)
-  if (sameState.length > exact.length) return nearestGeoPoints(origin, sameState, Math.min(n, sameState.length))
-  return nearestGeoPoints(origin, points, n)
+  return nearestGeoPoints(origin, listGeoPointsForCity(city, state), n)
 }
 
 export function importGeoPoints(rows: GeoCsvPoint[], fileName = ""): GeoPointsMeta {
@@ -362,11 +375,12 @@ export function importGeoCsvText(csv: string, fileName = ""): { meta: GeoPointsM
     throw new Error(missing || "That CSV did not contain any usable city GPS points.")
   }
   mkdirSync(dataDir(), { recursive: true })
-  if (csv.length < 15 * 1024 * 1024) {
+  const looksLikeFullImport = /uscities|us.?cities/i.test(fileName) || parsed.points.length > 1_000
+  if (looksLikeFullImport && csv.length < 15 * 1024 * 1024) {
     writeFileSync(importedCsvPath(), csv.startsWith("\uFEFF") ? csv : csv)
   }
   const next = adoptPoints(parsed.points, fileName)
-  writeMetaFallback(importedCsvPath())
+  writeMetaFallback(looksLikeFullImport ? importedCsvPath() : "")
   if (storeDriver() === "postgres") {
     void persistPostgres().catch((error) => {
       console.error("PlaceFind could not persist city GPS points to Postgres.", error)
@@ -492,27 +506,8 @@ export function resolveScanPoints(input: {
   }
 
   const exact = listGeoPointsForCity(input.city, input.state)
-  if (exact.length >= needed) {
-    const applied = applyCityGpsBackup(grid, exact, zoom, input.spacingMiles)
-    return { ...applied, pinSource, zoom }
-  }
-
-  const nearby = listNearbyGeoPoints(input.center, input.city, input.state, needed)
-  if (nearby.length >= needed) {
-    return {
-      points: layoutGeoPoints(nearby, zoom),
-      usedCityGps: true,
-      snappedCount: nearby.length,
-      cityPointCount: nearby.length,
-      pinSource,
-      zoom,
-    }
-  }
-  if (nearby.length === 0) {
-    return { points: grid, usedCityGps: false, snappedCount: 0, cityPointCount: exact.length, pinSource, zoom }
-  }
-  const applied = applyCityGpsBackup(grid, nearby, zoom, input.spacingMiles)
-  return { ...applied, cityPointCount: nearby.length, pinSource, zoom }
+  const applied = applyCityGpsBackup(grid, exact, zoom, input.spacingMiles)
+  return { ...applied, pinSource, zoom }
 }
 
 function ensureLoaded() {
@@ -533,12 +528,9 @@ export async function initGeoPoints(): Promise<GeoPointsMeta> {
   }
   loadJsonFallback()
   loaded = true
-  if (points.length > 0) return geoPointsMeta()
-
-  const imported = importedCsvPath()
-  const bundled = bundledUscitiesPath()
-  const source = existsSync(imported) ? imported : existsSync(bundled) ? bundled : ""
-  if (source) {
+  const source = pickCsvSource()
+  const shouldLoadBundled = Boolean(source) && (points.length === 0 || (fileSize(source) > 100_000 && points.length < 1_000))
+  if (shouldLoadBundled && source) {
     try {
       const result = await importGeoCsvFile(source, path.basename(source))
       return result.meta
