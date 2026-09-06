@@ -10,6 +10,7 @@ export type StoreCollection =
   | "issued_licenses"
   | "mail_outbox"
   | "campaigns"
+  | "scan_runs"
   | "password_resets"
 
 type JsonRow = Record<string, unknown>
@@ -21,6 +22,7 @@ const FILES: Record<StoreCollection, string> = {
   issued_licenses: "issued-licenses.json",
   mail_outbox: "mail-outbox.json",
   campaigns: "campaigns.json",
+  scan_runs: "scan-runs.json",
   password_resets: "password-resets.json",
 }
 
@@ -68,6 +70,11 @@ CREATE TABLE IF NOT EXISTS campaigns (
   id TEXT PRIMARY KEY,
   payload JSONB NOT NULL
 );
+CREATE TABLE IF NOT EXISTS scan_runs (
+  id TEXT PRIMARY KEY,
+  campaign_id TEXT NOT NULL,
+  payload JSONB NOT NULL
+);
 CREATE TABLE IF NOT EXISTS password_resets (
   token_hash TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -88,6 +95,7 @@ const memory: Record<StoreCollection, JsonRow[]> = {
   issued_licenses: [],
   mail_outbox: [],
   campaigns: [],
+  scan_runs: [],
   password_resets: [],
 }
 
@@ -203,6 +211,15 @@ async function persistPostgres(name: StoreCollection) {
       for (const row of rows) {
         await client.query("INSERT INTO campaigns (id, payload) VALUES ($1,$2::jsonb)", [row.id, JSON.stringify(row)])
       }
+    } else if (name === "scan_runs") {
+      await client.query("DELETE FROM scan_runs")
+      for (const row of rows) {
+        await client.query("INSERT INTO scan_runs (id, campaign_id, payload) VALUES ($1,$2,$3::jsonb)", [
+          row.id,
+          row.campaignId,
+          JSON.stringify(row),
+        ])
+      }
     } else if (name === "password_resets") {
       await client.query("DELETE FROM password_resets")
       for (const row of rows) {
@@ -241,6 +258,7 @@ async function loadPostgres() {
   )
   const outbox = await pool.query("SELECT payload FROM mail_outbox")
   const campaigns = await pool.query("SELECT payload FROM campaigns")
+  const scanRuns = await pool.query("SELECT payload FROM scan_runs")
   const resets = await pool.query(
     `SELECT token_hash AS "tokenHash", user_id AS "userId", expires_at AS "expiresAt", used_at AS "usedAt"
      FROM password_resets ORDER BY expires_at DESC`,
@@ -251,6 +269,7 @@ async function loadPostgres() {
   memory.issued_licenses = issued.rows
   memory.mail_outbox = outbox.rows.map((row) => row.payload as JsonRow)
   memory.campaigns = campaigns.rows.map((row) => row.payload as JsonRow)
+  memory.scan_runs = scanRuns.rows.map((row) => row.payload as JsonRow)
   memory.password_resets = resets.rows
 }
 
@@ -262,6 +281,7 @@ function collectionEmpty() {
     memory.issued_licenses.length === 0 &&
     memory.mail_outbox.length === 0 &&
     memory.campaigns.length === 0 &&
+    memory.scan_runs.length === 0 &&
     memory.password_resets.length === 0
   )
 }

@@ -11,7 +11,9 @@ import {
   buildGridPoints,
   createCampaign,
   hasConfirmedListing,
+  listingNotConfirmedForScheduleMessage,
   listingNotConfirmedMessage,
+  listCampaignScans,
   loadCampaignGrid,
   mapsKeysMissingMessage,
   mapsScanConfigured,
@@ -20,8 +22,10 @@ import {
   normalizeKeywords,
   rankColor,
   readCampaigns,
+  saveCampaign,
   scanCampaign,
   selectScanKeywords,
+  updateCampaign,
   validateCampaign,
   type Campaign,
   type KeywordRank,
@@ -284,6 +288,140 @@ describe("campaign store", () => {
     assert.equal(stored?.listingAddress, "900 E 11th St, Austin, TX 78702")
     assert.deepEqual(stored?.center, { lat: 30.2701, lng: -97.7313 })
     assert.equal(hasConfirmedListing(stored!), true)
+  })
+
+  it("cannot enable a scan or traffic schedule without a confirmed listing", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-schedule-")))
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue"],
+      },
+      "user-a",
+    )
+    assert.equal(hasConfirmedListing(campaign), false)
+    assert.throws(
+      () =>
+        updateCampaign(
+          campaign.id,
+          {
+            scanSchedule: {
+              enabled: true,
+              cadence: "daily",
+              hour: 9,
+              minute: 0,
+              timeZone: "utc",
+            },
+          },
+          "user-a",
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof CampaignError)
+        assert.equal(error.status, 400)
+        assert.equal(error.message, listingNotConfirmedForScheduleMessage())
+        return true
+      },
+    )
+    assert.throws(
+      () =>
+        updateCampaign(
+          campaign.id,
+          {
+            trafficSchedule: {
+              enabled: true,
+              cadence: "weekly",
+              hour: 8,
+              minute: 30,
+              weekday: 1,
+              timeZone: "local",
+              pinMode: "selected",
+              lastSelectedPinIds: ["0:0"],
+            },
+          },
+          "user-a",
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof CampaignError)
+        assert.equal(error.message, listingNotConfirmedForScheduleMessage())
+        return true
+      },
+    )
+    const confirmed = updateCampaign(
+      campaign.id,
+      {
+        placeId: "sample-franklin",
+        listingTitle: "Franklin Barbecue",
+        center: { lat: 30.2701, lng: -97.7313 },
+        scanSchedule: {
+          enabled: true,
+          cadence: "daily",
+          hour: 9,
+          minute: 0,
+          timeZone: "utc",
+        },
+      },
+      "user-a",
+    )
+    assert.equal(confirmed.scanSchedule.enabled, true)
+    assert.ok(confirmed.scanSchedule.nextRunAt)
+  })
+
+  it("lists saved scans and backfills from the last grid snapshot", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-scan-history-")))
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        placeId: "sample-franklin",
+        listingTitle: "Franklin Barbecue",
+        center: { lat: 30.2701, lng: -97.7313 },
+        keywords: ["barbecue"],
+      },
+      "user-a",
+    )
+    saveCampaign({
+      ...campaign,
+      lastGridScan: {
+        id: "scan-old",
+        startedAt: "2026-09-06T08:00:00.000Z",
+        finishedAt: "2026-09-06T08:05:00.000Z",
+        scannedAt: "2026-09-06T08:05:00.000Z",
+        keyword: "barbecue",
+        gridSize: 3,
+        spacingMiles: 1,
+        zoom: 17,
+        center: { lat: 30.2701, lng: -97.7313 },
+        placeId: "sample-franklin",
+        pointCount: 1,
+        foundCount: 1,
+        points: [
+          {
+            row: 0,
+            col: 0,
+            lat: 30.2701,
+            lng: -97.7313,
+            keyword: "barbecue",
+            rank: 5,
+            listingTitle: "Franklin Barbecue",
+            rating: 4.7,
+            address: "900 E 11th St",
+            mapsUrl: "https://maps.example.test/franklin",
+            scannedAt: "2026-09-06T08:05:00.000Z",
+          },
+        ],
+      },
+    })
+    const rows = listCampaignScans(campaign.id, "user-a")
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0]?.id, "scan-old")
+    assert.equal(rows[0]?.keyword, "barbecue")
+    const again = listCampaignScans(campaign.id, "user-a")
+    assert.equal(again.length, 1)
   })
 })
 

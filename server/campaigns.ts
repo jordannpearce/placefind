@@ -7,9 +7,24 @@ import { mapsPlaceUrl } from "./match.ts"
 import { publicSearchMessage } from "./public-copy.ts"
 import { rankFromMapsItems, rankOfBusiness } from "./rank.ts"
 import { isSellerMode } from "./runtime.ts"
+import { compareScanRuns } from "../src/lib/scan-compare.ts"
 import { finalizeGridPointResults } from "./scan-finalize.ts"
+import {
+  defaultScanSchedule,
+  defaultTrafficSchedule,
+  listingNotConfirmedForScheduleMessage,
+  nextRunAt,
+  normalizeScanSchedule,
+  normalizeTrafficSchedule,
+  type ScanSchedule,
+  type TrafficSchedule,
+} from "./schedule.ts"
 import { readCollection, writeCollection } from "./store.ts"
 import type { ApiKeys } from "./types.ts"
+import type { ScanCompare } from "../src/lib/types.ts"
+
+export type { ScanSchedule, TrafficSchedule }
+export { listingNotConfirmedForScheduleMessage }
 
 export const MAX_KEYWORDS = 20
 export const MAX_RECENT_SCANS = 10
@@ -40,6 +55,8 @@ export type CampaignInput = {
   spacingMiles?: number
   zoom?: number
   center?: GeoPoint | null
+  scanSchedule?: ScanSchedule | null
+  trafficSchedule?: TrafficSchedule | null
 }
 
 export type KeywordRank = {
@@ -86,6 +103,9 @@ export type ScanRun = {
 
 export type GridScanRun = {
   id: string
+  campaignId?: string
+  startedAt?: string
+  finishedAt?: string
   scannedAt: string
   keyword: string
   gridSize: number
@@ -120,11 +140,33 @@ export type Campaign = {
   recentScans: ScanRun[]
   recentGridScans: GridScanRun[]
   lastTrafficJob: TrafficJob | null
+  scanSchedule: ScanSchedule
+  trafficSchedule: TrafficSchedule
+}
+
+export type TrafficJobStatus = "running" | "ok" | "error" | "stopped"
+
+export type TrafficLogLine = {
+  at: string
+  message: string
+  pinId?: string
+  keyword?: string
+}
+
+export type TrafficPinResult = {
+  pinId: string
+  keyword?: string
+  row: number
+  col: number
+  lat: number
+  lng: number
+  status: "pending" | "running" | "ok" | "fail" | "cancelled"
+  finishedAt: string | null
 }
 
 export type TrafficJob = {
   id: string
-  status: "running" | "ok" | "error"
+  status: TrafficJobStatus
   startedAt: string
   finishedAt: string | null
   sessionsRequested: number
@@ -133,6 +175,11 @@ export type TrafficJob = {
   sessionsFailed: number
   requestCount: number
   lastError: string | null
+  pinIds?: string[]
+  keywords?: string[]
+  keywordIds?: string[]
+  log?: TrafficLogLine[]
+  results?: TrafficPinResult[]
 }
 
 export class CampaignError extends Error {
@@ -145,8 +192,18 @@ export class CampaignError extends Error {
   }
 }
 
+const runningScans = new Set<string>()
+
 function newId(): string {
   return randomBytes(8).toString("hex")
+}
+
+export function isScanRunning(campaignId: string): boolean {
+  return runningScans.has(campaignId)
+}
+
+export function scanAlreadyRunningMessage() {
+  return "A scan is already running for this campaign."
 }
 
 export function normalizeKeywords(raw: unknown): string[] {
@@ -339,6 +396,147 @@ function writeCampaigns(campaigns: Campaign[]) {
   writeCollection("campaigns", campaigns)
 }
 
+function writeScanRuns(rows: GridScanRun[]) {
+  writeCollection("scan_runs", rows)
+}
+
+function normalizeStoredScanRun(row: GridScanRun): GridScanRun {
+  return {
+    id: row.id || newId(),
+    campaignId: row.campaignId,
+    startedAt: row.startedAt || row.scannedAt,
+    finishedAt: row.finishedAt || row.scannedAt,
+    scannedAt: row.scannedAt || row.finishedAt || new Date().toISOString(),
+    keyword: row.keyword ?? "",
+    gridSize: row.gridSize,
+    spacingMiles: row.spacingMiles,
+    zoom: normalizeZoom(row.zoom),
+    center: normalizeCenter(row.center) ?? { lat: 0, lng: 0 },
+    placeId: row.placeId ?? null,
+    pointCount: row.pointCount ?? row.points?.length ?? 0,
+    foundCount: row.foundCount ?? 0,
+    points: Array.isArray(row.points) ? row.points : [],
+  }
+}
+
+export function saveScanRun(run: GridScanRun): GridScanRun {
+  const next = normalizeStoredScanRun(run)
+  const rows = readCollection<GridScanRun>("scan_runs").map(normalizeStoredScanRun)
+  const index = rows.findIndex((row) => row.id === next.id)
+  if (index < 0) writeScanRuns([next, ...rows])
+  else {
+    rows[index] = next
+    writeScanRuns(rows)
+  }
+  return next
+}
+
+export function listScanRuns(campaignId: string): GridScanRun[] {
+  return readCollection<GridScanRun>("scan_runs")
+    .map(normalizeStoredScanRun)
+    .filter((row) => row.campaignId === campaignId)
+    .sort((a, b) => String(b.finishedAt || b.scannedAt).localeCompare(String(a.finishedAt || a.scannedAt)))
+}
+
+export function getScanRun(campaignId: string, id: string): GridScanRun | null {
+  return listScanRuns(campaignId).find((row) => row.id === id) ?? null
+}
+
+export function deleteScanRunsForCampaign(campaignId: string) {
+  writeScanRuns(readCollection<GridScanRun>("scan_runs").map(normalizeStoredScanRun).filter((row) => row.campaignId !== campaignId))
+}
+
+function backfillScanRuns(campaign: Campaign): GridScanRun[] {
+  const existing = listScanRuns(campaign.id)
+  if (existing.length > 0) return existing
+  const seen = new Set<string>()
+  const fromCampaign = [campaign.lastGridScan, ...(campaign.recentGridScans ?? [])].filter((row): row is GridScanRun => Boolean(row))
+  for (const run of fromCampaign) {
+    if (seen.has(run.id)) continue
+    seen.add(run.id)
+    saveScanRun({ ...run, campaignId: campaign.id, startedAt: run.startedAt || run.scannedAt, finishedAt: run.finishedAt || run.scannedAt })
+  }
+  return listScanRuns(campaign.id)
+}
+
+export function listCampaignScans(id: string, userId?: string | null): GridScanRun[] {
+  const campaign = getCampaign(id, userId)
+  if (!campaign) throw new CampaignError("That campaign was not found.", 404)
+  return backfillScanRuns(campaign)
+}
+
+export function getCampaignScan(id: string, scanId: string, userId?: string | null): GridScanRun {
+  const campaign = getCampaign(id, userId)
+  if (!campaign) throw new CampaignError("That campaign was not found.", 404)
+  const run = getScanRun(campaign.id, scanId) ?? backfillScanRuns(campaign).find((row) => row.id === scanId)
+  if (!run) throw new CampaignError("That scan was not found.", 404)
+  return run
+}
+
+export function compareCampaignScans(id: string, previousId: string, currentId: string, userId?: string | null): ScanCompare {
+  const previous = getCampaignScan(id, previousId, userId)
+  const current = getCampaignScan(id, currentId, userId)
+  return compareScanRuns(previous, current)
+}
+
+function applyScheduleNextRun<T extends ScanSchedule | TrafficSchedule>(schedule: T, now = new Date()): T {
+  return { ...schedule, nextRunAt: nextRunAt({ ...schedule, enabled: true }, now).toISOString() }
+}
+
+function normalizeStoredTrafficJob(job: Campaign["lastTrafficJob"] | undefined): TrafficJob | null {
+  if (!job || typeof job !== "object") return null
+  const status =
+    job.status === "running" || job.status === "ok" || job.status === "error" || job.status === "stopped"
+      ? job.status
+      : "error"
+  return {
+    id: String(job.id || ""),
+    status,
+    startedAt: String(job.startedAt || ""),
+    finishedAt: job.finishedAt ?? null,
+    sessionsRequested: Number(job.sessionsRequested) || 0,
+    sessionsAttempted: Number(job.sessionsAttempted) || 0,
+    sessionsOk: Number(job.sessionsOk) || 0,
+    sessionsFailed: Number(job.sessionsFailed) || 0,
+    requestCount: Number(job.requestCount) || 0,
+    lastError: job.lastError ?? null,
+    pinIds: Array.isArray(job.pinIds) ? job.pinIds.map(String) : [],
+    keywords: Array.isArray(job.keywords) ? job.keywords.map(String) : [],
+    keywordIds: Array.isArray(job.keywordIds) ? job.keywordIds.map(String) : [],
+    log: Array.isArray(job.log)
+      ? job.log
+          .filter((line): line is TrafficLogLine => Boolean(line && typeof line === "object"))
+          .map((line) => ({
+            at: String(line.at || ""),
+            message: String(line.message || ""),
+            ...(line.pinId ? { pinId: String(line.pinId) } : {}),
+            ...(line.keyword ? { keyword: String(line.keyword) } : {}),
+          }))
+      : [],
+    results: Array.isArray(job.results)
+      ? job.results
+          .filter((row): row is TrafficPinResult => Boolean(row && typeof row === "object"))
+          .map((row) => ({
+            pinId: String(row.pinId || ""),
+            ...(row.keyword ? { keyword: String(row.keyword) } : {}),
+            row: Number(row.row) || 0,
+            col: Number(row.col) || 0,
+            lat: Number(row.lat) || 0,
+            lng: Number(row.lng) || 0,
+            status:
+              row.status === "pending" ||
+              row.status === "running" ||
+              row.status === "ok" ||
+              row.status === "fail" ||
+              row.status === "cancelled"
+                ? row.status
+                : "pending",
+            finishedAt: row.finishedAt ?? null,
+          }))
+      : [],
+  }
+}
+
 function normalizeStoredCampaign(row: Campaign): Campaign {
   const grid = normalizeGridSize(row.gridSize)
   const spacing = normalizeSpacingMiles(row.spacingMiles)
@@ -363,7 +561,9 @@ function normalizeStoredCampaign(row: Campaign): Campaign {
     lastGridScan: row.lastGridScan ?? null,
     recentScans: Array.isArray(row.recentScans) ? row.recentScans.slice(0, MAX_RECENT_SCANS) : [],
     recentGridScans: Array.isArray(row.recentGridScans) ? row.recentGridScans.slice(0, MAX_RECENT_SCANS) : [],
-    lastTrafficJob: row.lastTrafficJob ?? null,
+    lastTrafficJob: normalizeStoredTrafficJob(row.lastTrafficJob),
+    scanSchedule: normalizeScanSchedule(row.scanSchedule).value ?? defaultScanSchedule(),
+    trafficSchedule: normalizeTrafficSchedule(row.trafficSchedule).value ?? defaultTrafficSchedule(),
   }
 }
 
@@ -389,6 +589,8 @@ export function createCampaign(input: CampaignInput, userId = ""): Campaign {
     recentScans: [],
     recentGridScans: [],
     lastTrafficJob: null,
+    scanSchedule: defaultScanSchedule(),
+    trafficSchedule: defaultTrafficSchedule(),
   }
   writeCampaigns([campaign, ...readCollection<Campaign>("campaigns").map(normalizeStoredCampaign)])
   return campaign
@@ -415,6 +617,14 @@ export function updateCampaign(id: string, input: CampaignInput, userId?: string
     center: input.center !== undefined ? input.center : current.center,
   })
   if (parsed.error || !parsed.value) throw new CampaignError(parsed.error || "Could not update the campaign.")
+  const scanSchedule = input.scanSchedule !== undefined ? normalizeScanSchedule(input.scanSchedule) : { value: current.scanSchedule }
+  if (scanSchedule.error || !scanSchedule.value) throw new CampaignError(scanSchedule.error || "That scan schedule is not valid.")
+  const trafficSchedule =
+    input.trafficSchedule !== undefined ? normalizeTrafficSchedule(input.trafficSchedule) : { value: current.trafficSchedule }
+  if (trafficSchedule.error || !trafficSchedule.value) {
+    throw new CampaignError(trafficSchedule.error || "That traffic schedule is not valid.")
+  }
+  const enablingSchedule = Boolean(scanSchedule.value.enabled || trafficSchedule.value.enabled)
   const moved =
     parsed.value.businessName !== current.businessName ||
     parsed.value.city !== current.city ||
@@ -428,7 +638,12 @@ export function updateCampaign(id: string, input: CampaignInput, userId?: string
     listingTitle: moved && !listingProvided ? "" : parsed.value.listingTitle,
     listingAddress: moved && !listingProvided ? "" : parsed.value.listingAddress,
     center: moved && input.center === undefined ? null : parsed.value.center,
+    scanSchedule: applyScheduleNextRun(scanSchedule.value),
+    trafficSchedule: applyScheduleNextRun(trafficSchedule.value),
     updatedAt: new Date().toISOString(),
+  }
+  if (enablingSchedule && !hasConfirmedListing(next)) {
+    throw new CampaignError(listingNotConfirmedForScheduleMessage(), 400)
   }
   campaigns[index] = next
   writeCampaigns(campaigns)
@@ -442,6 +657,7 @@ export function deleteCampaign(id: string, userId?: string | null): boolean {
     throw new CampaignError("That campaign was not found.", 404)
   }
   writeCampaigns(campaigns.filter((row) => row.id !== id))
+  deleteScanRunsForCampaign(id)
   return true
 }
 
@@ -536,8 +752,13 @@ export async function scanCampaign(
 ): Promise<{ campaign: Campaign; scan: ScanRun; grid: GridScanRun }> {
   const campaign = getCampaign(id, userId)
   if (!campaign) throw new CampaignError("That campaign was not found.", 404)
+  if (runningScans.has(campaign.id)) {
+    throw new CampaignError(scanAlreadyRunningMessage(), 409)
+  }
+  runningScans.add(campaign.id)
 
   const keys = mergeHostedKeys(rawKeys)
+  try {
   if (!mapsScanConfigured(rawKeys)) {
     throw new CampaignError(mapsKeysMissingMessage())
   }
@@ -551,7 +772,8 @@ export async function scanCampaign(
   }
   const keyword = keywords[0]!
 
-  const scannedAt = new Date().toISOString()
+  const startedAt = new Date().toISOString()
+  const scannedAt = startedAt
   const center = normalizeCenter(campaign.center)
   if (!center) {
     throw new CampaignError("That listing has no map location. Choose another listing.", 400)
@@ -619,9 +841,13 @@ export async function scanCampaign(
     }
   }), scannedAt)
 
+  const finishedAt = new Date().toISOString()
   const grid: GridScanRun = {
     id: newId(),
-    scannedAt,
+    campaignId: campaign.id,
+    startedAt,
+    finishedAt,
+    scannedAt: finishedAt,
     keyword,
     gridSize: campaign.gridSize,
     spacingMiles: campaign.spacingMiles,
@@ -665,7 +891,11 @@ export async function scanCampaign(
     recentGridScans: [grid, ...campaign.recentGridScans].slice(0, MAX_RECENT_SCANS),
   }
 
+  saveScanRun(grid)
   return { campaign: saveCampaign(next), scan, grid }
+  } finally {
+    runningScans.delete(id)
+  }
 }
 
 export function bestGridRank(points: GridPointResult[]): number | null {

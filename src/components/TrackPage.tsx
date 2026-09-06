@@ -1,16 +1,22 @@
 import { LoaderCircle, Plus, Star, Trash2 } from "lucide-react"
-import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
 import {
+  compareCampaignScans,
   createCampaign,
   deleteCampaign,
   loadCampaignGrid,
+  loadCampaignScans,
   loadCampaigns,
+  loadCampaignTraffic,
+  rerunCampaignScan,
   scanCampaign,
   searchBusiness,
   startCampaignTraffic,
+  stopCampaignTraffic,
   updateCampaign,
 } from "../lib/api.ts"
-import { buildPreviewPoints, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
+import { buildPreviewPoints, gridPinId, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
+import { pointsWithCompare, rankChangeColor, rankChangeLabel } from "../lib/scan-compare.ts"
 import { publicSearchMessage } from "../lib/public-copy.ts"
 import { US_STATES } from "../lib/states.ts"
 import {
@@ -19,12 +25,21 @@ import {
   confirmedListingFromSearch,
   listingsFromSearch,
   campaignScanFinished,
+  listedTrafficKeywords,
+  noKeywordsSelectedMessage,
+  noPinsSelectedMessage,
   scanBusinessEnabled,
+  selectedKeywordsInListedOrder,
+  trafficKeywordHelpCopy,
   searchChanged,
   searchQueryFromCampaign,
   startTrafficEnabled,
   startTrafficLabel,
   startTrafficVisible,
+  stopTrafficVisible,
+  trafficLogEmptyCopy,
+  trafficLogLoadingCopy,
+  trafficPinStatusLabel,
 } from "../lib/track.ts"
 import type {
   ApiKeys,
@@ -36,6 +51,13 @@ import type {
   HostedKeyStatus,
   SearchQuery,
   SearchResponse,
+  GridScanRun,
+  ScanCompare,
+  ScanSchedule,
+  TrafficJob,
+  TrafficLogLine,
+  TrafficPinResult,
+  TrafficSchedule,
 } from "../lib/types.ts"
 import { GridMap } from "./GridMap.tsx"
 
@@ -59,6 +81,20 @@ function searchCount(gridSize: number) {
   return gridSize * gridSize
 }
 
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const
+
+function emptyScanSchedule(): ScanSchedule {
+  return { enabled: false, cadence: "daily", hour: 9, minute: 0, timeZone: "local", lastRunAt: null, nextRunAt: null }
+}
+
+function emptyTrafficSchedule(): TrafficSchedule {
+  return { ...emptyScanSchedule(), pinMode: "selected", lastSelectedPinIds: [], lastSelectedKeywords: [] }
+}
+
+function scanWhen(run: { finishedAt?: string; scannedAt?: string; startedAt?: string }) {
+  return formatWhen(run.finishedAt || run.scannedAt || run.startedAt)
+}
+
 export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [maxKeywords, setMaxKeywords] = useState(20)
@@ -75,12 +111,24 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [saving, setSaving] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [startingTraffic, setStartingTraffic] = useState(false)
+  const [stoppingTraffic, setStoppingTraffic] = useState(false)
+  const [trafficPollError, setTrafficPollError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [searchResult, setSearchResult] = useState<SearchResponse | null>(null)
   const [confirmed, setConfirmed] = useState<ConfirmedListing | null>(null)
   const [selectedPoint, setSelectedPoint] = useState<GridPointResult | null>(null)
+  const [selectedPinIds, setSelectedPinIds] = useState<string[]>([])
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([])
   const [previewCenter, setPreviewCenter] = useState<GeoPoint | null>(null)
+  const [scans, setScans] = useState<GridScanRun[]>([])
+  const [compareFromId, setCompareFromId] = useState("")
+  const [compareToId, setCompareToId] = useState("")
+  const [compare, setCompare] = useState<ScanCompare | null>(null)
+  const [comparing, setComparing] = useState(false)
+  const [rerunning, setRerunning] = useState(false)
+  const [scanScheduleDraft, setScanScheduleDraft] = useState<ScanSchedule>(emptyScanSchedule)
+  const [trafficScheduleDraft, setTrafficScheduleDraft] = useState<TrafficSchedule>(emptyTrafficSchedule)
 
   const selected = useMemo(
     () => (campaigns ?? []).find((campaign) => campaign.id === selectedId) ?? null,
@@ -90,10 +138,15 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const listings = listingsFromSearch(searchResult)
   const canScan = scanBusinessEnabled(confirmed)
   const grid = selected?.lastGridScan ?? null
+  const comparedPoints = useMemo(() => {
+    if (!compare) return null
+    return pointsWithCompare(compare.current, compare)
+  }, [compare])
   const mapCenter = confirmed
     ? { lat: confirmed.lat, lng: confirmed.lng }
-    : selected?.center || grid?.center || previewCenter
+    : selected?.center || compare?.current.center || grid?.center || previewCenter
   const points = useMemo(() => {
+    if (comparedPoints) return comparedPoints
     const keyword = activeKeyword || selected?.keywords[0] || keywordDraft.trim() || ""
     const scanMatches =
       Boolean(grid) &&
@@ -108,7 +161,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     }
     if (!mapCenter || !confirmed) return []
     return buildPreviewPoints(mapCenter, gridSize, spacingMiles, keyword)
-  }, [grid, activeKeyword, gridSize, spacingMiles, mapCenter, selected?.keywords, keywordDraft, confirmed])
+  }, [comparedPoints, grid, activeKeyword, gridSize, spacingMiles, mapCenter, selected?.keywords, keywordDraft, confirmed])
 
   function applyCampaign(campaign: Campaign | null) {
     if (!campaign) {
@@ -119,6 +172,10 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setGridSize(5)
       setSpacingMiles(1)
       setPreviewCenter(null)
+      setSelectedPinIds([])
+      setSelectedKeywords([])
+      setScanScheduleDraft(emptyScanSchedule())
+      setTrafficScheduleDraft(emptyTrafficSchedule())
       return
     }
     setQuery(searchQueryFromCampaign(campaign))
@@ -128,6 +185,33 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setGridSize(campaign.gridSize ?? 5)
     setSpacingMiles(campaign.spacingMiles ?? 1)
     setPreviewCenter(campaign.center || campaign.lastGridScan?.center || null)
+    setSelectedPinIds(campaign.trafficSchedule?.lastSelectedPinIds ?? [])
+    const listed = listedTrafficKeywords(campaign)
+    const remembered = campaign.trafficSchedule?.lastSelectedKeywords ?? []
+    setSelectedKeywords(remembered.length ? selectedKeywordsInListedOrder(listed, remembered) : listed)
+    setScanScheduleDraft(campaign.scanSchedule ?? emptyScanSchedule())
+    setTrafficScheduleDraft(campaign.trafficSchedule ?? emptyTrafficSchedule())
+  }
+
+  async function refreshScans(campaignId: string) {
+    try {
+      const payload = await loadCampaignScans(campaignId)
+      const rows = payload.scans
+      setScans(rows)
+      if (rows.length >= 2) {
+        setCompareToId((current) => current || rows[0]!.id)
+        setCompareFromId((current) => current || rows[1]!.id)
+      } else if (rows.length === 1) {
+        setCompareToId(rows[0]!.id)
+        setCompareFromId("")
+      } else {
+        setCompareToId("")
+        setCompareFromId("")
+        setCompare(null)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load scan history.")
+    }
   }
 
   async function refresh(nextId?: string | null) {
@@ -142,6 +226,11 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setCreating(!next)
     applyCampaign(next)
     setSelectedPoint(null)
+    if (next) void refreshScans(next.id)
+    else {
+      setScans([])
+      setCompare(null)
+    }
     return payload.campaigns
   }
 
@@ -157,6 +246,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
         setSelectedId(next?.id ?? null)
         setCreating(!next)
         applyCampaign(next)
+        if (next) void refreshScans(next.id)
       })
       .catch((err) => {
         if (active) setError(err instanceof Error ? err.message : "Could not load campaigns.")
@@ -193,6 +283,56 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     else if (next !== selectedPoint) setSelectedPoint(next)
   }, [points, selectedPoint])
 
+  useEffect(() => {
+    const allowed = new Set(points.map((point) => gridPinId(point)))
+    setSelectedPinIds((current) => {
+      const next = current.filter((id) => allowed.has(id))
+      return next.length === current.length ? current : next
+    })
+  }, [points])
+
+  useEffect(() => {
+    const listed = listedTrafficKeywords(selected)
+    setSelectedKeywords((current) => {
+      if (listed.length === 0) return current.length === 0 ? current : []
+      const next = selectedKeywordsInListedOrder(listed, current.length ? current : listed)
+      if (next.length === current.length && next.every((keyword, index) => keyword === current[index])) return current
+      return next
+    })
+  }, [selected?.id, selected?.keywords, selected?.lastGridScan?.keyword, selected?.businessName])
+
+  useEffect(() => {
+    if (!selected?.id || selected.lastTrafficJob?.status !== "running") return
+    let active = true
+    const poll = async () => {
+      try {
+        const payload = await loadCampaignTraffic(selected.id)
+        if (!active) return
+        replaceCampaign(payload.campaign)
+        setTrafficPollError(null)
+        const job = payload.traffic
+        if (job && job.status !== "running") {
+          if (job.status === "stopped") {
+            setNotice("Traffic stopped. Remaining keyword and pin pairs were cancelled.")
+          } else if (job.sessionsAttempted > 0) {
+            setNotice(`Traffic finished. ${job.sessionsOk} of ${job.sessionsAttempted} sessions opened the listing.`)
+          }
+          if (job.lastError && job.sessionsOk === 0 && job.status !== "stopped") setError(job.lastError)
+        }
+      } catch (err) {
+        if (active) setTrafficPollError(err instanceof Error ? err.message : "Could not refresh the traffic log.")
+      }
+    }
+    const timer = window.setInterval(() => {
+      void poll()
+    }, 1500)
+    void poll()
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [selected?.id, selected?.lastTrafficJob?.status])
+
   function replaceCampaign(next: Campaign) {
     setCampaigns((current) => current.map((row) => (row.id === next.id ? next : row)))
     if (selectedId === next.id) {
@@ -210,6 +350,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setSearchResult(null)
       setPreviewCenter(null)
       setSelectedPoint(null)
+      setSelectedPinIds([])
       setNotice(null)
     }
     setQuery(next)
@@ -221,6 +362,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setNotice(null)
     setConfirmed(null)
     setSelectedPoint(null)
+    setSelectedPinIds([])
     try {
       const payload = await searchBusiness(query, keys, Boolean(hosted?.included && !seller))
       setSearchResult(payload)
@@ -289,6 +431,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       replaceCampaign(next)
       setKeywordDraft("")
       if (!activeKeyword) setActiveKeyword(keyword)
+      setSelectedKeywords((current) => (current.some((row) => row.toLowerCase() === keyword.toLowerCase()) ? current : [...current, keyword]))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add that keyword.")
     } finally {
@@ -304,6 +447,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       const next = await updateCampaign(selected.id, { keywords: selected.keywords.filter((row) => row !== keyword) })
       replaceCampaign(next)
       if (activeKeyword.toLowerCase() === keyword.toLowerCase()) setActiveKeyword(next.keywords[0] || "")
+      setSelectedKeywords((current) => current.filter((row) => row.toLowerCase() !== keyword.toLowerCase()))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not remove that keyword.")
     } finally {
@@ -344,6 +488,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setError(null)
     setNotice(null)
     setSelectedPoint(null)
+    setSelectedPinIds([])
     try {
       const hideKeys = Boolean(hosted?.included && !seller)
       let campaign = selected
@@ -372,9 +517,11 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       replaceCampaign(payload.campaign)
       setActiveKeyword(payload.grid?.keyword || target)
       setKeywordDraft("")
+      await refreshScans(campaign.id)
+      setCompare(null)
       const found = payload.grid?.foundCount ?? 0
       const total = payload.grid?.pointCount ?? 0
-      setNotice(`Scan finished. ${confirmed.title} appeared at ${found} of ${total} grid points for “${target}”.`)
+      setNotice(`Scan finished and saved. ${confirmed.title} appeared at ${found} of ${total} grid points for “${target}”.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not scan Maps.")
     } finally {
@@ -388,6 +535,9 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     applyCampaign(null)
     setSearchResult(null)
     setSelectedPoint(null)
+    setSelectedPinIds([])
+    setScans([])
+    setCompare(null)
     setError(null)
     setNotice(null)
   }
@@ -398,45 +548,197 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     applyCampaign(campaign)
     setSearchResult(null)
     setSelectedPoint(null)
+    setCompare(null)
     setError(null)
     setNotice(null)
+    void refreshScans(campaign.id)
   }
 
   const mapsReady = Boolean((keys.dataforseoLogin && keys.dataforseoPassword) || hosted?.dataforseo)
-  const busy = Boolean(saving || scanning || searching || startingTraffic)
+  const trafficJob = selected?.lastTrafficJob ?? null
+  const trafficRunning = trafficJob?.status === "running"
+  const busy = Boolean(saving || scanning || searching || startingTraffic || stoppingTraffic || rerunning || comparing)
   const scanFinished = campaignScanFinished(selected)
+  const pinsSelectable = Boolean(scanFinished && points.length > 0 && !scanning)
   const showStartTraffic = startTrafficVisible(confirmed)
+  const showStopTraffic = stopTrafficVisible(trafficJob)
   const canStartTraffic = startTrafficEnabled({
     listing: confirmed,
     campaign: selected,
     scanning,
     starting: startingTraffic,
     busy,
+    running: trafficRunning,
   })
   const trafficLabel = startTrafficLabel({ scanning, starting: startingTraffic, scanFinished })
   const step = searching ? 1 : confirmed ? 3 : listings.length > 0 ? 2 : 1
+  const trafficLog = trafficJob?.log ?? []
+  const trafficResults = trafficJob?.results ?? []
+  const trafficKeywords = listedTrafficKeywords(selected)
+
+  function togglePin(point: GridPointResult) {
+    const pinId = gridPinId(point)
+    setSelectedPoint(point)
+    setSelectedPinIds((current) => (current.includes(pinId) ? current.filter((id) => id !== pinId) : [...current, pinId]))
+  }
+
+  function selectAllPins() {
+    setSelectedPinIds(points.map((point) => gridPinId(point)))
+  }
+
+  function selectNoPins() {
+    setSelectedPinIds([])
+  }
+
+  function toggleTrafficKeyword(keyword: string) {
+    setSelectedKeywords((current) =>
+      current.some((row) => row.toLowerCase() === keyword.toLowerCase())
+        ? current.filter((row) => row.toLowerCase() !== keyword.toLowerCase())
+        : selectedKeywordsInListedOrder(trafficKeywords, [...current, keyword]),
+    )
+  }
 
   async function onStartTraffic() {
     if (!selected) return
-    const sessions = 3
+    if (selectedPinIds.length === 0) {
+      window.alert(noPinsSelectedMessage())
+      setError(noPinsSelectedMessage())
+      return
+    }
+    const keywords = selectedKeywordsInListedOrder(trafficKeywords, selectedKeywords)
+    if (keywords.length === 0) {
+      window.alert(noKeywordsSelectedMessage())
+      setError(noKeywordsSelectedMessage())
+      return
+    }
+    const sessions = selectedPinIds.length * keywords.length
     const requests = sessions * 2
+    const keywordList = keywords.map((keyword) => `“${keyword}”`).join(", then ")
     const ok = window.confirm(
-      `Start ${sessions} traffic sessions for ${confirmed?.title || selected.businessName}?\n\nThis uses your Maps traffic runner to search Maps and open the listing profile.\n\nEstimated ${requests} Maps requests (2 per session).`,
+      `Start traffic from ${selectedPinIds.length} selected pin${selectedPinIds.length === 1 ? "" : "s"} × ${keywords.length} keyword${keywords.length === 1 ? "" : "s"} for ${confirmed?.title || selected.businessName}?\n\nFor each selected pin, Maps will search ${keywordList} from that pin’s GPS, then open the confirmed listing when it appears.\n\nEstimated ${requests} Maps requests (2 per pin×keyword).`,
     )
     if (!ok) return
     setStartingTraffic(true)
     setError(null)
     setNotice(null)
+    setTrafficPollError(null)
     try {
-      const payload = await startCampaignTraffic(selected.id, keys, Boolean(hosted?.included && !seller), sessions)
+      const payload = await startCampaignTraffic(selected.id, keys, Boolean(hosted?.included && !seller), {
+        pinIds: selectedPinIds,
+        keywords,
+        keywordIds: keywords,
+      })
       replaceCampaign(payload.campaign)
-      const job = payload.traffic
-      setNotice(`Traffic finished. ${job.sessionsOk} of ${job.sessionsAttempted} sessions opened the listing.`)
-      if (job.lastError && job.sessionsOk === 0) setError(job.lastError)
+      setNotice(
+        `Traffic started from ${selectedPinIds.length} pin${selectedPinIds.length === 1 ? "" : "s"} × ${keywords.length} keyword${keywords.length === 1 ? "" : "s"} in listed order. Watch the live log under the map.`,
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start traffic.")
     } finally {
       setStartingTraffic(false)
+    }
+  }
+
+  async function onStopTraffic() {
+    if (!selected) return
+    setStoppingTraffic(true)
+    setError(null)
+    try {
+      const payload = await stopCampaignTraffic(selected.id)
+      replaceCampaign(payload.campaign)
+      setNotice("Traffic stopped. Remaining keyword and pin pairs were cancelled.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not stop traffic.")
+    } finally {
+      setStoppingTraffic(false)
+    }
+  }
+
+  async function onRerunScan() {
+    if (!selected) return
+    const source = scans[0] || selected.lastGridScan
+    if (!source) {
+      setError("Finish a scan before rerunning.")
+      return
+    }
+    setRerunning(true)
+    setScanning(true)
+    setError(null)
+    setNotice(null)
+    try {
+      if (source.gridSize) setGridSize(source.gridSize)
+      if (source.spacingMiles) setSpacingMiles(source.spacingMiles)
+      if (source.keyword) setActiveKeyword(source.keyword)
+      const payload = await rerunCampaignScan(selected.id, keys, Boolean(hosted?.included && !seller), source.keyword ? [source.keyword] : undefined)
+      replaceCampaign(payload.campaign)
+      await refreshScans(selected.id)
+      setCompare(null)
+      const found = payload.grid?.foundCount ?? 0
+      const total = payload.grid?.pointCount ?? 0
+      setNotice(`Rerun saved. ${found} of ${total} grid points found “${payload.grid?.keyword || source.keyword}”.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not rerun that scan.")
+    } finally {
+      setRerunning(false)
+      setScanning(false)
+    }
+  }
+
+  async function onCompareScans(fromId = compareFromId, toId = compareToId) {
+    if (!selected) return
+    const previousId = fromId || scans[1]?.id
+    const currentId = toId || scans[0]?.id
+    if (!previousId || !currentId) {
+      setError("Save two scans before comparing.")
+      return
+    }
+    setComparing(true)
+    setError(null)
+    try {
+      const result = await compareCampaignScans(selected.id, previousId, currentId)
+      setCompare(result)
+      setCompareFromId(previousId)
+      setCompareToId(currentId)
+      setNotice(
+        `Compared ${scanWhen(result.previous)} with ${scanWhen(result.current)}. ${result.improved} improved, ${result.worse} worse, ${result.added} new, ${result.lost} lost.`,
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not compare those scans.")
+    } finally {
+      setComparing(false)
+    }
+  }
+
+  async function onSaveSchedules() {
+    if (!selected) return
+    if ((scanScheduleDraft.enabled || trafficScheduleDraft.enabled) && !confirmed) {
+      setError("Confirm a Maps listing before scheduling scans or traffic.")
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      const utcOffsetMinutes = -new Date().getTimezoneOffset()
+      const next = await updateCampaign(selected.id, {
+        scanSchedule: {
+          ...scanScheduleDraft,
+          utcOffsetMinutes: scanScheduleDraft.timeZone === "local" ? utcOffsetMinutes : undefined,
+        },
+        trafficSchedule: {
+          ...trafficScheduleDraft,
+          utcOffsetMinutes: trafficScheduleDraft.timeZone === "local" ? utcOffsetMinutes : undefined,
+          lastSelectedPinIds: selectedPinIds,
+          lastSelectedKeywords: selectedKeywordsInListedOrder(listedTrafficKeywords(selected), selectedKeywords),
+        },
+      })
+      replaceCampaign(next)
+      setScanScheduleDraft(next.scanSchedule ?? scanScheduleDraft)
+      setTrafficScheduleDraft(next.trafficSchedule ?? trafficScheduleDraft)
+      setNotice("Schedules saved. This server checks every minute. One web replica is enough; extra copies would run the same job twice.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save schedules.")
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -656,6 +958,18 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                     {trafficLabel}
                   </button>
                 )}
+                {showStopTraffic && (
+                  <button
+                    type="button"
+                    data-testid="stop-traffic"
+                    onClick={() => void onStopTraffic()}
+                    disabled={stoppingTraffic}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-clay/50 bg-clay/10 px-4 font-semibold text-clay hover:bg-clay/20 disabled:opacity-60"
+                  >
+                    {stoppingTraffic && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                    {stoppingTraffic ? "Stopping…" : "Stop Traffic"}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -773,7 +1087,56 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 })}
               </div>
             )}
+
+            {showStartTraffic && trafficKeywords.length > 0 && (
+              <div className="mt-5 rounded-xl border border-brass/25 bg-brass/5 px-4 py-4" data-testid="traffic-keyword-panel">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Start Traffic keywords</p>
+                <p className="mt-2 text-sm text-paper/80">{trafficKeywordHelpCopy()}</p>
+                <ul className="mt-3 grid gap-2">
+                  {trafficKeywords.map((keyword) => {
+                    const checked = selectedKeywords.some((row) => row.toLowerCase() === keyword.toLowerCase())
+                    return (
+                      <li key={keyword}>
+                        <label className="flex items-start gap-3 text-sm text-paper">
+                          <input
+                            type="checkbox"
+                            data-testid={`traffic-keyword-${keyword}`}
+                            checked={checked}
+                            onChange={() => toggleTrafficKeyword(keyword)}
+                            className="mt-0.5 h-4 w-4 accent-[#c9a227]"
+                          />
+                          <span>
+                            <span className="font-semibold">{keyword}</span>
+                            <span className="mt-0.5 block text-xs text-muted">
+                              Search this keyword on Maps from each selected pin GPS, then open the confirmed listing when it appears.
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    )
+                  })}
+                </ul>
+                <p className="mt-3 text-xs text-muted">
+                  Selected keywords run in listed order for each selected pin
+                  {selectedKeywords.length > 0
+                    ? `: ${selectedKeywordsInListedOrder(trafficKeywords, selectedKeywords).join(" → ")}.`
+                    : "."}
+                </p>
+              </div>
+            )}
           </section>
+        )}
+
+        {selected && !creating && confirmed && (
+          <SchedulePanel
+            scanSchedule={scanScheduleDraft}
+            trafficSchedule={trafficScheduleDraft}
+            selectedPinCount={selectedPinIds.length}
+            busy={busy}
+            onScanChange={setScanScheduleDraft}
+            onTrafficChange={setTrafficScheduleDraft}
+            onSave={() => void onSaveSchedules()}
+          />
         )}
 
         <section className="overflow-hidden rounded-2xl border border-line bg-panel p-0 sm:p-6">
@@ -785,6 +1148,9 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 {confirmed
                   ? `Pins mark every ${gridSize}×${gridSize} search point around ${confirmed.title}. Rank 1 is the darkest green, then 2 and 3 in lighter greens; 4–6 yellow, 7–10 orange, 11–15 orange-red, and 16+ or not found in red.`
                   : "Confirm a listing to drop a pin and center the grid on that business."}
+                {pinsSelectable
+                  ? " After a scan, click pins to choose which GPS points get traffic."
+                  : ""}
               </p>
             </div>
             <div className="flex flex-wrap gap-3 text-xs text-muted">
@@ -820,6 +1186,18 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankColor(16) }} />
                 16+ / not found
               </span>
+              {compare && (
+                <>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankChangeColor("up") }} />
+                    Improved / new
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankChangeColor("down") }} />
+                    Worse / lost
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
@@ -830,11 +1208,47 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             </div>
           )}
 
+          {pinsSelectable && (
+            <div className="mx-5 mb-3 flex flex-wrap items-center gap-2 sm:mx-0">
+              <p className="text-sm text-paper/80">
+                {selectedPinIds.length} of {points.length} pin{points.length === 1 ? "" : "s"} selected for traffic
+              </p>
+              <button
+                type="button"
+                data-testid="select-all-pins"
+                onClick={selectAllPins}
+                className="inline-flex h-8 items-center rounded-lg border border-line px-3 text-xs font-semibold text-paper hover:border-brass"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                data-testid="select-none-pins"
+                onClick={selectNoPins}
+                className="inline-flex h-8 items-center rounded-lg border border-line px-3 text-xs font-semibold text-paper hover:border-brass"
+              >
+                Select none
+              </button>
+            </div>
+          )}
+
           <GridMap
             center={mapCenter}
             points={points}
             selected={selectedPoint}
+            selectedPinIds={selectedPinIds}
+            pinSelectable={pinsSelectable}
             onSelect={setSelectedPoint}
+            onTogglePin={togglePin}
+          />
+
+          <TrafficLivePanel
+            job={trafficJob}
+            log={trafficLog}
+            results={trafficResults}
+            running={trafficRunning}
+            starting={startingTraffic}
+            pollError={trafficPollError}
           />
 
           {selectedPoint && (
@@ -856,6 +1270,20 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               {selectedPoint.address && <p className="mt-1 text-sm text-muted">{selectedPoint.address}</p>}
               {selectedPoint.domain && <p className="mt-1 text-sm text-muted">{selectedPoint.domain}</p>}
               {selectedPoint.placeId && <p className="mt-1 text-xs text-muted">Place ID {selectedPoint.placeId}</p>}
+              {selectedPoint.change && (
+                <p className="mt-2 text-sm" style={{ color: rankChangeColor(selectedPoint.change) }}>
+                  {rankChangeLabel(selectedPoint.change)}
+                  {selectedPoint.previousRank != null ? ` · was #${selectedPoint.previousRank}` : ""}
+                  {selectedPoint.rank != null ? ` · now #${selectedPoint.rank}` : " · now not found"}
+                </p>
+              )}
+              {pinsSelectable && (
+                <p className="mt-2 text-xs text-brass">
+                  {selectedPinIds.includes(gridPinId(selectedPoint))
+                    ? "Selected for traffic from this GPS point."
+                    : "Not selected for traffic. Click the pin again to add it."}
+                </p>
+              )}
               <p className="mt-1 text-xs text-muted">
                 {selectedPoint.locationCoordinate || `${selectedPoint.lat.toFixed(5)},${selectedPoint.lng.toFixed(5)}`}
                 {" · "}
@@ -882,8 +1310,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                   {points.map((point) => (
                     <tr
                       key={`${point.row}-${point.col}-${point.keyword}`}
-                      className="cursor-pointer border-t border-line hover:bg-raised/60"
-                      onClick={() => setSelectedPoint(point)}
+                      className={`cursor-pointer border-t border-line hover:bg-raised/60 ${selectedPinIds.includes(gridPinId(point)) ? "bg-brass/5" : ""}`}
+                      onClick={() => (pinsSelectable ? togglePin(point) : setSelectedPoint(point))}
                     >
                       <td className="py-2.5 pr-3 text-muted">
                         R{point.row + 1} C{point.col + 1}
@@ -908,38 +1336,470 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             </div>
           )}
 
-          {selected?.lastTrafficJob && (
-            <div className="mt-6 border-t border-line px-5 pt-4 sm:px-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Last traffic run</p>
-              <p className="mt-2 text-sm text-muted">
-                {formatWhen(selected.lastTrafficJob.startedAt)} · {selected.lastTrafficJob.sessionsOk} of{" "}
-                {selected.lastTrafficJob.sessionsAttempted} sessions opened the listing
-                {selected.lastTrafficJob.requestCount
-                  ? ` · ${selected.lastTrafficJob.requestCount} Maps requests`
-                  : ""}
-                {selected.lastTrafficJob.status === "running" ? " · running" : ""}
-              </p>
-              {selected.lastTrafficJob.lastError && selected.lastTrafficJob.sessionsOk === 0 && (
-                <p className="mt-1 text-sm text-clay">{selected.lastTrafficJob.lastError}</p>
-              )}
-            </div>
-          )}
-
-          {selected?.recentGridScans && selected.recentGridScans.length > 0 && (
-            <div className="mt-6 border-t border-line px-5 pt-4 sm:px-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Recent grid scans</p>
-              <ul className="mt-2 grid gap-1 text-sm text-muted">
-                {selected.recentGridScans.slice(0, 5).map((run) => (
-                  <li key={run.id}>
-                    {formatWhen(run.scannedAt)} · {run.keyword} · {run.foundCount} of {run.pointCount} found
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <ScanHistoryPanel
+            scans={scans}
+            compare={compare}
+            compareFromId={compareFromId}
+            compareToId={compareToId}
+            comparing={comparing}
+            rerunning={rerunning}
+            busy={busy}
+            onCompareFrom={setCompareFromId}
+            onCompareTo={setCompareToId}
+            onCompare={() => void onCompareScans()}
+            onLatestVsPrevious={() => {
+              if (scans.length < 2) return
+              void onCompareScans(scans[1]!.id, scans[0]!.id)
+            }}
+            onClearCompare={() => setCompare(null)}
+            onRerun={() => void onRerunScan()}
+          />
         </section>
       </main>
     </div>
+  )
+}
+
+function TrafficLivePanel({
+  job,
+  log,
+  results,
+  running,
+  starting,
+  pollError,
+}: {
+  job: TrafficJob | null
+  log: TrafficLogLine[]
+  results: TrafficPinResult[]
+  running: boolean
+  starting: boolean
+  pollError: string | null
+}) {
+  return (
+    <div className="mx-5 mt-4 rounded-xl border border-line bg-ink px-4 py-4 sm:mx-0" data-testid="traffic-live-panel">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Live traffic log</p>
+          <h5 className="font-display text-xl text-paper">Sessions from selected pins</h5>
+        </div>
+        {job && (
+          <p className="text-xs text-muted">
+            {trafficPinStatusLabel(job.status)}
+            {job.sessionsRequested ? ` · ${job.sessionsOk}/${job.sessionsRequested} opened` : ""}
+          </p>
+        )}
+      </div>
+
+      {pollError && <p className="mt-3 text-sm text-clay">{pollError}</p>}
+      {job?.lastError && job.sessionsOk === 0 && job.status !== "stopped" && (
+        <p className="mt-3 text-sm text-clay">{job.lastError}</p>
+      )}
+
+      {(starting || running) && log.length === 0 && (
+        <div className="mt-3 flex items-center gap-2 text-sm text-paper/80">
+          <LoaderCircle className="h-4 w-4 animate-spin text-brass" />
+          {trafficLogLoadingCopy()}
+        </div>
+      )}
+
+      {!job && !starting && (
+        <p className="mt-3 text-sm text-muted">{trafficLogEmptyCopy()}</p>
+      )}
+
+      {log.length > 0 && (
+        <ol className="mt-3 max-h-48 overflow-auto rounded-lg border border-line bg-panel/40 px-3 py-2" data-testid="traffic-log">
+          {log.map((line, index) => (
+            <li key={`${line.at}-${index}`} className="border-b border-line/70 py-1.5 text-sm last:border-b-0">
+              <span className="block text-[11px] text-muted">{formatWhen(line.at)}</span>
+              <span className="text-paper/85">{line.message}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {results.length > 0 && (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[28rem] text-left text-sm" data-testid="traffic-results">
+            <thead className="text-[11px] uppercase tracking-[0.12em] text-muted">
+              <tr>
+                <th className="pb-2 pr-3 font-semibold">Pin</th>
+                <th className="pb-2 pr-3 font-semibold">Keyword</th>
+                <th className="pb-2 pr-3 font-semibold">Coordinate</th>
+                <th className="pb-2 pr-3 font-semibold">Status</th>
+                <th className="pb-2 font-semibold">When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((row) => (
+                <tr key={`${row.pinId}-${row.keyword || ""}`} className="border-t border-line">
+                  <td className="py-2 pr-3 text-paper">
+                    R{row.row + 1} C{row.col + 1}
+                  </td>
+                  <td className="py-2 pr-3 text-paper/80">{row.keyword || "—"}</td>
+                  <td className="py-2 pr-3 text-muted">
+                    {row.lat.toFixed(5)}, {row.lng.toFixed(5)}
+                  </td>
+                  <td className="py-2 pr-3 text-paper/80">{trafficPinStatusLabel(row.status)}</td>
+                  <td className="py-2 text-muted">
+                    {row.finishedAt ? formatWhen(row.finishedAt) : row.status === "running" || row.status === "pending" ? "In progress" : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScanHistoryPanel({
+  scans,
+  compare,
+  compareFromId,
+  compareToId,
+  comparing,
+  rerunning,
+  busy,
+  onCompareFrom,
+  onCompareTo,
+  onCompare,
+  onLatestVsPrevious,
+  onClearCompare,
+  onRerun,
+}: {
+  scans: GridScanRun[]
+  compare: ScanCompare | null
+  compareFromId: string
+  compareToId: string
+  comparing: boolean
+  rerunning: boolean
+  busy: boolean
+  onCompareFrom: (id: string) => void
+  onCompareTo: (id: string) => void
+  onCompare: () => void
+  onLatestVsPrevious: () => void
+  onClearCompare: () => void
+  onRerun: () => void
+}) {
+  return (
+    <div className="mt-6 border-t border-line px-5 pt-4 sm:px-0" data-testid="scan-history">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Scan history</p>
+          <h5 className="font-display text-xl text-paper">Saved grid scans</h5>
+          <p className="mt-1 text-sm text-muted">Every finished scan is kept. Rerun uses the same keyword, grid, and center.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            data-testid="rerun-scan"
+            onClick={onRerun}
+            disabled={busy || scans.length === 0}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-line px-3 text-sm font-semibold text-paper hover:border-brass disabled:opacity-60"
+          >
+            {(rerunning || comparing) && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            Rerun
+          </button>
+          <button
+            type="button"
+            data-testid="compare-latest"
+            onClick={onLatestVsPrevious}
+            disabled={busy || scans.length < 2}
+            className="inline-flex h-9 items-center rounded-lg border border-line px-3 text-sm font-semibold text-paper hover:border-brass disabled:opacity-60"
+          >
+            Latest vs previous
+          </button>
+        </div>
+      </div>
+
+      {scans.length === 0 ? (
+        <p className="mt-3 text-sm text-muted">No saved scans yet. Scan the confirmed listing to create the first snapshot.</p>
+      ) : (
+        <ul className="mt-3 grid gap-1 text-sm text-muted" data-testid="scan-history-list">
+          {scans.map((run) => (
+            <li key={run.id}>
+              {scanWhen(run)} · {run.keyword} · {run.gridSize}×{run.gridSize} · {run.foundCount} of {run.pointCount} found
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {scans.length >= 2 && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Earlier scan</span>
+            <select
+              value={compareFromId}
+              onChange={(event) => onCompareFrom(event.target.value)}
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            >
+              {scans.map((run) => (
+                <option key={run.id} value={run.id}>
+                  {scanWhen(run)} · {run.keyword}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Later scan</span>
+            <select
+              value={compareToId}
+              onChange={(event) => onCompareTo(event.target.value)}
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            >
+              {scans.map((run) => (
+                <option key={run.id} value={run.id}>
+                  {scanWhen(run)} · {run.keyword}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex items-end gap-2">
+            <button
+              type="button"
+              data-testid="compare-scans"
+              onClick={onCompare}
+              disabled={busy || !compareFromId || !compareToId}
+              className="inline-flex h-11 items-center rounded-lg bg-brass px-4 text-sm font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
+            >
+              Compare
+            </button>
+            {compare && (
+              <button
+                type="button"
+                onClick={onClearCompare}
+                className="inline-flex h-11 items-center rounded-lg border border-line px-3 text-sm text-paper hover:border-brass"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {compare && (
+        <div className="mt-4 overflow-x-auto" data-testid="scan-compare-table">
+          <p className="mb-2 text-sm text-paper/80">
+            {compare.improved} improved · {compare.worse} worse · {compare.same} same · {compare.added} new · {compare.lost} lost
+          </p>
+          <table className="w-full min-w-[28rem] text-left text-sm">
+            <thead className="text-[11px] uppercase tracking-[0.12em] text-muted">
+              <tr>
+                <th className="pb-2 pr-3 font-semibold">Pin</th>
+                <th className="pb-2 pr-3 font-semibold">Earlier</th>
+                <th className="pb-2 pr-3 font-semibold">Later</th>
+                <th className="pb-2 font-semibold">Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {compare.pins.map((pin) => (
+                <tr key={`${pin.row}-${pin.col}`} className="border-t border-line">
+                  <td className="py-2 pr-3 text-muted">
+                    R{pin.row + 1} C{pin.col + 1}
+                  </td>
+                  <td className="py-2 pr-3 text-paper/80">{pin.previousRank == null ? "—" : `#${pin.previousRank}`}</td>
+                  <td className="py-2 pr-3 text-paper/80">{pin.currentRank == null ? "—" : `#${pin.currentRank}`}</td>
+                  <td className="py-2 font-semibold" style={{ color: rankChangeColor(pin.change) }}>
+                    {rankChangeLabel(pin.change)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScheduleFieldset({
+  title,
+  detail,
+  schedule,
+  extra,
+  onChange,
+}: {
+  title: string
+  detail: string
+  schedule: ScanSchedule
+  extra?: ReactNode
+  onChange: (next: ScanSchedule) => void
+}) {
+  return (
+    <fieldset className="grid gap-3 rounded-xl border border-line bg-ink px-4 py-4">
+      <legend className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">{title}</legend>
+      <p className="text-sm text-muted">{detail}</p>
+      <label className="inline-flex items-center gap-2 text-sm text-paper">
+        <input
+          type="checkbox"
+          checked={schedule.enabled}
+          onChange={(event) => onChange({ ...schedule, enabled: event.target.checked })}
+        />
+        Run automatically
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Cadence</span>
+          <select
+            value={schedule.cadence}
+            onChange={(event) =>
+              onChange({
+                ...schedule,
+                cadence: event.target.value === "weekly" ? "weekly" : "daily",
+                weekday: event.target.value === "weekly" ? (schedule.weekday ?? 1) : undefined,
+              })
+            }
+            className="h-11 rounded-lg border border-line bg-panel px-3 text-paper outline-none focus:border-brass"
+          >
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+          </select>
+        </label>
+        {schedule.cadence === "weekly" && (
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Weekday</span>
+            <select
+              value={schedule.weekday ?? 1}
+              onChange={(event) => onChange({ ...schedule, weekday: Number(event.target.value) })}
+              className="h-11 rounded-lg border border-line bg-panel px-3 text-paper outline-none focus:border-brass"
+            >
+              {WEEKDAYS.map((label, index) => (
+                <option key={label} value={index}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Hour</span>
+          <select
+            value={schedule.hour}
+            onChange={(event) => onChange({ ...schedule, hour: Number(event.target.value) })}
+            className="h-11 rounded-lg border border-line bg-panel px-3 text-paper outline-none focus:border-brass"
+          >
+            {Array.from({ length: 24 }, (_, hour) => (
+              <option key={hour} value={hour}>
+                {String(hour).padStart(2, "0")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Minute</span>
+          <select
+            value={schedule.minute}
+            onChange={(event) => onChange({ ...schedule, minute: Number(event.target.value) })}
+            className="h-11 rounded-lg border border-line bg-panel px-3 text-paper outline-none focus:border-brass"
+          >
+            {[0, 15, 30, 45, schedule.minute]
+              .filter((value, index, rows) => rows.indexOf(value) === index)
+              .sort((a, b) => a - b)
+              .map((minute) => (
+                <option key={minute} value={minute}>
+                  {String(minute).padStart(2, "0")}
+                </option>
+              ))}
+          </select>
+        </label>
+      </div>
+      <fieldset className="grid gap-2">
+        <legend className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Time zone</legend>
+        <label className="inline-flex items-center gap-2 text-sm text-paper">
+          <input
+            type="radio"
+            name={`${title}-tz`}
+            checked={schedule.timeZone === "local"}
+            onChange={() => onChange({ ...schedule, timeZone: "local" })}
+          />
+          Local (this browser’s clock)
+        </label>
+        <label className="inline-flex items-center gap-2 text-sm text-paper">
+          <input
+            type="radio"
+            name={`${title}-tz`}
+            checked={schedule.timeZone === "utc"}
+            onChange={() => onChange({ ...schedule, timeZone: "utc" })}
+          />
+          UTC (Railway and this server use UTC)
+        </label>
+      </fieldset>
+      {extra}
+      <p className="text-xs text-muted">
+        Last run {schedule.lastRunAt ? formatWhen(schedule.lastRunAt) : "never"} · Next run{" "}
+        {schedule.nextRunAt ? formatWhen(schedule.nextRunAt) : "not scheduled"}
+      </p>
+    </fieldset>
+  )
+}
+
+function SchedulePanel({
+  scanSchedule,
+  trafficSchedule,
+  selectedPinCount,
+  busy,
+  onScanChange,
+  onTrafficChange,
+  onSave,
+}: {
+  scanSchedule: ScanSchedule
+  trafficSchedule: TrafficSchedule
+  selectedPinCount: number
+  busy: boolean
+  onScanChange: (next: ScanSchedule) => void
+  onTrafficChange: (next: TrafficSchedule) => void
+  onSave: () => void
+}) {
+  return (
+    <section className="rounded-2xl border border-line bg-panel p-5 sm:p-6" data-testid="schedules">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Schedules</p>
+      <h4 className="font-display text-2xl text-paper">When scans and traffic run</h4>
+      <p className="mt-1 text-sm text-muted">
+        Automatic jobs start on this web process every minute. Keep a single Railway replica so the same scan or traffic job does not fire twice.
+      </p>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <ScheduleFieldset
+          title="Scan schedule"
+          detail="Rerun the latest keyword and grid at this time."
+          schedule={scanSchedule}
+          onChange={onScanChange}
+        />
+        <ScheduleFieldset
+          title="Traffic schedule"
+          detail="Start traffic from selected pins or every pin where the listing was found."
+          schedule={trafficSchedule}
+          onChange={(next) => onTrafficChange({ ...trafficSchedule, ...next })}
+          extra={
+            <label className="grid gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Pins</span>
+              <select
+                value={trafficSchedule.pinMode}
+                onChange={(event) =>
+                  onTrafficChange({
+                    ...trafficSchedule,
+                    pinMode: event.target.value === "all_found" ? "all_found" : "selected",
+                  })
+                }
+                className="h-11 rounded-lg border border-line bg-panel px-3 text-paper outline-none focus:border-brass"
+              >
+                <option value="selected">Last selected pins ({selectedPinCount})</option>
+                <option value="all_found">Every pin where the listing was found</option>
+              </select>
+            </label>
+          }
+        />
+      </div>
+      <button
+        type="button"
+        data-testid="save-schedules"
+        onClick={onSave}
+        disabled={busy}
+        className="mt-4 inline-flex h-11 items-center rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
+      >
+        Save schedules
+      </button>
+    </section>
   )
 }
 

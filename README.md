@@ -135,7 +135,11 @@ KEYGEN_TOKEN=
 1. Open **Track**.
 2. Create a campaign with a name, the business to watch, its city and state, then add up to 20 keywords people would type on Google Maps.
 3. Click **Scan keywords** (or **Scan** on one keyword). Search Google Maps in that city and record the rank of the listing that matches your business name.
-4. The results table shows keyword, rank (or not found), listing title, rating, address, Maps URL, and when it was scanned. The latest scan stays on the campaign, with recent runs underneath.
+4. The results table shows keyword, rank (or not found), listing title, rating, address, Maps URL, and when it was scanned. Every finished grid scan is saved on the campaign (Postgres `scan_runs` table, or `.data/scan-runs.json` when Postgres is not set).
+5. **Scan history** lists those snapshots. **Rerun** runs the same keyword, grid, and center again. **Compare** two saved scans (or latest vs previous) to see per-pin rank change: improved, worse, same, new, or lost.
+6. **Schedules** can run scans and traffic daily or weekly at a local or UTC time. The Express server checks once a minute. It will not start a second scan or traffic job if one is already running. Stop still cancels an in-progress traffic job.
+
+On Railway, keep a **single web replica**. Multiple copies would each fire the same scheduled scan or traffic job.
 
 Rank scans use the same Maps search as the test scan. If Maps search is not set up, the scan returns an error instead of inventing ranks.
 

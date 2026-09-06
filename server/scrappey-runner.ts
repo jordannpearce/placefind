@@ -15,6 +15,7 @@ export type TrafficSessionInput = {
   listingTitle: string
   profileId: string
   sessionId: string
+  signal?: AbortSignal
 }
 
 export type TrafficSessionResult = {
@@ -70,15 +71,16 @@ async function scrappeyRequest(
   key: string,
   body: Record<string, unknown>,
   timeoutMs = 90_000,
+  signal?: AbortSignal,
 ): Promise<{ payload: ScrappeyResponse; error: string | null }> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const timeout = AbortSignal.timeout(timeoutMs)
+  const combined = signal ? AbortSignal.any([signal, timeout]) : timeout
   try {
     const response = await fetch(runnerUrl(key), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal: controller.signal,
+      signal: combined,
     })
     const payload = (await response.json()) as ScrappeyResponse
     if (payload.error || payload.solution?.verified === false) {
@@ -86,18 +88,18 @@ async function scrappeyRequest(
     }
     return { payload, error: null }
   } catch (error) {
-    const message =
-      error instanceof Error && error.name === "AbortError" ? "Traffic runner timed out." : "Could not reach the traffic runner."
-    return { payload: {}, error: message }
-  } finally {
-    clearTimeout(timer)
+    if (error instanceof Error && error.name === "AbortError") {
+      if (signal?.aborted) return { payload: {}, error: "Traffic stopped." }
+      return { payload: {}, error: "Traffic runner timed out." }
+    }
+    return { payload: {}, error: "Could not reach the traffic runner." }
   }
 }
 
 async function runnerGet(
   key: string,
   url: string,
-  options: { session?: string; profileId?: string; browserActions?: ScrappeyBrowserAction[] } = {},
+  options: { session?: string; profileId?: string; browserActions?: ScrappeyBrowserAction[]; signal?: AbortSignal } = {},
 ): Promise<{ currentUrl: string; error: string | null }> {
   const body: Record<string, unknown> = {
     cmd: "request.get",
@@ -109,17 +111,26 @@ async function runnerGet(
   if (options.session) body.session = options.session
   if (options.profileId) body.profileId = options.profileId
   if (options.browserActions?.length) body.browserActions = options.browserActions
-  const page = await scrappeyRequest(key, body)
+  const page = await scrappeyRequest(key, body, 90_000, options.signal)
   if (page.error) return { currentUrl: url, error: sanitizeRunnerError(page.error) }
   return { currentUrl: page.payload.solution?.currentUrl || url, error: null }
 }
 
-async function createRunnerSession(key: string, sessionId: string): Promise<{ sessionId: string; error: string | null }> {
-  const result = await scrappeyRequest(key, {
-    cmd: "sessions.create",
-    session: sessionId,
-    proxyCountry: "UnitedStates",
-  })
+async function createRunnerSession(
+  key: string,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<{ sessionId: string; error: string | null }> {
+  const result = await scrappeyRequest(
+    key,
+    {
+      cmd: "sessions.create",
+      session: sessionId,
+      proxyCountry: "UnitedStates",
+    },
+    90_000,
+    signal,
+  )
   return { sessionId: result.payload.session || sessionId, error: result.error }
 }
 
@@ -135,7 +146,7 @@ export async function runMapsTrafficSession(input: TrafficSessionInput): Promise
     listingUrl: input.listingUrl,
   }
   let requestCount = 0
-  const created = await createRunnerSession(input.key, input.sessionId)
+  const created = await createRunnerSession(input.key, input.sessionId, input.signal)
   const session = created.error ? undefined : created.sessionId
   try {
     requestCount += 1
@@ -143,12 +154,14 @@ export async function runMapsTrafficSession(input: TrafficSessionInput): Promise
       session,
       profileId: input.profileId,
       browserActions: listingClickActions(input.listingTitle),
+      signal: input.signal,
     })
     if (search.error) return { ...base, ok: false, requestCount, error: search.error }
     requestCount += 1
     const listing = await runnerGet(input.key, input.listingUrl, {
       session,
       profileId: input.profileId,
+      signal: input.signal,
     })
     if (listing.error) return { ...base, ok: false, requestCount, error: listing.error }
     return { ...base, ok: true, requestCount, error: null }

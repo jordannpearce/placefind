@@ -2,19 +2,33 @@ import assert from "node:assert/strict"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { after, describe, it } from "node:test"
+import { after, afterEach, describe, it } from "node:test"
 import { createCampaign, type Campaign, type GridScanRun } from "./campaigns.ts"
 import { emptyApiKeys, resetHostedKeysCacheForTests } from "./hosted-keys.ts"
 import { leaksVendorTalk, publicTrafficMessage } from "./public-copy.ts"
 import { listingClickActions, sanitizeRunnerError } from "./scrappey-runner.ts"
 import { reloadStoreFromDisk, resetStoreForTests, writeCollection } from "./store.ts"
 import {
+  appendTrafficLog,
   confirmedListingForTraffic,
+  emptyTrafficJob,
+  gridPinId,
   listingNotReadyForTrafficMessage,
+  mapsKeywordAtPinUrl,
   mapsKeywordNearUrl,
+  MAX_TRAFFIC_LOG_LINES,
+  noKeywordsSelectedMessage,
+  noPinsSelectedMessage,
   normalizeTrafficSessions,
+  pairsForTraffic,
+  pinsForTraffic,
   pickTrafficOrigins,
+  resetTrafficRuntimeForTests,
   runCampaignTraffic,
+  selectTrafficKeywords,
+  startCampaignTraffic,
+  stopCampaignTraffic,
+  trafficPairLabel,
   trafficRunnerMissingMessage,
 } from "./traffic.ts"
 
@@ -36,6 +50,7 @@ function foundScan(campaign: Campaign, found: boolean): GridScanRun {
         col: 0,
         lat: 30.28,
         lng: -97.75,
+        locationCoordinate: "30.28,-97.75,17z",
         keyword: "barbecue",
         rank: found ? 1 : null,
         listingTitle: found ? "Franklin Barbecue" : null,
@@ -49,6 +64,7 @@ function foundScan(campaign: Campaign, found: boolean): GridScanRun {
         col: 1,
         lat: 30.26,
         lng: -97.73,
+        locationCoordinate: "30.26,-97.73,17z",
         keyword: "barbecue",
         rank: found ? 3 : null,
         listingTitle: found ? "Franklin Barbecue" : null,
@@ -68,22 +84,28 @@ function attachScan(campaign: Campaign, found: boolean): Campaign {
   return next
 }
 
+function pinIdsFor(campaign: Campaign): string[] {
+  return (campaign.lastGridScan?.points ?? []).map((point) => gridPinId(point))
+}
+
 describe("normalizeTrafficSessions", () => {
-  it("defaults to 3 and caps at 20", () => {
+  it("defaults to 3 and caps at 49", () => {
     assert.equal(normalizeTrafficSessions(undefined), 3)
     assert.equal(normalizeTrafficSessions(1), 1)
     assert.equal(normalizeTrafficSessions(20), 20)
-    assert.equal(normalizeTrafficSessions(99), 20)
+    assert.equal(normalizeTrafficSessions(99), 49)
     assert.equal(normalizeTrafficSessions(0), 3)
     assert.equal(normalizeTrafficSessions(1.5), 3)
   })
 })
 
 describe("mapsKeywordNearUrl", () => {
-  it("builds a Maps search URL from a keyword and grid point", () => {
+  it("drops a Maps search at the pin GPS", () => {
     const url = mapsKeywordNearUrl("barbecue", 30.27, -97.74)
-    assert.match(url, /^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=/)
-    assert.match(decodeURIComponent(url), /barbecue near 30\.27,-97\.74/)
+    assert.match(url, /^https:\/\/www\.google\.com\/maps\/search\/barbecue\/@30\.27,-97\.74,17z$/)
+    const fromPin = mapsKeywordAtPinUrl("barbecue", { lat: 30.28, lng: -97.75, locationCoordinate: "30.28,-97.75,17z" })
+    assert.match(fromPin, /\/@30\.28,-97\.75,17z$/)
+    assert.equal(fromPin.includes("Austin"), false)
   })
 })
 
@@ -115,6 +137,21 @@ describe("publicTrafficMessage", () => {
   })
 })
 
+describe("appendTrafficLog", () => {
+  it("appends lines and caps the log length", () => {
+    let job = emptyTrafficJob()
+    job = appendTrafficLog(job, "Started pin 0:0 at 30.28000, -97.75000.", "0:0")
+    assert.equal(job.log?.length, 1)
+    assert.match(job.log?.[0]?.message || "", /Started pin/)
+    for (let index = 0; index < MAX_TRAFFIC_LOG_LINES + 20; index += 1) {
+      job = appendTrafficLog(job, `line ${index}`)
+    }
+    assert.equal(job.log?.length, MAX_TRAFFIC_LOG_LINES)
+    assert.match(job.log?.[0]?.message || "", /line /)
+    assert.equal(job.log?.at(-1)?.message, `line ${MAX_TRAFFIC_LOG_LINES + 19}`)
+  })
+})
+
 describe("runCampaignTraffic", () => {
   const previous = {
     keysFile: process.env.PLACEFIND_KEYS_FILE,
@@ -131,6 +168,10 @@ describe("runCampaignTraffic", () => {
     delete process.env.DATAFORSEO_PASSWORD
     delete process.env.SCRAPPEY_API_KEY
   }
+
+  afterEach(async () => {
+    await resetTrafficRuntimeForTests()
+  })
 
   after(() => {
     resetHostedKeysCacheForTests()
@@ -165,7 +206,7 @@ describe("runCampaignTraffic", () => {
     )
     assert.equal(confirmedListingForTraffic(campaign), null)
     await assert.rejects(
-      () => runCampaignTraffic(campaign.id, emptyApiKeys(), 3, "user-a"),
+      () => runCampaignTraffic(campaign.id, emptyApiKeys(), ["0:0"], "user-a"),
       (error: unknown) => {
         assert.ok(error instanceof Error)
         assert.equal(error.message, listingNotReadyForTrafficMessage())
@@ -189,11 +230,47 @@ describe("runCampaignTraffic", () => {
     )
     assert.equal(confirmedListingForTraffic(campaign), null)
     await assert.rejects(
-      () => runCampaignTraffic(campaign.id, emptyApiKeys(), 3, "user-a"),
+      () => runCampaignTraffic(campaign.id, emptyApiKeys(), ["0:0"], "user-a"),
       (error: unknown) => {
         assert.ok(error instanceof Error)
         assert.equal(error.message, listingNotReadyForTrafficMessage())
         assert.equal((error as { status?: number }).status, 400)
+        return true
+      },
+    )
+  })
+
+  it("cannot start with zero pins", async () => {
+    isolateKeys()
+    process.env.SCRAPPEY_API_KEY = "scp_test_runner_key"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-traffic-zeropin-")))
+    const created = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue"],
+        placeId: "ChIJ123",
+        center: { lat: 30.27, lng: -97.74 },
+      },
+      "user-a",
+    )
+    attachScan(created, true)
+    await assert.rejects(
+      () => runCampaignTraffic(created.id, emptyApiKeys(), [], "user-a"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error)
+        assert.equal(error.message, noPinsSelectedMessage())
+        assert.equal((error as { status?: number }).status, 400)
+        return true
+      },
+    )
+    await assert.rejects(
+      () => runCampaignTraffic(created.id, emptyApiKeys(), undefined, "user-a"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error)
+        assert.equal(error.message, noPinsSelectedMessage())
         return true
       },
     )
@@ -216,7 +293,7 @@ describe("runCampaignTraffic", () => {
     )
     attachScan(created, true)
     await assert.rejects(
-      () => runCampaignTraffic(created.id, emptyApiKeys(), 2, "user-a"),
+      () => runCampaignTraffic(created.id, emptyApiKeys(), pinIdsFor(attachScan(created, true)), "user-a"),
       (error: unknown) => {
         assert.ok(error instanceof Error)
         assert.equal(error.message, trafficRunnerMissingMessage())
@@ -248,8 +325,9 @@ describe("runCampaignTraffic", () => {
     assert.ok(listing)
     assert.match(listing.mapsUrl, /maps/)
     assert.equal(listing.title, "Franklin Barbecue")
-    const origins = pickTrafficOrigins(scanned, 2)
-    assert.equal(origins.length, 2)
+    const pins = pinsForTraffic(scanned, pinIdsFor(scanned))
+    assert.equal(pins.length, 2)
+    assert.equal(pins[0]?.lat, 30.28)
   })
 
   it("spreads traffic origins across scanned grid points", () => {
@@ -268,7 +346,7 @@ describe("runCampaignTraffic", () => {
     assert.ok(origins[0].lat !== origins[1].lat || origins[0].lng !== origins[1].lng)
   })
 
-  it("runs traffic sessions against the listing URL when the runner responds", async () => {
+  it("runs one session per selected pin from that pin GPS and appends a log", async () => {
     isolateKeys()
     process.env.SCRAPPEY_API_KEY = "scp_test_runner_key"
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-traffic-ok-")))
@@ -284,7 +362,8 @@ describe("runCampaignTraffic", () => {
       },
       "user-a",
     )
-    attachScan(created, true)
+    const scanned = attachScan(created, true)
+    const selectedPins = pinIdsFor(scanned)
 
     const originalFetch = globalThis.fetch
     const cmds: string[] = []
@@ -304,18 +383,183 @@ describe("runCampaignTraffic", () => {
     }) as typeof fetch
 
     try {
-      const result = await runCampaignTraffic(created.id, emptyApiKeys(), 2, "user-a")
+      const result = await runCampaignTraffic(created.id, emptyApiKeys(), selectedPins, "user-a")
       assert.equal(result.traffic.status, "ok")
       assert.equal(result.traffic.sessionsRequested, 2)
       assert.equal(result.traffic.sessionsOk, 2)
       assert.equal(result.traffic.sessionsFailed, 0)
       assert.ok(result.traffic.requestCount >= 4)
       assert.equal(result.campaign.lastTrafficJob?.status, "ok")
+      assert.ok((result.traffic.log?.length ?? 0) >= 4)
+      assert.ok(result.traffic.log?.some((line) => /Started pin/.test(line.message)))
+      assert.ok(result.traffic.log?.some((line) => /Searching Maps/.test(line.message)))
+      assert.ok(result.traffic.log?.some((line) => /Listing opened/.test(line.message)))
+      assert.equal(result.traffic.results?.length, 2)
+      assert.ok(result.traffic.results?.every((row) => row.status === "ok"))
       assert.ok(cmds.includes("sessions.create"))
       assert.ok(cmds.includes("request.get"))
-      assert.ok(urls.some((url) => url.includes("maps/search")))
+      assert.ok(urls.some((url) => url.includes("/maps/search/barbecue/@30.28,-97.75,17z")))
+      assert.ok(urls.some((url) => url.includes("/maps/search/barbecue/@30.26,-97.73,17z")))
+      assert.equal(urls.some((url) => /Austin|city/i.test(url) && url.includes("maps/search")), false)
       assert.ok(urls.some((url) => url.includes("query_place_id=ChIJ123")))
       assert.ok(profiles.size >= 2)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("preserves campaign keyword order and rejects an empty selection", async () => {
+    isolateKeys()
+    process.env.SCRAPPEY_API_KEY = "scp_test_runner_key"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-traffic-keywords-")))
+    const created = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue", "brisket", "smoked meats"],
+        placeId: "ChIJ123",
+        center: { lat: 30.27, lng: -97.74 },
+      },
+      "user-a",
+    )
+    const scanned = attachScan(created, true)
+    assert.deepEqual(selectTrafficKeywords(scanned, { keywords: ["smoked meats", "barbecue"] }), [
+      "barbecue",
+      "smoked meats",
+    ])
+    assert.deepEqual(selectTrafficKeywords(scanned, { keywordIds: ["2", "0"] }), ["barbecue", "smoked meats"])
+    assert.deepEqual(selectTrafficKeywords(scanned), ["barbecue", "brisket", "smoked meats"])
+    assert.deepEqual(selectTrafficKeywords(scanned, { keywords: [] }), [])
+    const pins = pinsForTraffic(scanned, pinIdsFor(scanned))
+    const pairs = pairsForTraffic(pins, ["barbecue", "smoked meats"])
+    assert.deepEqual(
+      pairs.map((pair) => `${pair.pinId}:${pair.keyword}`),
+      ["0:0:barbecue", "0:0:smoked meats", "0:1:barbecue", "0:1:smoked meats"],
+    )
+    await assert.rejects(
+      () => runCampaignTraffic(created.id, emptyApiKeys(), { pinIds: pinIdsFor(scanned), keywords: [] }, "user-a"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error)
+        assert.equal(error.message, noKeywordsSelectedMessage())
+        assert.equal((error as { status?: number }).status, 400)
+        return true
+      },
+    )
+    await assert.rejects(
+      () => runCampaignTraffic(created.id, emptyApiKeys(), { pinIds: pinIdsFor(scanned), keywordIds: [] }, "user-a"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error)
+        assert.equal(error.message, noKeywordsSelectedMessage())
+        return true
+      },
+    )
+  })
+
+  it("searches selected keywords in listed order from each pin and names them in the log", async () => {
+    isolateKeys()
+    process.env.SCRAPPEY_API_KEY = "scp_test_runner_key"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-traffic-kworder-")))
+    const created = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue", "brisket", "smoked meats"],
+        placeId: "ChIJ123",
+        center: { lat: 30.27, lng: -97.74 },
+      },
+      "user-a",
+    )
+    const scanned = attachScan(created, true)
+    const originalFetch = globalThis.fetch
+    const urls: string[] = []
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || "{}")) as { url?: string }
+      if (body.url) urls.push(body.url)
+      return new Response(JSON.stringify({ solution: { verified: true, currentUrl: body.url, markdown: "# Franklin Barbecue" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }) as typeof fetch
+
+    try {
+      const result = await runCampaignTraffic(
+        created.id,
+        emptyApiKeys(),
+        { pinIds: ["0:0"], keywords: ["smoked meats", "barbecue"] },
+        "user-a",
+      )
+      assert.equal(result.traffic.status, "ok")
+      assert.deepEqual(result.traffic.keywords, ["barbecue", "smoked meats"])
+      assert.equal(result.traffic.sessionsRequested, 2)
+      assert.equal(result.traffic.sessionsOk, 2)
+      const searchUrls = urls.filter((url) => url.includes("/maps/search/"))
+      const firstBarbecue = searchUrls.findIndex((url) => url.includes("/maps/search/barbecue/@30.28,-97.75,17z"))
+      const firstSmoked = searchUrls.findIndex((url) => url.includes("/maps/search/smoked%20meats/@30.28,-97.75,17z"))
+      assert.ok(firstBarbecue >= 0)
+      assert.ok(firstSmoked >= 0)
+      assert.ok(firstBarbecue < firstSmoked)
+      assert.ok(result.traffic.log?.every((line) => !line.pinId || (line.keyword && /\d+\.\d+,\s*-?\d+\.\d+/.test(line.message))))
+      assert.ok(result.traffic.log?.some((line) => line.message.includes("barbecue") && line.message.includes("30.28000")))
+      assert.ok(result.traffic.log?.some((line) => line.message.includes("smoked meats") && line.message.includes("30.28000")))
+      assert.equal(trafficPairLabel("barbecue", { lat: 30.28, lng: -97.75 }), "“barbecue” · 30.28000, -97.75000")
+      assert.deepEqual(
+        result.traffic.results?.map((row) => `${row.pinId}:${row.keyword}:${row.status}`),
+        ["0:0:barbecue:ok", "0:0:smoked meats:ok"],
+      )
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("stop flips a running job to stopped", async () => {
+    isolateKeys()
+    process.env.SCRAPPEY_API_KEY = "scp_test_runner_key"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-traffic-stop-")))
+    const created = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue"],
+        placeId: "ChIJ123",
+        center: { lat: 30.27, lng: -97.74 },
+      },
+      "user-a",
+    )
+    const scanned = attachScan(created, true)
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          resolve(
+            new Response(JSON.stringify({ solution: { verified: true } }), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          )
+        }, 20_000)
+        init?.signal?.addEventListener("abort", () => {
+          clearTimeout(timer)
+          const error = new Error("Aborted")
+          error.name = "AbortError"
+          reject(error)
+        })
+      })
+    }) as typeof fetch
+
+    try {
+      const started = startCampaignTraffic(created.id, emptyApiKeys(), pinIdsFor(scanned), "user-a")
+      assert.equal(started.traffic.status, "running")
+      const stopped = stopCampaignTraffic(created.id, "user-a")
+      assert.equal(stopped.traffic.status, "stopped")
+      assert.equal(stopped.campaign.lastTrafficJob?.status, "stopped")
+      assert.ok(stopped.traffic.log?.some((line) => /Stop requested/.test(line.message)))
+      assert.ok(stopped.traffic.results?.every((row) => row.status === "cancelled" || row.status === "fail"))
     } finally {
       globalThis.fetch = originalFetch
     }

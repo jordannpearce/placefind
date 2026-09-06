@@ -5,9 +5,12 @@ import {
   mapsPlaceUrlFromCampaign,
   saveCampaign,
   type Campaign,
-  type GeoPoint,
+  type GridPointResult,
   type TrafficJob,
+  type TrafficLogLine,
+  type TrafficPinResult,
 } from "./campaigns.ts"
+import { parseLocationCoordinate } from "./grid.ts"
 import { mergeHostedKeys, trafficRunnerConfigured } from "./hosted-keys.ts"
 import { publicTrafficMessage } from "./public-copy.ts"
 import { isSellerMode } from "./runtime.ts"
@@ -15,9 +18,19 @@ import { runMapsTrafficSession, type TrafficSessionResult } from "./scrappey-run
 import type { ApiKeys } from "./types.ts"
 
 export const DEFAULT_TRAFFIC_SESSIONS = 3
-export const MAX_TRAFFIC_SESSIONS = 20
+export const MAX_TRAFFIC_SESSIONS = 49
 export const TRAFFIC_REQUESTS_PER_SESSION = 2
 export const TRAFFIC_CONCURRENCY = 2
+export const MAX_TRAFFIC_LOG_LINES = 200
+
+type RunningHandle = {
+  jobId: string
+  abort: AbortController
+  stopRequested: boolean
+  done: Promise<void>
+}
+
+const runningJobs = new Map<string, RunningHandle>()
 
 function newId(): string {
   return randomBytes(8).toString("hex")
@@ -31,9 +44,41 @@ export function listingNotReadyForTrafficMessage() {
   return "Confirm a Maps listing and finish a grid scan before starting traffic."
 }
 
-export function mapsKeywordNearUrl(keyword: string, lat: number, lng: number): string {
-  const query = `${keyword.trim()} near ${lat},${lng}`
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+export function noPinsSelectedMessage() {
+  return "Select at least one pin"
+}
+
+export function noKeywordsSelectedMessage() {
+  return "Select at least one keyword"
+}
+
+export function trafficAlreadyRunningMessage() {
+  return "Traffic is already running for this campaign."
+}
+
+export function noRunningTrafficMessage() {
+  return "No traffic job is running."
+}
+
+export function gridPinId(point: Pick<GridPointResult, "row" | "col">): string {
+  return `${point.row}:${point.col}`
+}
+
+export function zoomFromCoordinate(value: string | undefined, fallback = 17): number {
+  const parsed = value ? parseLocationCoordinate(value) : null
+  return parsed?.zoom ?? fallback
+}
+
+export function mapsKeywordNearUrl(keyword: string, lat: number, lng: number, zoom = 17): string {
+  const query = encodeURIComponent(keyword.trim())
+  return `https://www.google.com/maps/search/${query}/@${lat},${lng},${zoom}z`
+}
+
+export function mapsKeywordAtPinUrl(
+  keyword: string,
+  pin: { lat: number; lng: number; locationCoordinate?: string },
+): string {
+  return mapsKeywordNearUrl(keyword, pin.lat, pin.lng, zoomFromCoordinate(pin.locationCoordinate))
 }
 
 export function normalizeTrafficSessions(raw: unknown): number {
@@ -41,6 +86,105 @@ export function normalizeTrafficSessions(raw: unknown): number {
   const value = Number(raw)
   if (!Number.isInteger(value) || value < 1) return DEFAULT_TRAFFIC_SESSIONS
   return Math.min(MAX_TRAFFIC_SESSIONS, value)
+}
+
+export function normalizePinIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<string>()
+  const ids: string[] = []
+  for (const item of raw) {
+    const id = String(item ?? "").trim()
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    ids.push(id)
+  }
+  return ids
+}
+
+export type TrafficStartInput = {
+  pinIds?: unknown
+  keywords?: unknown
+  keywordIds?: unknown
+}
+
+export function parseTrafficStartInput(raw: unknown): TrafficStartInput {
+  if (Array.isArray(raw)) return { pinIds: raw }
+  if (!raw || typeof raw !== "object") return {}
+  const body = raw as TrafficStartInput
+  return {
+    pinIds: body.pinIds,
+    keywords: body.keywords,
+    keywordIds: body.keywordIds,
+  }
+}
+
+export function campaignKeywordId(keyword: string, index: number): string {
+  return `${index}:${keyword.trim().toLowerCase()}`
+}
+
+export function listedTrafficKeywords(campaign: Campaign): string[] {
+  if (campaign.keywords.length > 0) return campaign.keywords
+  const fallback = (campaign.lastGridScan?.keyword || campaign.businessName || "").trim()
+  return fallback ? [fallback] : []
+}
+
+export function selectTrafficKeywords(
+  campaign: Campaign,
+  input?: { keywords?: unknown; keywordIds?: unknown },
+): string[] {
+  const listed = listedTrafficKeywords(campaign)
+  const specified = Boolean(input && (input.keywords !== undefined || input.keywordIds !== undefined))
+  if (!specified) return listed
+  if (!Array.isArray(input?.keywords) && !Array.isArray(input?.keywordIds)) return []
+
+  const requested = [
+    ...(Array.isArray(input?.keywordIds) ? input.keywordIds : []),
+    ...(Array.isArray(input?.keywords) ? input.keywords : []),
+  ]
+  if (requested.length === 0) return []
+
+  const byLower = new Map(listed.map((keyword) => [keyword.toLowerCase(), keyword]))
+  const picked = new Set<string>()
+  for (const item of requested) {
+    const token = String(item ?? "").trim()
+    if (!token) continue
+    if (/^\d+$/.test(token)) {
+      const match = listed[Number(token)]
+      if (match) picked.add(match.toLowerCase())
+      continue
+    }
+    const indexed = token.match(/^(\d+):(.+)$/)
+    if (indexed) {
+      const match = listed[Number(indexed[1])] || byLower.get(indexed[2]!.toLowerCase())
+      if (match) picked.add(match.toLowerCase())
+      continue
+    }
+    const match = byLower.get(token.toLowerCase())
+    if (match) picked.add(match.toLowerCase())
+  }
+  return listed.filter((keyword) => picked.has(keyword.toLowerCase()))
+}
+
+export function pinCoordLabel(pin: { lat: number; lng: number }): string {
+  return `${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)}`
+}
+
+export function trafficPairLabel(keyword: string, pin: { lat: number; lng: number }): string {
+  return `“${keyword}” · ${pinCoordLabel(pin)}`
+}
+
+export type TrafficPair = TrafficOrigin & {
+  keyword: string
+}
+
+export function pairsForTraffic(pins: TrafficOrigin[], keywords: string[]): TrafficPair[] {
+  const pairs: TrafficPair[] = []
+  for (const pin of pins) {
+    for (const keyword of keywords) {
+      pairs.push({ ...pin, keyword })
+    }
+  }
+  return pairs
 }
 
 export function confirmedListingForTraffic(campaign: Campaign): {
@@ -68,22 +212,107 @@ export function confirmedListingForTraffic(campaign: Campaign): {
   }
 }
 
-export function pickTrafficOrigins(campaign: Campaign, sessions: number): GeoPoint[] {
+export type TrafficOrigin = {
+  pinId: string
+  row: number
+  col: number
+  lat: number
+  lng: number
+  locationCoordinate?: string
+}
+
+export function pinsForTraffic(campaign: Campaign, pinIds: string[]): TrafficOrigin[] {
+  const points = campaign.lastGridScan?.points ?? []
+  const byId = new Map(points.map((point) => [gridPinId(point), point]))
+  const selected: TrafficOrigin[] = []
+  for (const pinId of pinIds) {
+    const point = byId.get(pinId)
+    if (!point) continue
+    selected.push({
+      pinId,
+      row: point.row,
+      col: point.col,
+      lat: point.lat,
+      lng: point.lng,
+      locationCoordinate: point.locationCoordinate,
+    })
+  }
+  return selected
+}
+
+export function pickTrafficOrigins(campaign: Campaign, sessions: number): TrafficOrigin[] {
   const points = campaign.lastGridScan?.points ?? []
   const found = points.filter((point) => point.rank != null)
   const rest = points.filter((point) => point.rank == null)
   const pool = [...found, ...rest]
   const fallback = campaign.center || campaign.lastGridScan?.center || null
-  const origins: GeoPoint[] = []
+  const origins: TrafficOrigin[] = []
   for (let index = 0; index < sessions; index += 1) {
     if (pool.length > 0) {
       const pick = pool[Math.floor((index * pool.length) / sessions) % pool.length]!
-      origins.push({ lat: pick.lat, lng: pick.lng })
+      origins.push({
+        pinId: gridPinId(pick),
+        row: pick.row,
+        col: pick.col,
+        lat: pick.lat,
+        lng: pick.lng,
+        locationCoordinate: pick.locationCoordinate,
+      })
     } else if (fallback) {
-      origins.push(fallback)
+      origins.push({
+        pinId: `center:${index}`,
+        row: 0,
+        col: 0,
+        lat: fallback.lat,
+        lng: fallback.lng,
+      })
     }
   }
   return origins
+}
+
+export function emptyTrafficJob(): TrafficJob {
+  return {
+    id: "",
+    status: "error",
+    startedAt: "",
+    finishedAt: null,
+    sessionsRequested: 0,
+    sessionsAttempted: 0,
+    sessionsOk: 0,
+    sessionsFailed: 0,
+    requestCount: 0,
+    lastError: null,
+    pinIds: [],
+    keywords: [],
+    keywordIds: [],
+    log: [],
+    results: [],
+  }
+}
+
+export function normalizeTrafficJob(job: TrafficJob | null | undefined): TrafficJob | null {
+  if (!job) return null
+  return {
+    ...emptyTrafficJob(),
+    ...job,
+    pinIds: Array.isArray(job.pinIds) ? job.pinIds : [],
+    keywords: Array.isArray(job.keywords) ? job.keywords : [],
+    keywordIds: Array.isArray(job.keywordIds) ? job.keywordIds : [],
+    log: Array.isArray(job.log) ? job.log.slice(-MAX_TRAFFIC_LOG_LINES) : [],
+    results: Array.isArray(job.results) ? job.results : [],
+  }
+}
+
+export function appendTrafficLog(job: TrafficJob, message: string, pinId?: string, keyword?: string): TrafficJob {
+  const line: TrafficLogLine = {
+    at: new Date().toISOString(),
+    message,
+    ...(pinId ? { pinId } : {}),
+    ...(keyword ? { keyword } : {}),
+  }
+  const log = [...(job.log ?? []), line].slice(-MAX_TRAFFIC_LOG_LINES)
+  return { ...job, log }
 }
 
 async function runPool<T>(items: T[], limit: number, worker: (item: T, index: number) => Promise<void>) {
@@ -105,12 +334,238 @@ function publicJobError(message: string | null): string | null {
   return isSellerMode() ? message : publicTrafficMessage(message)
 }
 
-export async function runCampaignTraffic(
+function persistJob(campaignId: string, jobId: string, mutate: (job: TrafficJob, campaign: Campaign) => TrafficJob): TrafficJob | null {
+  const campaign = getCampaign(campaignId)
+  if (!campaign) return null
+  const current = normalizeTrafficJob(campaign.lastTrafficJob)
+  if (!current || current.id !== jobId) return null
+  let nextJob = mutate(current, campaign)
+  if (current.status === "stopped" && nextJob.status !== "stopped") {
+    nextJob = { ...nextJob, status: "stopped", finishedAt: nextJob.finishedAt || current.finishedAt }
+  }
+  saveCampaign({ ...campaign, lastTrafficJob: nextJob, updatedAt: new Date().toISOString() })
+  return nextJob
+}
+
+function handleFor(campaignId: string, jobId: string): RunningHandle | null {
+  const handle = runningJobs.get(campaignId)
+  if (!handle || handle.jobId !== jobId) return null
+  return handle
+}
+
+export function getCampaignTraffic(
+  id: string,
+  userId?: string | null,
+): { campaign: Campaign; traffic: TrafficJob | null } {
+  const campaign = getCampaign(id, userId)
+  if (!campaign) throw new CampaignError("That campaign was not found.", 404)
+  return { campaign, traffic: normalizeTrafficJob(campaign.lastTrafficJob) }
+}
+
+export function stopCampaignTraffic(
+  id: string,
+  userId?: string | null,
+): { campaign: Campaign; traffic: TrafficJob } {
+  const campaign = getCampaign(id, userId)
+  if (!campaign) throw new CampaignError("That campaign was not found.", 404)
+  const job = normalizeTrafficJob(campaign.lastTrafficJob)
+  if (!job || job.status !== "running") {
+    throw new CampaignError(noRunningTrafficMessage(), 400)
+  }
+
+  const handle = handleFor(campaign.id, job.id)
+  if (handle) {
+    handle.stopRequested = true
+    handle.abort.abort()
+  }
+
+  const now = new Date().toISOString()
+  const nextJob = persistJob(campaign.id, job.id, (current) => {
+    const results = (current.results ?? []).map((row) =>
+      row.status === "pending" || row.status === "running"
+        ? { ...row, status: "cancelled" as const, finishedAt: row.finishedAt || now }
+        : row,
+    )
+    return appendTrafficLog(
+      {
+        ...current,
+        status: "stopped",
+        finishedAt: now,
+        results,
+      },
+      "Stop requested. Remaining keyword and pin pairs were cancelled.",
+    )
+  })
+  const latest = getCampaign(id, userId)
+  if (!latest || !nextJob) throw new CampaignError(noRunningTrafficMessage(), 400)
+  return { campaign: latest, traffic: nextJob }
+}
+
+function createPendingResults(pairs: TrafficPair[]): TrafficPinResult[] {
+  return pairs.map((pair) => ({
+    pinId: pair.pinId,
+    keyword: pair.keyword,
+    row: pair.row,
+    col: pair.col,
+    lat: pair.lat,
+    lng: pair.lng,
+    status: "pending",
+    finishedAt: null,
+  }))
+}
+
+function snapshotFromSessions(
+  job: TrafficJob,
+  sessionResults: Array<TrafficSessionResult | undefined>,
+  pinResults: TrafficPinResult[],
+): TrafficJob {
+  const done = sessionResults.filter((row): row is TrafficSessionResult => Boolean(row))
+  const lastFail = [...done].reverse().find((row) => !row.ok)
+  return {
+    ...job,
+    sessionsAttempted: done.length,
+    sessionsOk: done.filter((row) => row.ok).length,
+    sessionsFailed: done.filter((row) => !row.ok).length,
+    requestCount: done.reduce((sum, row) => sum + row.requestCount, 0),
+    lastError: lastFail ? publicJobError(lastFail.error) : job.lastError,
+    results: pinResults,
+  }
+}
+
+function cancelRemainingPairs(
+  pairs: TrafficPair[],
+  pinResults: TrafficPinResult[],
+  pinId: string,
+  fromIndex: number,
+  now: string,
+): TrafficPair[] {
+  const cancelled: TrafficPair[] = []
+  for (let index = fromIndex; index < pairs.length; index += 1) {
+    const pair = pairs[index]
+    if (!pair || pair.pinId !== pinId) continue
+    const current = pinResults[index]
+    if (!current || current.status === "ok" || current.status === "fail" || current.status === "cancelled") continue
+    pinResults[index] = { ...current, status: "cancelled", finishedAt: now }
+    cancelled.push(pair)
+  }
+  return cancelled
+}
+
+async function executeTrafficJob(input: {
+  campaignId: string
+  jobId: string
+  key: string
+  listing: { title: string; mapsUrl: string }
+  pins: TrafficOrigin[]
+  keywords: string[]
+  signal: AbortSignal
+}) {
+  const pairs = pairsForTraffic(input.pins, input.keywords)
+  const sessionResults: Array<TrafficSessionResult | undefined> = Array.from({ length: pairs.length })
+  const pinResults = createPendingResults(pairs)
+
+  persistJob(input.campaignId, input.jobId, (job) =>
+    appendTrafficLog(
+      job,
+      `Traffic started for ${input.pins.length} selected pin${input.pins.length === 1 ? "" : "s"} × ${input.keywords.length} keyword${input.keywords.length === 1 ? "" : "s"}. Each pin searches keywords in listed order, then opens the confirmed listing.`,
+    ),
+  )
+
+  await runPool(input.pins, TRAFFIC_CONCURRENCY, async (pin, pinIndex) => {
+    for (let keywordIndex = 0; keywordIndex < input.keywords.length; keywordIndex += 1) {
+      const keyword = input.keywords[keywordIndex]!
+      const index = pinIndex * input.keywords.length + keywordIndex
+      const pair = pairs[index]!
+      const label = trafficPairLabel(keyword, pin)
+      const handle = handleFor(input.campaignId, input.jobId)
+      if (handle?.stopRequested || input.signal.aborted) {
+        const now = new Date().toISOString()
+        const remaining = cancelRemainingPairs(pairs, pinResults, pin.pinId, index, now)
+        persistJob(input.campaignId, input.jobId, (job) => {
+          let next = snapshotFromSessions(job, sessionResults, pinResults)
+          for (const cancelled of remaining.length ? remaining : [pair]) {
+            next = appendTrafficLog(
+              next,
+              `${trafficPairLabel(cancelled.keyword, cancelled)} · cancelled.`,
+              cancelled.pinId,
+              cancelled.keyword,
+            )
+          }
+          return next
+        })
+        return
+      }
+
+      pinResults[index] = { ...pinResults[index]!, status: "running" }
+      persistJob(input.campaignId, input.jobId, (job) =>
+        appendTrafficLog(
+          snapshotFromSessions(job, sessionResults, pinResults),
+          `Started pin ${pin.pinId} at ${pinCoordLabel(pin)} · “${keyword}”.`,
+          pin.pinId,
+          keyword,
+        ),
+      )
+      persistJob(input.campaignId, input.jobId, (job) =>
+        appendTrafficLog(
+          job,
+          `Searching Maps for “${keyword}” from ${pinCoordLabel(pin)}.`,
+          pin.pinId,
+          keyword,
+        ),
+      )
+
+      const result = await runMapsTrafficSession({
+        key: input.key,
+        searchUrl: mapsKeywordAtPinUrl(keyword, pin),
+        listingUrl: input.listing.mapsUrl,
+        listingTitle: input.listing.title,
+        profileId: `pf-maps-${input.campaignId.slice(0, 8)}-${index}-${newId().slice(0, 6)}`,
+        sessionId: `pf-traffic-${input.campaignId.slice(0, 8)}-${index}-${newId().slice(0, 6)}`,
+        signal: input.signal,
+      })
+      sessionResults[index] = result
+      const now = new Date().toISOString()
+      pinResults[index] = {
+        ...pinResults[index]!,
+        status: result.ok ? "ok" : handleFor(input.campaignId, input.jobId)?.stopRequested ? "cancelled" : "fail",
+        finishedAt: now,
+      }
+
+      persistJob(input.campaignId, input.jobId, (job) => {
+        let next = snapshotFromSessions(job, sessionResults, pinResults)
+        if (result.ok) {
+          next = appendTrafficLog(next, `${label} · Listing opened.`, pin.pinId, keyword)
+          next = appendTrafficLog(next, `${label} · Session finished.`, pin.pinId, keyword)
+        } else {
+          const fail = publicJobError(result.error) || "Session failed."
+          next = appendTrafficLog(next, `${label} · Session failed. ${fail}`, pin.pinId, keyword)
+        }
+        return next
+      })
+    }
+  })
+
+  persistJob(input.campaignId, input.jobId, (job) => {
+    if (job.status === "stopped") {
+      return snapshotFromSessions(job, sessionResults, pinResults)
+    }
+    const next = snapshotFromSessions(job, sessionResults, pinResults)
+    const ok = next.sessionsOk > 0
+    return {
+      ...next,
+      status: ok ? "ok" : "error",
+      finishedAt: new Date().toISOString(),
+      lastError: ok ? next.lastError : next.lastError || publicTrafficMessage("Traffic runner could not finish."),
+    }
+  })
+}
+
+export function startCampaignTraffic(
   id: string,
   rawKeys: ApiKeys,
-  requestedSessions?: number,
+  pinIds?: string[] | TrafficStartInput | unknown,
   userId?: string | null,
-): Promise<{ campaign: Campaign; traffic: TrafficJob }> {
+): { campaign: Campaign; traffic: TrafficJob } {
   const campaign = getCampaign(id, userId)
   if (!campaign) throw new CampaignError("That campaign was not found.", 404)
 
@@ -122,58 +577,103 @@ export async function runCampaignTraffic(
     throw new CampaignError(trafficRunnerMissingMessage(), 400)
   }
 
-  const sessions = normalizeTrafficSessions(requestedSessions)
-  const origins = pickTrafficOrigins(campaign, sessions)
-  if (origins.length === 0) throw new CampaignError(listingNotReadyForTrafficMessage(), 400)
+  const startInput = parseTrafficStartInput(pinIds)
+  const requestedIds = normalizePinIds(startInput.pinIds)
+  const pins = pinsForTraffic(campaign, requestedIds)
+  if (pins.length === 0) throw new CampaignError(noPinsSelectedMessage(), 400)
 
+  const keywords = selectTrafficKeywords(campaign, startInput)
+  if (keywords.length === 0) throw new CampaignError(noKeywordsSelectedMessage(), 400)
+
+  const current = normalizeTrafficJob(campaign.lastTrafficJob)
+  if (current?.status === "running" && runningJobs.has(campaign.id)) {
+    throw new CampaignError(trafficAlreadyRunningMessage(), 409)
+  }
+
+  const pairs = pairsForTraffic(pins, keywords)
   const startedAt = new Date().toISOString()
-  let job: TrafficJob = {
+  const job: TrafficJob = {
     id: newId(),
     status: "running",
     startedAt,
     finishedAt: null,
-    sessionsRequested: sessions,
+    sessionsRequested: pairs.length,
     sessionsAttempted: 0,
     sessionsOk: 0,
     sessionsFailed: 0,
     requestCount: 0,
     lastError: null,
+    pinIds: pins.map((pin) => pin.pinId),
+    keywords,
+    keywordIds: keywords.map((keyword, index) => campaignKeywordId(keyword, index)),
+    log: [],
+    results: createPendingResults(pairs),
   }
-  let next = saveCampaign({ ...campaign, lastTrafficJob: job, updatedAt: startedAt })
+  const trafficSchedule = campaign.trafficSchedule
+    ? {
+        ...campaign.trafficSchedule,
+        lastSelectedPinIds: pins.map((pin) => pin.pinId),
+        lastSelectedKeywords: keywords,
+      }
+    : campaign.trafficSchedule
+  const next = saveCampaign({ ...campaign, lastTrafficJob: job, trafficSchedule, updatedAt: startedAt })
 
-  const sessionResults: Array<TrafficSessionResult | undefined> = Array.from({ length: origins.length })
-  const snapshotJob = () => {
-    const done = sessionResults.filter((row): row is TrafficSessionResult => Boolean(row))
-    const lastFail = [...done].reverse().find((row) => !row.ok)
-    job = {
-      ...job,
-      sessionsAttempted: done.length,
-      sessionsOk: done.filter((row) => row.ok).length,
-      sessionsFailed: done.filter((row) => !row.ok).length,
-      requestCount: done.reduce((sum, row) => sum + row.requestCount, 0),
-      lastError: lastFail ? publicJobError(lastFail.error) : null,
-    }
-    next = saveCampaign({ ...next, lastTrafficJob: job, updatedAt: new Date().toISOString() })
+  const abort = new AbortController()
+  const handle: RunningHandle = {
+    jobId: job.id,
+    abort,
+    stopRequested: false,
+    done: Promise.resolve(),
   }
-
-  await runPool(origins, TRAFFIC_CONCURRENCY, async (origin, index) => {
-    sessionResults[index] = await runMapsTrafficSession({
-      key: keys.scrappeyKey,
-      searchUrl: mapsKeywordNearUrl(listing.keyword, origin.lat, origin.lng),
-      listingUrl: listing.mapsUrl,
-      listingTitle: listing.title,
-      profileId: `pf-maps-${campaign.id.slice(0, 8)}-${index}-${newId().slice(0, 6)}`,
-      sessionId: `pf-traffic-${campaign.id.slice(0, 8)}-${index}-${newId().slice(0, 6)}`,
-    })
-    snapshotJob()
+  handle.done = executeTrafficJob({
+    campaignId: next.id,
+    jobId: job.id,
+    key: keys.scrappeyKey,
+    listing,
+    pins,
+    keywords,
+    signal: abort.signal,
+  }).catch((error) => {
+    persistJob(next.id, job.id, (currentJob) =>
+      appendTrafficLog(
+        {
+          ...currentJob,
+          status: currentJob.status === "stopped" ? "stopped" : "error",
+          finishedAt: currentJob.finishedAt || new Date().toISOString(),
+          lastError: publicJobError(error instanceof Error ? error.message : "Traffic runner could not finish."),
+        },
+        "Traffic stopped with an unexpected error.",
+      ),
+    )
+  })
+  runningJobs.set(next.id, handle)
+  void handle.done.finally(() => {
+    const currentHandle = runningJobs.get(next.id)
+    if (currentHandle?.jobId === job.id) runningJobs.delete(next.id)
   })
 
-  job = {
-    ...job,
-    status: job.sessionsOk > 0 ? "ok" : "error",
-    finishedAt: new Date().toISOString(),
-    lastError: job.sessionsOk > 0 ? job.lastError : job.lastError || publicTrafficMessage("Traffic runner could not finish."),
-  }
-  next = saveCampaign({ ...next, lastTrafficJob: job, updatedAt: job.finishedAt })
   return { campaign: next, traffic: job }
+}
+
+export async function runCampaignTraffic(
+  id: string,
+  rawKeys: ApiKeys,
+  pinIds?: string[] | unknown,
+  userId?: string | null,
+): Promise<{ campaign: Campaign; traffic: TrafficJob }> {
+  const started = startCampaignTraffic(id, rawKeys, pinIds, userId)
+  const handle = runningJobs.get(started.campaign.id)
+  if (handle) await handle.done
+  const campaign = getCampaign(id, userId)
+  if (!campaign?.lastTrafficJob) return started
+  return { campaign, traffic: normalizeTrafficJob(campaign.lastTrafficJob)! }
+}
+
+export async function resetTrafficRuntimeForTests() {
+  for (const handle of runningJobs.values()) {
+    handle.stopRequested = true
+    handle.abort.abort()
+  }
+  await Promise.allSettled([...runningJobs.values()].map((handle) => handle.done))
+  runningJobs.clear()
 }
