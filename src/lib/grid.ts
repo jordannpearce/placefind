@@ -71,17 +71,23 @@ export function pointScanned(point: Pick<GridPointResult, "scannedAt" | "rank" |
   return Boolean(point.scannedAt) || point.rank != null || Boolean(point.error)
 }
 
-export function rankTone(rank: number | null | undefined): "green" | "yellow" | "red" {
-  if (rank == null || rank >= 11) return "red"
+export function rankTone(rank: number | null | undefined): "green" | "yellow" | "orange" | "orange-red" | "red" {
+  if (rank == null || !Number.isFinite(rank) || rank < 1 || rank >= 16) return "red"
   if (rank <= 3) return "green"
-  return "yellow"
+  if (rank <= 6) return "yellow"
+  if (rank <= 10) return "orange"
+  return "orange-red"
 }
 
 export function rankColor(rank: number | null | undefined): string {
-  const tone = rankTone(rank)
-  if (tone === "green") return "#7dae86"
-  if (tone === "yellow") return "#e0b15b"
-  return "#d07252"
+  if (rank == null || !Number.isFinite(rank) || rank < 1) return "#c5362b"
+  if (rank === 1) return "#2f6b3d"
+  if (rank === 2) return "#4d8f5a"
+  if (rank === 3) return "#7dae86"
+  if (rank <= 6) return "#e6c24a"
+  if (rank <= 10) return "#e08a3c"
+  if (rank <= 15) return "#d45c38"
+  return "#c5362b"
 }
 
 export function pinColor(point: Pick<GridPointResult, "rank" | "scannedAt" | "error">): string {

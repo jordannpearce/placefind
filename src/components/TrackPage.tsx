@@ -9,7 +9,7 @@ import {
   scanCampaign,
   updateCampaign,
 } from "../lib/api.ts"
-import { buildPreviewPoints, pinColor, rankLabel, rankTone } from "../lib/grid.ts"
+import { buildPreviewPoints, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
 import { publicSearchMessage } from "../lib/public-copy.ts"
 import { US_STATES } from "../lib/states.ts"
 import type { ApiKeys, Campaign, CampaignInput, GeoPoint, GridPointResult, HostedKeyStatus } from "../lib/types.ts"
@@ -628,8 +628,9 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Map grid</p>
                   <h4 className="font-display text-2xl text-paper">Where the listing ranks</h4>
                   <p className="mt-1 text-sm text-muted">
-                    Pins mark every {gridSize}×{gridSize} search point. Green is ranks 1–3, brass is 4–10, clay is 11+
-                    or not found. Click a pin for coordinates and the listing snippet.
+                    Pins mark every {gridSize}×{gridSize} search point. Rank 1 is the darkest green, then 2 and 3 in
+                    lighter greens; 4–6 yellow, 7–10 orange, 11–15 orange-red, and 16+ or not found in red. Click a pin
+                    for coordinates and the listing snippet.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3 text-xs text-muted">
@@ -638,16 +639,32 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                     Not scanned
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-moss" />
-                    1–3
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankColor(1) }} />
+                    1
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-brass" />
-                    4–10
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankColor(2) }} />
+                    2
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-clay" />
-                    11+ / missing
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankColor(3) }} />
+                    3
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankColor(4) }} />
+                    4–6
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankColor(7) }} />
+                    7–10
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankColor(11) }} />
+                    11–15
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankColor(16) }} />
+                    16+ / not found
                   </span>
                 </div>
               </div>
@@ -728,7 +745,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                                 className="h-2.5 w-2.5 rounded-full"
                                 style={{ background: pinColor(point) }}
                               />
-                              <span className={rankTone(point.rank) === "red" ? "text-clay" : "text-brass"}>
+                              <span style={{ color: pinColor(point) }}>
                                 {rankLabel(point.rank, point.error, point.scannedAt)}
                               </span>
                             </span>
