@@ -33,6 +33,8 @@ export type CampaignInput = {
   state?: string
   keywords?: string[]
   placeId?: string
+  listingTitle?: string
+  listingAddress?: string
   gridSize?: number
   spacingMiles?: number
   zoom?: number
@@ -102,6 +104,8 @@ export type Campaign = {
   city: string
   state: string
   placeId: string
+  listingTitle: string
+  listingAddress: string
   keywords: string[]
   gridSize: number
   spacingMiles: number
@@ -113,6 +117,20 @@ export type Campaign = {
   lastGridScan: GridScanRun | null
   recentScans: ScanRun[]
   recentGridScans: GridScanRun[]
+  lastTrafficJob: TrafficJob | null
+}
+
+export type TrafficJob = {
+  id: string
+  status: "running" | "ok" | "error"
+  startedAt: string
+  finishedAt: string | null
+  sessionsRequested: number
+  sessionsAttempted: number
+  sessionsOk: number
+  sessionsFailed: number
+  requestCount: number
+  lastError: string | null
 }
 
 export class CampaignError extends Error {
@@ -179,8 +197,17 @@ export function normalizeZoom(raw: unknown): number {
   return Math.min(21, Math.max(3, Math.round(zoom)))
 }
 
+
+export function listingNotConfirmedMessage() {
+  return "Confirm a Maps listing before scanning."
+}
+
+export function hasConfirmedListing(campaign: Pick<Campaign, "placeId">): boolean {
+  return Boolean(campaign.placeId?.trim())
+}
+
 export function validateCampaign(input: CampaignInput): {
-  value?: Pick<Campaign, "name" | "businessName" | "city" | "state" | "placeId" | "keywords" | "gridSize" | "spacingMiles" | "zoom" | "center">
+  value?: Pick<Campaign, "name" | "businessName" | "city" | "state" | "placeId" | "listingTitle" | "listingAddress" | "keywords" | "gridSize" | "spacingMiles" | "zoom" | "center">
   error?: string
 } {
   const name = input.name?.trim() ?? ""
@@ -188,6 +215,8 @@ export function validateCampaign(input: CampaignInput): {
   const city = input.city?.trim() ?? ""
   const state = input.state?.trim() ?? ""
   const placeId = input.placeId?.trim() ?? ""
+  const listingTitle = input.listingTitle?.trim() ?? ""
+  const listingAddress = input.listingAddress?.trim() ?? ""
   const keywords = normalizeKeywords(input.keywords)
   if (name.length < 2) return { error: "Enter a campaign name." }
   if (businessName.length < 2) return { error: "Enter the business name to track." }
@@ -205,6 +234,8 @@ export function validateCampaign(input: CampaignInput): {
       city,
       state,
       placeId,
+      listingTitle,
+      listingAddress,
       keywords,
       gridSize: grid.value,
       spacingMiles: spacing.value,
@@ -317,6 +348,8 @@ function normalizeStoredCampaign(row: Campaign): Campaign {
     city: row.city ?? "",
     state: row.state ?? "",
     placeId: row.placeId ?? "",
+    listingTitle: row.listingTitle ?? "",
+    listingAddress: row.listingAddress ?? "",
     keywords: normalizeKeywords(row.keywords),
     gridSize: grid.value ?? DEFAULT_GRID_SIZE,
     spacingMiles: spacing.value ?? DEFAULT_SPACING_MILES,
@@ -328,6 +361,7 @@ function normalizeStoredCampaign(row: Campaign): Campaign {
     lastGridScan: row.lastGridScan ?? null,
     recentScans: Array.isArray(row.recentScans) ? row.recentScans.slice(0, MAX_RECENT_SCANS) : [],
     recentGridScans: Array.isArray(row.recentGridScans) ? row.recentGridScans.slice(0, MAX_RECENT_SCANS) : [],
+    lastTrafficJob: row.lastTrafficJob ?? null,
   }
 }
 
@@ -352,6 +386,7 @@ export function createCampaign(input: CampaignInput, userId = ""): Campaign {
     lastGridScan: null,
     recentScans: [],
     recentGridScans: [],
+    lastTrafficJob: null,
   }
   writeCampaigns([campaign, ...readCollection<Campaign>("campaigns").map(normalizeStoredCampaign)])
   return campaign
@@ -370,6 +405,8 @@ export function updateCampaign(id: string, input: CampaignInput, userId?: string
     state: input.state !== undefined ? input.state : current.state,
     keywords: input.keywords !== undefined ? input.keywords : current.keywords,
     placeId: input.placeId !== undefined ? input.placeId : current.placeId,
+    listingTitle: input.listingTitle !== undefined ? input.listingTitle : current.listingTitle,
+    listingAddress: input.listingAddress !== undefined ? input.listingAddress : current.listingAddress,
     gridSize: input.gridSize !== undefined ? input.gridSize : current.gridSize,
     spacingMiles: input.spacingMiles !== undefined ? input.spacingMiles : current.spacingMiles,
     zoom: input.zoom !== undefined ? input.zoom : current.zoom,
@@ -380,9 +417,14 @@ export function updateCampaign(id: string, input: CampaignInput, userId?: string
     parsed.value.businessName !== current.businessName ||
     parsed.value.city !== current.city ||
     parsed.value.state !== current.state
+  const listingProvided =
+    input.placeId !== undefined || input.center !== undefined || input.listingTitle !== undefined
   const next: Campaign = {
     ...current,
     ...parsed.value,
+    placeId: moved && !listingProvided ? "" : parsed.value.placeId,
+    listingTitle: moved && !listingProvided ? "" : parsed.value.listingTitle,
+    listingAddress: moved && !listingProvided ? "" : parsed.value.listingAddress,
     center: moved && input.center === undefined ? null : parsed.value.center,
     updatedAt: new Date().toISOString(),
   }
@@ -460,7 +502,19 @@ export async function resolveCampaignCenter(
   throw new CampaignError("Could not find a map location for this business. Check the name, city, and state.")
 }
 
-function saveCampaign(next: Campaign): Campaign {
+export function mapsPlaceUrlFromCampaign(campaign: Campaign, title: string, address: string): string {
+  if (!campaign.placeId && campaign.center == null) return ""
+  return mapsPlaceUrl({
+    title,
+    address,
+    placeId: campaign.placeId || null,
+    lat: campaign.center?.lat ?? campaign.lastGridScan?.center.lat,
+    lng: campaign.center?.lng ?? campaign.lastGridScan?.center.lng,
+    cid: null,
+  })
+}
+
+export function saveCampaign(next: Campaign): Campaign {
   const campaigns = readCollection<Campaign>("campaigns").map(normalizeStoredCampaign)
   const index = campaigns.findIndex((row) => row.id === next.id)
   if (index < 0) {
@@ -490,12 +544,18 @@ export async function scanCampaign(
   if (keywords.length === 0) {
     throw new CampaignError("Add at least one keyword before running a scan.")
   }
+  if (!hasConfirmedListing(campaign)) {
+    throw new CampaignError(listingNotConfirmedMessage(), 400)
+  }
   const keyword = keywords[0]!
 
   const scannedAt = new Date().toISOString()
-  const resolved = await resolveCampaignCenter(campaign, keys)
-  const center = resolved.center
-  const placeId = resolved.placeId
+  const center = normalizeCenter(campaign.center)
+  if (!center) {
+    throw new CampaignError("That listing has no map location. Choose another listing.", 400)
+  }
+  const placeId = campaign.placeId.trim()
+  const targetName = campaign.listingTitle.trim() || campaign.businessName
   const zoom = normalizeZoom(campaign.zoom)
   const gridPoints = buildGridPoints(center, campaign.gridSize, campaign.spacingMiles, zoom)
   const cells = await scanMapsGrid(
@@ -517,7 +577,7 @@ export async function scanCampaign(
 
   const points: GridPointResult[] = cells.map((cell) => {
     const hit = rankFromMapsItems(cell.items, {
-      name: campaign.businessName,
+      name: targetName,
       placeId,
       city: campaign.city,
       state: campaign.state,

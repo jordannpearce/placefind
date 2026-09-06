@@ -270,6 +270,8 @@ export type Campaign = {
   city: string
   state: string
   placeId?: string
+  listingTitle?: string
+  listingAddress?: string
   keywords: string[]
   gridSize: number
   spacingMiles: number
@@ -281,6 +283,20 @@ export type Campaign = {
   lastGridScan: GridScanRun | null
   recentScans: ScanRun[]
   recentGridScans?: GridScanRun[]
+  lastTrafficJob?: TrafficJob | null
+}
+
+export type TrafficJob = {
+  id: string
+  status: "running" | "ok" | "error"
+  startedAt: string
+  finishedAt: string | null
+  sessionsRequested: number
+  sessionsAttempted: number
+  sessionsOk: number
+  sessionsFailed: number
+  requestCount: number
+  lastError: string | null
 }
 
 export type CampaignInput = {
@@ -290,8 +306,22 @@ export type CampaignInput = {
   state?: string
   keywords?: string[]
   placeId?: string
+  listingTitle?: string
+  listingAddress?: string
   gridSize?: number
   spacingMiles?: number
   zoom?: number
   center?: GeoPoint | null
+}
+
+export type ConfirmedListing = {
+  title: string
+  address: string
+  rating?: number | null
+  reviewCount?: number | null
+  placeId: string
+  lat: number
+  lng: number
+  city?: string
+  state?: string
 }

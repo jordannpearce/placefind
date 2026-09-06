@@ -10,6 +10,8 @@ import {
   bestGridRank,
   buildGridPoints,
   createCampaign,
+  hasConfirmedListing,
+  listingNotConfirmedMessage,
   loadCampaignGrid,
   mapsKeysMissingMessage,
   mapsScanConfigured,
@@ -259,6 +261,30 @@ describe("campaign store", () => {
     const seven = await loadCampaignGrid(campaign.id, "user-a", { gridSize: 7 })
     assert.equal(seven.points.length, 49)
   })
+
+  it("persists the confirmed listing fields", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-listing-")))
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        placeId: "sample-franklin",
+        listingTitle: "Franklin Barbecue",
+        listingAddress: "900 E 11th St, Austin, TX 78702",
+        center: { lat: 30.2701, lng: -97.7313 },
+        keywords: ["barbecue"],
+      },
+      "user-a",
+    )
+    const stored = readCampaigns("user-a")[0]
+    assert.equal(campaign.placeId, "sample-franklin")
+    assert.equal(stored?.listingTitle, "Franklin Barbecue")
+    assert.equal(stored?.listingAddress, "900 E 11th St, Austin, TX 78702")
+    assert.deepEqual(stored?.center, { lat: 30.2701, lng: -97.7313 })
+    assert.equal(hasConfirmedListing(stored!), true)
+  })
 })
 
 describe("selectScanKeywords", () => {
@@ -371,5 +397,61 @@ describe("rank scan Maps keys", () => {
     process.env.DATAFORSEO_LOGIN = "maps-login@example.test"
     process.env.DATAFORSEO_PASSWORD = "maps-password-test"
     assert.equal(mapsScanConfigured(emptyApiKeys()), true)
+  })
+
+  it("cannot scan without a selected listing", async () => {
+    isolateKeys()
+    process.env.DATAFORSEO_LOGIN = "maps-login@example.test"
+    process.env.DATAFORSEO_PASSWORD = "maps-password-test"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-scan-listing-")))
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue"],
+      },
+      "user-a",
+    )
+    assert.equal(hasConfirmedListing(campaign), false)
+    await assert.rejects(
+      () => scanCampaign(campaign.id, emptyApiKeys(), ["barbecue"], "user-a"),
+      (error: unknown) => {
+        assert.ok(error instanceof CampaignError)
+        assert.equal(error.status, 400)
+        assert.equal(error.message, listingNotConfirmedMessage())
+        return true
+      },
+    )
+  })
+
+  it("cannot scan a confirmed listing that has no map coordinates", async () => {
+    isolateKeys()
+    process.env.DATAFORSEO_LOGIN = "maps-login@example.test"
+    process.env.DATAFORSEO_PASSWORD = "maps-password-test"
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-scan-center-")))
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        placeId: "sample-franklin",
+        listingTitle: "Franklin Barbecue",
+        keywords: ["barbecue"],
+      },
+      "user-a",
+    )
+    assert.equal(hasConfirmedListing(campaign), true)
+    await assert.rejects(
+      () => scanCampaign(campaign.id, emptyApiKeys(), ["barbecue"], "user-a"),
+      (error: unknown) => {
+        assert.ok(error instanceof CampaignError)
+        assert.equal(error.status, 400)
+        assert.match(error.message, /map location/i)
+        return true
+      },
+    )
   })
 })
