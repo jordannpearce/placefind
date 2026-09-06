@@ -20,6 +20,7 @@ import type {
   GeoPoint,
   SearchQuery,
   SearchResponse,
+  TrafficJob,
 } from "./types.ts"
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -407,5 +408,17 @@ export async function scanCampaign(
   return request(`/api/campaigns/${id}/scan`, {
     method: "POST",
     body: JSON.stringify(hideClientKeys ? { keywords } : { keywords, ...keys }),
+  })
+}
+
+export async function startCampaignTraffic(
+  id: string,
+  keys: ApiKeys,
+  hideClientKeys = false,
+  sessions?: number,
+): Promise<{ campaign: Campaign; traffic: TrafficJob }> {
+  return request(`/api/campaigns/${id}/traffic`, {
+    method: "POST",
+    body: JSON.stringify(hideClientKeys ? { sessions } : { sessions, ...keys }),
   })
 }

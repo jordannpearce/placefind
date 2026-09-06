@@ -153,6 +153,11 @@ export function mapsScanConfigured(rawKeys: ApiKeys = emptyApiKeys()): boolean {
   return Boolean(keys.dataforseoLogin?.trim() && keys.dataforseoPassword?.trim())
 }
 
+export function trafficRunnerConfigured(rawKeys: ApiKeys = emptyApiKeys()): boolean {
+  const keys = mergeHostedKeys(rawKeys)
+  return Boolean(keys.scrappeyKey?.trim())
+}
+
 export function resetHostedKeysCacheForTests() {
   cachedDatabaseKeys = null
   lastDatabaseWriteOk = false

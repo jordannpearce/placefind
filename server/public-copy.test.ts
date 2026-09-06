@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { leaksVendorTalk, publicCheckoutWarning, publicSearchMessage } from "./public-copy.ts"
+import { leaksVendorTalk, publicCheckoutWarning, publicSearchMessage, publicTrafficMessage } from "./public-copy.ts"
 
 describe("publicSearchMessage", () => {
   it("leaves ordinary lookup copy alone", () => {
@@ -19,6 +19,15 @@ describe("publicSearchMessage", () => {
       assert.equal(leaksVendorTalk(next), false, next)
       assert.match(next, /Maps|sample listing|PlaceFind/i)
     }
+  })
+})
+
+describe("publicTrafficMessage", () => {
+  it("does not name the traffic vendor", () => {
+    assert.equal(publicTrafficMessage("Traffic runner is not configured."), "Traffic runner is not configured.")
+    const next = publicTrafficMessage("Scrappey timed out.")
+    assert.equal(leaksVendorTalk(next), false)
+    assert.match(next, /Traffic runner/)
   })
 })
 

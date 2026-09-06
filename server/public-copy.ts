@@ -22,3 +22,11 @@ export function publicCheckoutWarning(internalError?: string): string | undefine
   if (!internalError) return undefined
   return "Your payment is in. Your license key will appear on your account page and in email once it is issued."
 }
+
+export function publicTrafficMessage(text: string | undefined): string {
+  if (!text) return "Traffic runner could not finish. Try again in a moment."
+  if (text === "Traffic runner is not configured.") return text
+  if (!VENDOR_TALK.test(text) && !/add your|in settings/i.test(text)) return text
+  if (/timeout|timed out/i.test(text)) return "Traffic runner timed out. Try again in a moment."
+  return "Traffic runner could not finish. Try again in a moment."
+}

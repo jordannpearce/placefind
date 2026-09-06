@@ -7,6 +7,7 @@ import {
   emptyApiKeys,
   hostedKeyStatus,
   mapsScanConfigured,
+  trafficRunnerConfigured,
   maskSecret,
   openSealed,
   readHostedKeys,
@@ -93,9 +94,15 @@ describe("hostedKeyStatus", () => {
     const keys = readHostedKeys()
     assert.equal(keys.dataforseoLogin, "env-login@example.test")
     assert.equal(mapsScanConfigured(emptyApiKeys()), true)
+    assert.equal(trafficRunnerConfigured(emptyApiKeys()), false)
+    process.env.SCRAPPEY_API_KEY = "scp_env_runner"
+    resetHostedKeysCacheForTests()
+    assert.equal(trafficRunnerConfigured(emptyApiKeys()), true)
     delete process.env.DATAFORSEO_LOGIN
     delete process.env.DATAFORSEO_PASSWORD
+    delete process.env.SCRAPPEY_API_KEY
     resetHostedKeysCacheForTests()
     assert.equal(mapsScanConfigured(emptyApiKeys()), false)
+    assert.equal(trafficRunnerConfigured(emptyApiKeys()), false)
   })
 })

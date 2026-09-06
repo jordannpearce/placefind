@@ -70,6 +70,7 @@ import {
   scanCampaign,
   updateCampaign,
 } from "./campaigns.ts"
+import { runCampaignTraffic } from "./traffic.ts"
 import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
 import { initStore } from "./store.ts"
@@ -318,6 +319,32 @@ async function start() {
         return
       }
       res.status(500).json({ error: "Rank scan failed unexpectedly." })
+    }
+  })
+
+  app.post("/api/campaigns/:id/traffic", async (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const desktop = isDesktopRequest(req)
+    const license = await licenseStatus()
+    if (license.required && !license.valid && (desktop || !storeOpen())) {
+      res.status(402).json({
+        error: license.detail || "Enter a valid PlaceFind license key to start traffic.",
+        license,
+      })
+      return
+    }
+    const body = (req.body ?? {}) as ApiKeys & { sessions?: number }
+    const keys = isSellerMode() ? body : {}
+    try {
+      const result = await runCampaignTraffic(String(req.params.id ?? ""), keys, body.sessions, user.id)
+      res.json({ ...result, ...campaignMeta() })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Traffic run failed unexpectedly." })
     }
   })
 
