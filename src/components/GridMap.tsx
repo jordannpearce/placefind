@@ -43,7 +43,7 @@ function pinIcon(color: string, selected: boolean) {
 }
 
 function popupHtml(point: GridPointResult): string {
-  const rank = rankLabel(point.rank, point.error, point.scannedAt)
+  const rank = rankLabel(point.rank, point.error, point.scannedAt, point.status)
   const listing = point.listingTitle?.trim()
   const address = point.address?.trim()
   return `<div class="pf-popup">
@@ -102,7 +102,7 @@ export function GridMap({ center, points, selected, onSelect }: Props) {
         keyboard: true,
         title: `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`,
       })
-      marker.bindTooltip(`${rankLabel(point.rank, point.error, point.scannedAt)} · ${point.lat.toFixed(4)}, ${point.lng.toFixed(4)}`, {
+      marker.bindTooltip(`${rankLabel(point.rank, point.error, point.scannedAt, point.status)} · ${point.lat.toFixed(4)}, ${point.lng.toFixed(4)}`, {
         direction: "top",
       })
       marker.bindPopup(popupHtml(point), { closeButton: true })

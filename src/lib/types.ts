@@ -238,6 +238,7 @@ export type GridPointResult = GridPoint & {
   mapsUrl: string | null
   scannedAt: string
   error?: string
+  status?: "rank" | "not_found" | "error" | "pending" | "unset"
 }
 
 export type ScanRun = {

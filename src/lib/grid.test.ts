@@ -38,7 +38,17 @@ describe("buildGridPoints", () => {
   it("marks preview points as unscanned", () => {
     const preview = buildPreviewPoints(center, 3, 1, "barbecue")
     assert.equal(preview.length, 9)
-    assert.ok(preview.every((point) => point.scannedAt === "" && point.rank == null))
+    assert.ok(preview.every((point) => point.scannedAt === "" && point.rank == null && point.status === "unset"))
+  })
+
+  it("labels preview coordinates with at most 7 decimals and a zoom", () => {
+    const points = buildGridPoints({ lat: 40.689199123, lng: -73.975035987 }, 3, 1, 17)
+    assert.ok(
+      points.every((point) => {
+        const [lat, lng, zoom] = (point.locationCoordinate || "").split(",")
+        return (lat.split(".")[1] ?? "").length <= 7 && (lng.split(".")[1] ?? "").length <= 7 && zoom === "17z"
+      }),
+    )
   })
 })
 

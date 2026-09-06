@@ -7,6 +7,7 @@ import { mapsPlaceUrl } from "./match.ts"
 import { publicSearchMessage } from "./public-copy.ts"
 import { rankFromMapsItems, rankOfBusiness } from "./rank.ts"
 import { isSellerMode } from "./runtime.ts"
+import { finalizeGridPointResults } from "./scan-finalize.ts"
 import { readCollection, writeCollection } from "./store.ts"
 import type { ApiKeys } from "./types.ts"
 
@@ -72,6 +73,7 @@ export type GridPointResult = GridPoint & {
   mapsUrl: string | null
   scannedAt: string
   error?: string
+  status?: "rank" | "not_found" | "error" | "pending" | "unset"
 }
 
 export type ScanRun = {
@@ -575,7 +577,7 @@ export async function scanCampaign(
     keys.dataforseoPassword!,
   )
 
-  const points: GridPointResult[] = cells.map((cell) => {
+  const points: GridPointResult[] = finalizeGridPointResults(cells.map((cell) => {
     const hit = rankFromMapsItems(cell.items, {
       name: targetName,
       placeId,
@@ -615,7 +617,7 @@ export async function scanCampaign(
       scannedAt,
       error: publicError,
     }
-  })
+  }), scannedAt)
 
   const grid: GridScanRun = {
     id: newId(),

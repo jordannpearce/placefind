@@ -37,12 +37,14 @@ export function buildGridPoints(
       const eastMiles = (col - half) * spacing
       const lat = center.lat + northMiles * latDegPerMile
       const lng = center.lng + eastMiles * lngDegPerMile
+      const latPart = lat.toFixed(7).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "")
+      const lngPart = lng.toFixed(7).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "")
       points.push({
         row,
         col,
         lat,
         lng,
-        locationCoordinate: `${lat},${lng},${z}z`,
+        locationCoordinate: `${latPart === "-0" ? "0" : latPart},${lngPart === "-0" ? "0" : lngPart},${z}z`,
       })
     }
   }
@@ -64,10 +66,15 @@ export function buildPreviewPoints(
     address: null,
     mapsUrl: null,
     scannedAt: "",
+    status: "unset",
   }))
 }
 
-export function pointScanned(point: Pick<GridPointResult, "scannedAt" | "rank" | "error">): boolean {
+export function pointScanned(
+  point: Pick<GridPointResult, "scannedAt" | "rank" | "error" | "status">,
+): boolean {
+  if (point.status === "rank" || point.status === "not_found" || point.status === "error") return true
+  if (point.status === "pending" || point.status === "unset") return false
   return Boolean(point.scannedAt) || point.rank != null || Boolean(point.error)
 }
 
@@ -90,12 +97,20 @@ export function rankColor(rank: number | null | undefined): string {
   return "#c5362b"
 }
 
-export function pinColor(point: Pick<GridPointResult, "rank" | "scannedAt" | "error">): string {
+export function pinColor(point: Pick<GridPointResult, "rank" | "scannedAt" | "error" | "status">): string {
   if (!pointScanned(point)) return "#b4a793"
   return rankColor(point.rank)
 }
 
-export function rankLabel(rank: number | null | undefined, error?: string, scannedAt?: string): string {
+export function rankLabel(
+  rank: number | null | undefined,
+  error?: string,
+  scannedAt?: string,
+  status?: GridPointResult["status"],
+): string {
+  if (status === "error" || (error && rank == null && status !== "not_found")) return "Error"
+  if (status === "not_found") return "Not found"
+  if (status === "rank" && rank != null) return `#${rank}`
   if (error && rank == null) return "Error"
   if (rank == null && !scannedAt) return "Not scanned"
   if (rank == null) return "Not found"

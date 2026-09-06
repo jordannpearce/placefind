@@ -10,8 +10,12 @@ const TASK_POST_ENDPOINT = "https://api.dataforseo.com/v3/serp/google/maps/task_
 const TASK_GET_ENDPOINT = "https://api.dataforseo.com/v3/serp/google/maps/task_get/advanced"
 const USER_ENDPOINT = "https://api.dataforseo.com/v3/appendix/user_data"
 
-const TASK_PENDING = new Set([20100, 40601, 40602])
-const TASK_READY = 20000
+export const TASK_PENDING = new Set([20100, 40601, 40602])
+export const TASK_READY = 20000
+export const TASK_GET_CONCURRENCY = 10
+export const LIVE_FALLBACK_CONCURRENCY = 5
+export const MIN_GRID_POLL_MS = 180_000
+export const MAX_GRID_POLL_MS = 240_000
 
 type Rating = {
   value?: number | null
@@ -113,6 +117,14 @@ export function formatWorkHours(workHours?: WorkHours | null): { summary: string
   return { summary, rows, status }
 }
 
+export function isPendingMapsStatus(code?: number | null): boolean {
+  return Boolean(code && TASK_PENDING.has(code))
+}
+
+export function isFailedMapsStatus(code?: number | null): boolean {
+  return Boolean(code && code >= 40000 && !TASK_PENDING.has(code))
+}
+
 export function dataForSeoErrorMessage(payload: DfsResponse, httpStatus: number): string | null {
   if (httpStatus === 401 || payload.status_code === 40101 || payload.status_code === 40102) {
     return "DataForSEO rejected the login or API password."
@@ -120,11 +132,13 @@ export function dataForSeoErrorMessage(payload: DfsResponse, httpStatus: number)
   if (httpStatus >= 400) {
     return payload.status_message || `DataForSEO returned HTTP ${httpStatus}.`
   }
-  if (payload.status_code && payload.status_code >= 40000) {
+  if (payload.status_code && isFailedMapsStatus(payload.status_code)) {
     return payload.status_message || "DataForSEO request failed."
   }
+  if (isPendingMapsStatus(payload.status_code)) return null
   const task = payload.tasks?.[0]
-  if (task?.status_code && task.status_code >= 40000) {
+  if (isPendingMapsStatus(task?.status_code)) return null
+  if (task?.status_code && isFailedMapsStatus(task.status_code)) {
     return task.status_message || "DataForSEO could not finish the Maps search."
   }
   return null
@@ -181,6 +195,41 @@ export type GridCellResult = {
   point: GridPoint
   items: MapsItem[]
   error: string | null
+}
+
+export type PostedMapsTask = {
+  id: string
+  tag: string
+}
+
+export type CollectedCell = {
+  items: MapsItem[] | null
+  error: string | null
+}
+
+export type MapsTaskSnapshot = {
+  id?: string
+  status_code?: number
+  status_message?: string
+  data?: { tag?: string }
+  result?: Array<{ items?: MapsItem[] | null } | null> | null
+}
+
+export type MapsGridClient = {
+  postTasks: (tasks: ReturnType<typeof mapsGridTask>[]) => Promise<PostedMapsTask[]>
+  getTask: (id: string) => Promise<MapsTaskSnapshot | null>
+  liveAtCoordinate: (keyword: string, point: GridPoint) => Promise<{ items: MapsItem[]; error: string | null }>
+}
+
+export type ScanMapsGridOptions = {
+  client?: MapsGridClient
+  pollTimeoutMs?: number
+  sleep?: (ms: number) => Promise<void>
+}
+
+export function gridPollTimeoutMs(pointCount: number): number {
+  const estimated = Math.max(1, pointCount) * 4_000
+  return Math.min(MAX_GRID_POLL_MS, Math.max(MIN_GRID_POLL_MS, estimated))
 }
 
 function listingsFromItems(items: MapsItem[] | null | undefined, query: SearchQuery): BusinessListing[] {
@@ -251,24 +300,81 @@ export async function searchDataForSeo(
   return { hits: listingsFromItems(items, query), items, error: null }
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function runPool<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>) {
+  if (items.length === 0) return
+  let index = 0
+  const runners = Array.from({ length: Math.min(Math.max(1, concurrency), items.length) }, async () => {
+    while (index < items.length) {
+      const current = index
+      index += 1
+      await worker(items[current]!)
+    }
+  })
+  await Promise.all(runners)
+}
+
+export function postedTasksFromResponse(
+  requested: ReturnType<typeof mapsGridTask>[],
+  tasks: MapsTaskSnapshot[] | undefined,
+): { posted: PostedMapsTask[]; failed: ReturnType<typeof mapsGridTask>[] } {
+  const posted: PostedMapsTask[] = []
+  const failed: ReturnType<typeof mapsGridTask>[] = []
+  const byTag = new Map<string, MapsTaskSnapshot>()
+  for (const task of tasks ?? []) {
+    const tag = task.data?.tag?.trim()
+    if (tag) byTag.set(tag, task)
+  }
+  requested.forEach((row, index) => {
+    const tag = row.tag || ""
+    const task = (tag && byTag.get(tag)) || tasks?.[index]
+    if (task?.id && !isFailedMapsStatus(task.status_code)) {
+      posted.push({ id: task.id, tag: tag || task.data?.tag || "" })
+      return
+    }
+    failed.push(row)
+  })
+  return { posted, failed }
+}
+
+async function postMapsTaskChunk(
+  chunk: ReturnType<typeof mapsGridTask>[],
+  login: string,
+  password: string,
+): Promise<{ posted: PostedMapsTask[]; failed: ReturnType<typeof mapsGridTask>[] }> {
+  const { payload, error } = await dfsJson(TASK_POST_ENDPOINT, login, password, {
+    method: "POST",
+    body: JSON.stringify(chunk),
+  }, 30_000)
+  if (error && !(payload.tasks && payload.tasks.length > 0)) {
+    return { posted: [], failed: chunk }
+  }
+  return postedTasksFromResponse(chunk, payload.tasks)
+}
+
 async function postMapsTasks(
   tasks: ReturnType<typeof mapsGridTask>[],
   login: string,
   password: string,
-): Promise<{ id: string; tag: string }[]> {
-  const posted: { id: string; tag: string }[] = []
+): Promise<PostedMapsTask[]> {
+  const posted: PostedMapsTask[] = []
+  let retryable: ReturnType<typeof mapsGridTask>[] = []
   for (const chunk of chunkTasks(tasks)) {
-    const { payload, error } = await dfsJson(TASK_POST_ENDPOINT, login, password, {
-      method: "POST",
-      body: JSON.stringify(chunk),
-    }, 30_000)
-    if (error) throw new Error(error)
-    for (const task of payload.tasks ?? []) {
-      const tag = task.data?.tag || ""
-      if (task.id && (!task.status_code || task.status_code < 40000)) {
-        posted.push({ id: task.id, tag })
-      }
+    const first = await postMapsTaskChunk(chunk, login, password)
+    posted.push(...first.posted)
+    retryable.push(...first.failed)
+  }
+  if (retryable.length > 0) {
+    const leftover: ReturnType<typeof mapsGridTask>[] = []
+    for (const chunk of chunkTasks(retryable)) {
+      const again = await postMapsTaskChunk(chunk, login, password)
+      posted.push(...again.posted)
+      leftover.push(...again.failed)
     }
+    retryable = leftover
   }
   return posted
 }
@@ -279,39 +385,60 @@ async function getMapsTask(id: string, login: string, password: string): Promise
   return payload.tasks?.[0] ?? null
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function collectPostedTasks(
-  posted: { id: string; tag: string }[],
-  login: string,
-  password: string,
-  timeoutMs = 75_000,
-): Promise<Map<string, MapsItem[] | null>> {
-  const byTag = new Map<string, MapsItem[] | null>()
+export async function collectPostedTasks(
+  posted: PostedMapsTask[],
+  getTask: (id: string) => Promise<MapsTaskSnapshot | null>,
+  timeoutMs: number,
+  wait: (ms: number) => Promise<void> = sleep,
+): Promise<Map<string, CollectedCell>> {
+  const byTag = new Map<string, CollectedCell>()
   const pending = new Map(posted.map((row) => [row.id, row.tag]))
   const started = Date.now()
-  let delay = 1500
+  let delay = 1200
   while (pending.size > 0 && Date.now() - started < timeoutMs) {
-    for (const [id, tag] of [...pending]) {
-      const task = await getMapsTask(id, login, password)
+    const ids = [...pending.keys()]
+    await runPool(ids, TASK_GET_CONCURRENCY, async (id) => {
+      const tag = pending.get(id)
+      if (tag == null) return
+      const task = await getTask(id)
       const code = task?.status_code ?? 0
       if (code === TASK_READY) {
-        byTag.set(tag, task?.result?.[0]?.items ?? [])
+        byTag.set(tag, { items: task?.result?.[0]?.items ?? [], error: null })
         pending.delete(id)
-        continue
+        return
       }
-      if (code && !TASK_PENDING.has(code) && code >= 40000) {
-        byTag.set(tag, null)
+      if (isFailedMapsStatus(code)) {
+        byTag.set(tag, {
+          items: null,
+          error: task?.status_message || "Maps search could not finish this point.",
+        })
         pending.delete(id)
       }
-    }
+    })
     if (pending.size === 0) break
-    await sleep(delay)
+    await wait(delay)
     delay = Math.min(8000, Math.round(delay * 1.4))
   }
   return byTag
+}
+
+async function retryFailedGets(
+  posted: PostedMapsTask[],
+  collected: Map<string, CollectedCell>,
+  getTask: (id: string) => Promise<MapsTaskSnapshot | null>,
+): Promise<void> {
+  const failed = posted.filter((row) => {
+    const entry = collected.get(row.tag)
+    return Boolean(entry && entry.items == null && entry.error)
+  })
+  if (failed.length === 0) return
+  await runPool(failed, TASK_GET_CONCURRENCY, async (row) => {
+    const task = await getTask(row.id)
+    const code = task?.status_code ?? 0
+    if (code === TASK_READY) {
+      collected.set(row.tag, { items: task?.result?.[0]?.items ?? [], error: null })
+    }
+  })
 }
 
 async function liveMapsAtCoordinate(
@@ -323,18 +450,51 @@ async function liveMapsAtCoordinate(
   const { payload, error } = await dfsJson(LIVE_ENDPOINT, login, password, {
     method: "POST",
     body: JSON.stringify([mapsGridTask(keyword, point.locationCoordinate, point.id)]),
-  }, 25_000)
+  }, 30_000)
+  const task = payload.tasks?.[0]
+  if (isPendingMapsStatus(task?.status_code) || isPendingMapsStatus(payload.status_code)) {
+    return { items: [], error: "Maps search is still running." }
+  }
   if (error) return { items: [], error }
-  return { items: payload.tasks?.[0]?.result?.[0]?.items ?? [], error: null }
+  return { items: task?.result?.[0]?.items ?? [], error: null }
 }
 
-/** One Maps SERP task per grid cell. Prefers batched task_post (≤100/POST) then task_get; live/advanced fallback. */
+async function liveWithRetry(
+  keyword: string,
+  point: GridPoint,
+  liveAtCoordinate: MapsGridClient["liveAtCoordinate"],
+): Promise<{ items: MapsItem[]; error: string | null }> {
+  const first = await liveAtCoordinate(keyword, point)
+  if (!first.error) return first
+  return liveAtCoordinate(keyword, point)
+}
+
+export function defaultMapsGridClient(login: string, password: string): MapsGridClient {
+  return {
+    postTasks: (tasks) => postMapsTasks(tasks, login, password),
+    getTask: (id) => getMapsTask(id, login, password),
+    liveAtCoordinate: (keyword, point) => liveMapsAtCoordinate(keyword, point, login, password),
+  }
+}
+
+export function finalizeGridCells(points: GridPoint[], results: Map<string, GridCellResult>): GridCellResult[] {
+  return points.map((point) => {
+    const row = results.get(point.id)
+    if (row) return { point: row.point, items: row.items ?? [], error: row.error }
+    return { point, items: [], error: "Maps search did not return this grid point." }
+  })
+}
+
+/** One Maps SERP task per grid cell. Prefers batched task_post (≤100/POST) then task_get; live/advanced fallback per remaining pin. */
 export async function scanMapsGrid(
   points: GridPoint[],
   keyword: string,
   login: string,
   password: string,
+  options?: ScanMapsGridOptions,
 ): Promise<GridCellResult[]> {
+  const client = options?.client ?? defaultMapsGridClient(login, password)
+  const wait = options?.sleep ?? sleep
   const results = new Map<string, GridCellResult>()
   const mark = (point: GridPoint, items: MapsItem[], error: string | null) => {
     results.set(point.id, { point, items, error })
@@ -342,30 +502,29 @@ export async function scanMapsGrid(
 
   try {
     const tasks = points.map((point) => mapsGridTask(keyword, point.locationCoordinate, point.id))
-    const posted = await postMapsTasks(tasks, login, password)
-    const collected = await collectPostedTasks(posted, login, password)
+    const posted = await client.postTasks(tasks)
+    const collected = await collectPostedTasks(
+      posted,
+      (id) => client.getTask(id),
+      options?.pollTimeoutMs ?? gridPollTimeoutMs(points.length),
+      wait,
+    )
+    await retryFailedGets(posted, collected, (id) => client.getTask(id))
     for (const point of points) {
-      if (collected.has(point.id)) {
-        const items = collected.get(point.id)
-        if (items) mark(point, items, null)
-      }
+      const entry = collected.get(point.id)
+      if (entry && entry.items != null) mark(point, entry.items, null)
     }
   } catch {
     // Fall through to live/advanced per remaining cell.
   }
 
   const remaining = points.filter((point) => !results.has(point.id))
-  const concurrency = 5
-  for (let index = 0; index < remaining.length; index += concurrency) {
-    const batch = remaining.slice(index, index + concurrency)
-    const settled = await Promise.all(batch.map((point) => liveMapsAtCoordinate(keyword, point, login, password)))
-    batch.forEach((point, offset) => {
-      const live = settled[offset]!
-      mark(point, live.items, live.error)
-    })
-  }
+  await runPool(remaining, LIVE_FALLBACK_CONCURRENCY, async (point) => {
+    const live = await liveWithRetry(keyword, point, client.liveAtCoordinate)
+    mark(point, live.items, live.error)
+  })
 
-  return points.map((point) => results.get(point.id) ?? { point, items: [], error: "Maps search did not return this grid point." })
+  return finalizeGridCells(points, results)
 }
 
 export async function testDataForSeo(login: string, password: string): Promise<KeyTestResult> {

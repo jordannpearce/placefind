@@ -296,6 +296,8 @@ async function start() {
   })
 
   app.post("/api/campaigns/:id/scan", async (req, res) => {
+    req.setTimeout(10 * 60 * 1000)
+    res.setTimeout(10 * 60 * 1000)
     const user = requireUser(req, res)
     if (!user) return
     const desktop = isDesktopRequest(req)

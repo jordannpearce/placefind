@@ -845,7 +845,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               </p>
               <p className="mt-1 text-sm text-paper">
                 {selectedPoint.keyword ? `${selectedPoint.keyword} · ` : ""}
-                {rankLabel(selectedPoint.rank, selectedPoint.error, selectedPoint.scannedAt)}
+                {rankLabel(selectedPoint.rank, selectedPoint.error, selectedPoint.scannedAt, selectedPoint.status)}
                 {selectedPoint.rating != null ? ` · ${selectedPoint.rating.toFixed(1)}` : ""}
                 {selectedPoint.reviewCount != null ? ` (${selectedPoint.reviewCount} reviews)` : ""}
               </p>
@@ -895,7 +895,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                         <span className="inline-flex items-center gap-2">
                           <span className="h-2.5 w-2.5 rounded-full" style={{ background: pinColor(point) }} />
                           <span style={{ color: pinColor(point) }}>
-                            {rankLabel(point.rank, point.error, point.scannedAt)}
+                            {rankLabel(point.rank, point.error, point.scannedAt, point.status)}
                           </span>
                         </span>
                       </td>
