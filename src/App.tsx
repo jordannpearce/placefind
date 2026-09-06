@@ -8,17 +8,13 @@ import { AuthPage } from "./components/AuthPage.tsx"
 import { BuyPage } from "./components/BuyPage.tsx"
 import { ResetPage } from "./components/ResetPage.tsx"
 import { DownloadPage } from "./components/DownloadPage.tsx"
-import { HomePage } from "./components/HomePage.tsx"
-import { LegalPage } from "./components/LegalPage.tsx"
 import { LicenseGate } from "./components/LicenseGate.tsx"
 import { ResultPanel } from "./components/ResultPanel.tsx"
 import { SearchForm } from "./components/SearchForm.tsx"
-import { SiteFooter } from "./components/SiteFooter.tsx"
 import { TrackPage } from "./components/TrackPage.tsx"
 import { SellPage } from "./components/SellPage.tsx"
-import { isLegalPath } from "./lib/legal.ts"
 import { loadRuntime, searchBusiness, stopImpersonation } from "./lib/api.ts"
-import { allowedPath, clientIsDesktop, currentPath, isAppPath, pageTitle, type AppPath } from "./lib/nav.ts"
+import { allowedPath, clientIsDesktop, currentPath, type AppPath } from "./lib/nav.ts"
 import { emptyKeys, loadHistory, pushHistory } from "./lib/storage.ts"
 import type {
   AuthUser,
@@ -30,15 +26,7 @@ import type {
   SearchResponse,
 } from "./lib/types.ts"
 
-const emptyQuery = (): SearchQuery => ({ name: "", city: "", state: "", keyword: "" })
-
-function scrollToHash(hash: string) {
-  const id = hash.replace(/^#/, "")
-  if (!id) return
-  window.setTimeout(() => {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
-  }, 40)
-}
+const emptyQuery = (): SearchQuery => ({ name: "", city: "", state: "" })
 
 export default function App() {
   const [path, setPath] = useState<AppPath>(currentPath)
@@ -66,14 +54,6 @@ export default function App() {
     window.addEventListener("popstate", onPop)
     return () => window.removeEventListener("popstate", onPop)
   }, [])
-
-  useEffect(() => {
-    document.title = pageTitle(path)
-  }, [path])
-
-  useEffect(() => {
-    if (path === "/") scrollToHash(window.location.hash)
-  }, [path])
 
   useEffect(() => {
     void loadRuntime()
@@ -108,15 +88,10 @@ export default function App() {
       .finally(() => setRuntimeReady(true))
   }, [])
 
-  function go(next: string) {
-    const [rawPath, hash] = next.split("#")
-    const requested = (rawPath || "/") as AppPath
-    const dest = isAppPath(requested) ? allowedPath(requested, access) : "/"
-    const url = hash ? `${dest}#${hash}` : dest
-    window.history.pushState({}, "", url)
+  function go(next: AppPath) {
+    const dest = allowedPath(next, access)
+    window.history.pushState({}, "", dest)
     setPath(dest)
-    if (hash) scrollToHash(hash)
-    else window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   async function refreshSession(nextUser: AuthUser, dest?: AppPath) {
@@ -148,8 +123,7 @@ export default function App() {
   }
 
   function onAuthed(next: AuthUser) {
-    const stay = path === "/track" || path === "/try" || path === "/demo"
-    void refreshSession(next, stay ? path : desktop ? "/" : "/account")
+    void refreshSession(next, path === "/track" ? "/track" : desktop ? "/" : "/account")
   }
 
   function onAdminAuthed(next: AuthUser) {
@@ -188,24 +162,16 @@ export default function App() {
   }
 
   function useHistory(item: HistoryItem) {
-    const next = { name: item.name, city: item.city, state: item.state, keyword: item.keyword ?? "" }
+    const next = { name: item.name, city: item.city, state: item.state }
     setQuery(next)
     void runSearch(next)
   }
 
   const lookupBlocked = Boolean(license?.required && !license.valid && desktop)
-  const needsDesktopLogin = desktop && !user && path !== "/admin" && path !== "/reset" && !isLegalPath(path)
+  const needsDesktopLogin = desktop && !user && path !== "/admin" && path !== "/reset"
   const needsTrackLogin = !desktop && path === "/track" && !user
-  const needsTryLogin = !desktop && (path === "/try" || path === "/demo") && !user
-  const showHome = !desktop && path === "/"
-  const showLegal = isLegalPath(path)
-  const showLookup =
-    ((desktop && path === "/") || (!desktop && (path === "/try" || path === "/demo") && Boolean(user))) &&
-    !lookupBlocked &&
-    !needsDesktopLogin
+  const showLookup = path === "/" && !lookupBlocked && !needsDesktopLogin
   const showTrack = path === "/track" && !lookupBlocked && Boolean(user)
-  const showWebsiteChrome = !desktop
-  const tryScanDest = user ? "/try" : "/#sample"
 
   return (
     <div className="min-h-screen bg-ink">
@@ -230,17 +196,17 @@ export default function App() {
           </div>
         )}
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <button type="button" onClick={() => go("/")} className="text-left">
+          <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">
-              {desktop ? "Windows desktop" : "Maps research for local businesses"}
+              {desktop ? "Windows desktop" : "Maps listing software"}
             </p>
             <h1 className="font-display text-3xl text-paper sm:text-4xl">PlaceFind</h1>
-          </button>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             {runtimeReady && !needsDesktopLogin && (
               <AppNav path={path} desktop={desktop} store={store} admin={admin} user={user} onGo={go} />
             )}
-            {showLookup && result?.best && (
+            {path === "/" && result?.best && (
               <button
                 type="button"
                 onClick={exportJson}
@@ -258,12 +224,8 @@ export default function App() {
           <AdminPage currentUserId={user?.id} onViewAs={(next) => void refreshSession(next, "/account")} />
         )}
         {path === "/admin" && !admin && !impersonating && <AdminLogin bootstrap={bootstrap} onAuthed={onAdminAuthed} />}
-        {!desktop && (admin || store) && path === "/download" && (
-          <DownloadPage onTryScan={() => go(tryScanDest)} />
-        )}
-        {!desktop && store && path === "/buy" && (
-          <BuyPage user={user} onAuthed={onAuthed} onTryScan={() => go(tryScanDest)} />
-        )}
+        {!desktop && (admin || store) && path === "/download" && <DownloadPage onTryScan={() => go("/")} />}
+        {!desktop && store && path === "/buy" && <BuyPage user={user} onAuthed={onAuthed} onTryScan={() => go("/")} />}
         {path === "/account" && user && (
           <AccountPage
             user={user}
@@ -286,46 +248,35 @@ export default function App() {
             onGoLogin={() => go("/login")}
           />
         )}
-        {showLegal && <LegalPage path={path} />}
-        {showHome && <HomePage user={user} store={store} onGo={go} />}
-        {(needsDesktopLogin || needsTrackLogin || needsTryLogin || (path === "/login" && !user)) && (
+        {(needsDesktopLogin || needsTrackLogin || (path === "/login" && !user)) && (
           <AuthPage
             desktop={desktop}
             publicUrl={publicUrl}
-            title={
-              needsTrackLogin
-                ? "Sign in to track ranks"
-                : needsTryLogin
-                  ? "Sign in to run a test scan"
-                  : undefined
-            }
+            title={needsTrackLogin ? "Sign in to track ranks" : undefined}
             intro={
               needsTrackLogin
-                ? "Grid tracking is for signed-in customers."
-                : needsTryLogin
-                  ? "The live test scan is for signed-in customers. Visitors can try the sample search on the home page."
-                  : undefined
+                ? "Grid tracking is for signed-in customers. Visitors can still run a public test scan."
+                : undefined
             }
             onAuthed={onAuthed}
             onGoBuy={desktop ? undefined : () => go("/buy")}
           />
         )}
-        {(path === "/" || path === "/track" || path === "/try" || path === "/demo") &&
-          lookupBlocked &&
-          license &&
-          user && <LicenseGate license={license} onActivated={setLicense} />}
+        {(path === "/" || path === "/track") && lookupBlocked && license && user && (
+          <LicenseGate license={license} onActivated={setLicense} />
+        )}
         {showTrack && <TrackPage keys={emptyKeys()} hosted={hosted} seller={seller} desktop={desktop} />}
         {showLookup && (
           <div className="grid flex-1 gap-6 lg:grid-cols-[20rem_1fr]">
             <aside className="min-w-0 rounded-2xl border border-line bg-panel p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">
-                {desktop ? "Lookup" : "Internal test scan"}
+                {desktop ? "Lookup" : "Try PlaceFind"}
               </p>
               <h2 className="mt-1 font-display text-2xl text-paper">{desktop ? "Find a listing" : "Test scan"}</h2>
               <p className="mb-4 mt-2 text-sm leading-6 text-muted">
                 {desktop
-                  ? "Enter a business name, city, state, and optional keyword to pull the Google Maps listing."
-                  : "Signed-in lookup. Enter a business name, city, state, and optional keyword."}
+                  ? "Enter a business name, city, and state to pull the Google Maps listing."
+                  : "This preview shows what the Windows app does. Enter a business name, city, and state."}
               </p>
               <SearchForm
                 query={query}
@@ -342,7 +293,6 @@ export default function App() {
             </main>
           </div>
         )}
-        {showWebsiteChrome && <SiteFooter onGo={go} />}
       </div>
     </div>
   )

@@ -3,9 +3,9 @@ import { CityStateFields } from "./CityStateFields.tsx"
 import type { HistoryItem, SearchQuery } from "../lib/types.ts"
 
 const SAMPLES: SearchQuery[] = [
-  { name: "Franklin Barbecue", city: "Austin", state: "TX", keyword: "barbecue" },
-  { name: "Joe's Pizza", city: "New York", state: "NY", keyword: "pizza" },
-  { name: "Pike Place Fish", city: "Seattle", state: "WA", keyword: "fish market" },
+  { name: "Franklin Barbecue", city: "Austin", state: "TX" },
+  { name: "Joe's Pizza", city: "New York", state: "NY" },
+  { name: "Pike Place Fish", city: "Seattle", state: "WA" },
 ]
 
 type Props = {
@@ -16,19 +16,9 @@ type Props = {
   history: HistoryItem[]
   onHistory: (item: HistoryItem) => void
   submitLabel?: string
-  showHistory?: boolean
 }
 
-export function SearchForm({
-  query,
-  onChange,
-  onSearch,
-  loading,
-  history,
-  onHistory,
-  submitLabel,
-  showHistory = true,
-}: Props) {
+export function SearchForm({ query, onChange, onSearch, loading, history, onHistory, submitLabel }: Props) {
   return (
     <form
       className="flex min-w-0 flex-col gap-4"
@@ -56,17 +46,6 @@ export function SearchForm({
         fieldClassName="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none ring-brass/40 placeholder:text-muted/50 focus:border-brass focus:ring-2"
       />
 
-      <label className="grid gap-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Keyword</span>
-        <input
-          value={query.keyword ?? ""}
-          onChange={(event) => onChange({ ...query, keyword: event.target.value })}
-          placeholder="barbecue"
-          autoComplete="off"
-          className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none ring-brass/40 placeholder:text-muted/50 focus:border-brass focus:ring-2"
-        />
-      </label>
-
       <button
         type="submit"
         disabled={loading}
@@ -92,7 +71,7 @@ export function SearchForm({
         </div>
       </div>
 
-      {showHistory && history.length > 0 && (
+      {history.length > 0 && (
         <div>
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Recent</p>
           <ul className="grid gap-1">
@@ -106,7 +85,6 @@ export function SearchForm({
                   <span className="block truncate">{item.title || item.name}</span>
                   <span className="text-xs text-muted">
                     {item.city}, {item.state}
-                    {item.keyword ? ` · ${item.keyword}` : ""}
                   </span>
                 </button>
               </li>

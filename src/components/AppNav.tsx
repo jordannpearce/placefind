@@ -7,7 +7,7 @@ type Props = {
   store: boolean
   admin: boolean
   user: AuthUser | null
-  onGo: (path: string) => void
+  onGo: (path: AppPath) => void
 }
 
 export function AppNav({ path, desktop, store, admin, user, onGo }: Props) {
@@ -18,7 +18,7 @@ export function AppNav({ path, desktop, store, admin, user, onGo }: Props) {
   return (
     <nav className="flex flex-wrap items-center gap-1">
       {links.map((link) => {
-        const active = link.href === path || (link.href.startsWith("/#") && path === "/")
+        const active = path === link.href
         return (
           <a
             key={link.href}

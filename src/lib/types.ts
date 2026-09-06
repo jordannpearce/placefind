@@ -2,7 +2,6 @@ export type SearchQuery = {
   name: string
   city: string
   state: string
-  keyword?: string
 }
 
 export type ApiKeys = {

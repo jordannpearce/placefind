@@ -57,16 +57,6 @@ import {
   trafficSearchHelpCopy,
   trafficStartConfirmCopy,
 } from "../lib/traffic-plan.ts"
-import {
-  formatKeywordText,
-  keywordCapMessage,
-  keywordHelpCopy,
-  mergeKeywordLists,
-  parseKeywordText,
-  parseKeywordsOrError,
-  scanKeywordsLabel,
-  trafficKeywordTypeHelpCopy,
-} from "../lib/keywords.ts"
 import type {
   ApiKeys,
   BusinessListing,

@@ -91,10 +91,3 @@ CREATE TABLE IF NOT EXISTS geo_imports (
   file_name TEXT,
   point_count INTEGER NOT NULL DEFAULT 0
 );
-
-CREATE TABLE IF NOT EXISTS search_ip (
-  hash TEXT PRIMARY KEY,
-  first_at TIMESTAMPTZ NOT NULL,
-  last_at TIMESTAMPTZ NOT NULL,
-  count INTEGER NOT NULL DEFAULT 1
-);

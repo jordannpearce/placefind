@@ -12,7 +12,6 @@ export type StoreCollection =
   | "campaigns"
   | "scan_runs"
   | "password_resets"
-  | "search_ip"
 
 type JsonRow = Record<string, unknown>
 
@@ -25,7 +24,6 @@ const FILES: Record<StoreCollection, string> = {
   campaigns: "campaigns.json",
   scan_runs: "scan-runs.json",
   password_resets: "password-resets.json",
-  search_ip: "search-ip.json",
 }
 
 const SCHEMA_SQL = `
@@ -106,12 +104,6 @@ CREATE TABLE IF NOT EXISTS geo_imports (
   file_name TEXT,
   point_count INTEGER NOT NULL DEFAULT 0
 );
-CREATE TABLE IF NOT EXISTS search_ip (
-  hash TEXT PRIMARY KEY,
-  first_at TIMESTAMPTZ NOT NULL,
-  last_at TIMESTAMPTZ NOT NULL,
-  count INTEGER NOT NULL DEFAULT 1
-);
 `
 
 const memory: Record<StoreCollection, JsonRow[]> = {
@@ -123,7 +115,6 @@ const memory: Record<StoreCollection, JsonRow[]> = {
   campaigns: [],
   scan_runs: [],
   password_resets: [],
-  search_ip: [],
 }
 
 let loaded = false
@@ -290,16 +281,6 @@ async function persistPostgres(name: StoreCollection) {
           [row.tokenHash, row.userId, row.expiresAt, row.usedAt ?? null],
         )
       }
-    } else if (name === "search_ip") {
-      await client.query("DELETE FROM search_ip")
-      for (const row of rows) {
-        await client.query("INSERT INTO search_ip (hash, first_at, last_at, count) VALUES ($1,$2,$3,$4)", [
-          row.hash,
-          row.firstAt,
-          row.lastAt,
-          row.count ?? 1,
-        ])
-      }
     }
     await client.query("COMMIT")
   } catch (error) {
@@ -335,9 +316,6 @@ async function loadPostgres() {
     `SELECT token_hash AS "tokenHash", user_id AS "userId", expires_at AS "expiresAt", used_at AS "usedAt"
      FROM password_resets ORDER BY expires_at DESC`,
   )
-  const searchIp = await pool.query(
-    `SELECT hash, first_at AS "firstAt", last_at AS "lastAt", count FROM search_ip`,
-  )
   memory.users = users.rows
   memory.sessions = sessions.rows
   memory.orders = orders.rows
@@ -346,7 +324,6 @@ async function loadPostgres() {
   memory.campaigns = campaigns.rows.map((row) => row.payload as JsonRow)
   memory.scan_runs = scanRuns.rows.map((row) => row.payload as JsonRow)
   memory.password_resets = resets.rows
-  memory.search_ip = searchIp.rows
 }
 
 function collectionEmpty() {
