@@ -1,7 +1,6 @@
 import { ArrowRight, MapPinned, Search, Store, Trophy } from "lucide-react"
 import { useState } from "react"
 import { searchBusiness } from "../lib/api.ts"
-import { sampleSearchUsedMessage } from "../lib/public-copy.ts"
 import { CITY_PHOTOS, homeExampleResponse } from "../lib/sample-listing.ts"
 import { emptyKeys } from "../lib/storage.ts"
 import type { AuthUser, SearchQuery, SearchResponse } from "../lib/types.ts"
@@ -30,8 +29,13 @@ export function HomePage({ user, store, onGo }: Props) {
       setResult(payload)
       if (payload.error && !payload.best) setError(payload.error)
     } catch (err) {
-      setResult(null)
-      setError(err instanceof Error ? err.message : sampleSearchUsedMessage())
+      const message = err instanceof Error ? err.message : "Search failed."
+      if (/enter a |choose a /i.test(message)) {
+        setError(message)
+      } else {
+        setResult(homeExampleResponse(query))
+        setError(null)
+      }
     } finally {
       setLoading(false)
     }
