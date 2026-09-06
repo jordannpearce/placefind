@@ -24,6 +24,8 @@ import type {
   ScanCompare,
   ScanSchedule,
   TrafficSchedule,
+  PinSource,
+  GeoPointsStatus,
 } from "./types.ts"
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -261,6 +263,7 @@ export async function loadAdmin(): Promise<{
   issued: IssuedLicense[]
   outbox: Array<{ id: string; to: string; subject: string; createdAt: string; delivered: boolean; detail: string }>
   mailPresets?: Array<{ type: string; label: string; subject: string; text: string }>
+  geoPoints?: GeoPointsStatus
 }> {
   return request("/api/admin")
 }
@@ -387,13 +390,63 @@ export async function deleteCampaign(id: string): Promise<void> {
 
 export async function loadCampaignGrid(
   id: string,
-  input?: { gridSize?: number; spacingMiles?: number },
-): Promise<{ campaign: Campaign; center: GeoPoint; points: GridPoint[]; gridSize: number; spacingMiles: number }> {
+  input?: { gridSize?: number; spacingMiles?: number; pinSource?: PinSource },
+): Promise<{
+  campaign: Campaign
+  center: GeoPoint
+  points: GridPoint[]
+  gridSize: number
+  spacingMiles: number
+  pinSource?: PinSource
+  usedCityGps?: boolean
+  cityPointCount?: number
+}> {
   const query = new URLSearchParams()
   if (input?.gridSize != null) query.set("gridSize", String(input.gridSize))
   if (input?.spacingMiles != null) query.set("spacingMiles", String(input.spacingMiles))
+  if (input?.pinSource) query.set("pinSource", input.pinSource)
   const suffix = query.size ? `?${query}` : ""
   return request(`/api/campaigns/${id}/grid${suffix}`)
+}
+
+export async function loadGeoPointsStatus(): Promise<GeoPointsStatus> {
+  return request<GeoPointsStatus>("/api/geo-points")
+}
+
+export async function previewGeoPoints(input: {
+  city: string
+  state: string
+  lat: number
+  lng: number
+  gridSize?: number
+  spacingMiles?: number
+  pinSource?: PinSource
+}): Promise<{ points: GridPoint[]; usedCityGps: boolean; cityPointCount: number; pinSource: PinSource }> {
+  const query = new URLSearchParams({
+    city: input.city,
+    state: input.state,
+    lat: String(input.lat),
+    lng: String(input.lng),
+  })
+  if (input.gridSize != null) query.set("gridSize", String(input.gridSize))
+  if (input.spacingMiles != null) query.set("spacingMiles", String(input.spacingMiles))
+  if (input.pinSource) query.set("pinSource", input.pinSource)
+  return request(`/api/geo-points/preview?${query}`)
+}
+
+export async function loadAdminGeoPoints(): Promise<GeoPointsStatus> {
+  return request<GeoPointsStatus>("/api/admin/geo-points")
+}
+
+export async function uploadGeoPointsCsv(csv: string, fileName?: string): Promise<GeoPointsStatus> {
+  return request<GeoPointsStatus>("/api/admin/geo-points", {
+    method: "POST",
+    body: JSON.stringify({ csv, fileName }),
+  })
+}
+
+export async function loadSampleGeoPoints(): Promise<GeoPointsStatus> {
+  return request<GeoPointsStatus>("/api/admin/geo-points/sample", { method: "POST", body: JSON.stringify({}) })
 }
 
 export async function geocodePlace(city: string, state: string): Promise<GeoPoint> {

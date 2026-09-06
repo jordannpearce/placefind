@@ -1,8 +1,9 @@
 import { Check, Copy, LoaderCircle } from "lucide-react"
 import { useEffect, useState } from "react"
 import { adminIssueLicense, loadAdmin, saveMail, testMail } from "../lib/api.ts"
-import type { AuthUser, HostedKeyStatus, IssuedLicense, MailPreset, MailStatus, OrderInfo, OutboxRow } from "../lib/types.ts"
+import type { AuthUser, GeoPointsStatus, HostedKeyStatus, IssuedLicense, MailPreset, MailStatus, OrderInfo, OutboxRow } from "../lib/types.ts"
 import { AdminEmail } from "./AdminEmail.tsx"
+import { AdminGeoPoints } from "./AdminGeoPoints.tsx"
 import { AdminUsers } from "./AdminUsers.tsx"
 import { MapsSearchPanel } from "./MapsSearchPanel.tsx"
 
@@ -20,6 +21,7 @@ export function AdminPage({
   const [mailPresets, setMailPresets] = useState<MailPreset[]>([])
   const [mail, setMail] = useState<MailStatus | null>(null)
   const [hosted, setHosted] = useState<HostedKeyStatus | null>(null)
+  const [geoPoints, setGeoPoints] = useState<GeoPointsStatus | null>(null)
   const [shop, setShop] = useState({ orderCount: 0, paidCount: 0, pendingCount: 0 })
   const [keygenReady, setKeygenReady] = useState(false)
   const [name, setName] = useState("")
@@ -49,6 +51,7 @@ export function AdminPage({
     )
     setMail(admin.mail)
     setHosted(admin.hosted ?? null)
+    setGeoPoints(admin.geoPoints ?? null)
     setShop(admin.shop)
     setKeygenReady(admin.keygen.canIssue)
     setFromEmail(admin.mail.fromEmail)
@@ -88,6 +91,8 @@ export function AdminPage({
         onError={setError}
         onMessage={setMessage}
       />
+
+      <AdminGeoPoints initial={geoPoints} onError={setError} onMessage={setMessage} />
 
       <section className="rounded-2xl border border-line bg-panel p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Admin</p>

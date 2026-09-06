@@ -27,6 +27,10 @@ export function mapsKeysMissingPublicMessage() {
   return "Maps search is not configured, so a rank scan cannot run."
 }
 
+export function usingCityGpsBackupNote() {
+  return "Using city GPS backup"
+}
+
 export function mapsKeysMissingAdminMessage() {
   return "Maps rank tracking is not configured. Save Maps search credentials on Admin, or set the Railway Maps variables, before a Track scan can run."
 }

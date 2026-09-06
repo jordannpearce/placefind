@@ -1,0 +1,12 @@
+city,state,lat,lng,zip,name
+Austin,TX,30.2672,-97.7431,78701,Austin downtown
+Austin,TX,30.2701,-97.7313,78702,East Austin
+Austin,TX,30.2849,-97.7366,78705,University
+Austin,TX,30.2500,-97.7500,78704,South Austin
+Austin,TX,30.3072,-97.7544,78756,North Loop
+New York,NY,40.730610,-73.935242,10009,East Village
+New York,NY,40.7580,-73.9855,10036,Times Square
+New York,NY,40.6892,-74.0445,10004,Battery
+Seattle,WA,47.6097,-122.3331,98101,Downtown Seattle
+Seattle,WA,47.6085,-122.3406,98101,Pike Place
+Chicago,IL,41.8781,-87.6298,60601,The Loop

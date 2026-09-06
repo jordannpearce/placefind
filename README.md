@@ -145,6 +145,8 @@ Rank scans use the same Maps search as the test scan. If Maps search is not set 
 
 Grid cells call DataForSEO Maps with `location_coordinate` as `latitude,longitude,zoom` (max 7 decimals; zoom 3–21). One task per pin, batched up to 100 per `task_post`. DataForSEO applies **17z** when zoom is omitted — that is street-level “search this area,” so a 1-mile neighbor often omits the listing. PlaceFind uses **14z** for 1-mile cells (~2–3 mile viewport; 13z when spacing is 1.5+ miles, 15z at 0.5 mile). Every finished pin is rank, not found (red), or error — never left blank.
 
+A US city GPS CSV is a **backup of coordinates only**. It does not replace rank results. After you confirm a listing on Track, choose **Grid around listing** (the usual 3×3 / 5×5 / 7×7) or **City GPS backup** (nearest imported city points around that listing, still 3 / 5 / 7). If a cell has no nearby city point, PlaceFind keeps the computed coordinate. Upload the full file on **Admin → City GPS backup**. A small sample lives at `data/us-cities-sample.csv`. Points are stored in Postgres `geo_points` when `DATABASE_URL` is set, or in `.data/geo-points.json` locally.
+
 Keygen and Resend on **Admin** / **Sell** are separate: they issue and email Windows licenses. They are not required to create a campaign.
 
 ## Sample searches

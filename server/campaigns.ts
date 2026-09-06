@@ -24,9 +24,12 @@ import {
   type ScanSchedule,
   type TrafficSchedule,
 } from "./schedule.ts"
+import { normalizePinSource, resolveScanPoints, type PinSource } from "./geo-points.ts"
 import { readCollection, writeCollection } from "./store.ts"
 import type { ApiKeys } from "./types.ts"
 import type { ScanCompare } from "../src/lib/types.ts"
+
+export type { PinSource }
 
 export type { ScanSchedule, TrafficSchedule }
 export { listingNotConfirmedForScheduleMessage }
@@ -60,6 +63,7 @@ export type CampaignInput = {
   spacingMiles?: number
   zoom?: number
   center?: GeoPoint | null
+  pinSource?: PinSource
   scanSchedule?: ScanSchedule | null
   trafficSchedule?: TrafficSchedule | null
 }
@@ -123,6 +127,8 @@ export type GridScanRun = {
   foundCount: number
   points: GridPointResult[]
   status?: "running" | "ok" | "error"
+  pinSource?: PinSource
+  usedCityGps?: boolean
 }
 
 export type Campaign = {
@@ -139,6 +145,7 @@ export type Campaign = {
   gridSize: number
   spacingMiles: number
   zoom: number
+  pinSource: PinSource
   center: GeoPoint | null
   createdAt: string
   updatedAt: string
@@ -274,7 +281,7 @@ export function hasConfirmedListing(campaign: Pick<Campaign, "placeId">): boolea
 }
 
 export function validateCampaign(input: CampaignInput): {
-  value?: Pick<Campaign, "name" | "businessName" | "city" | "state" | "placeId" | "listingTitle" | "listingAddress" | "keywords" | "gridSize" | "spacingMiles" | "zoom" | "center">
+  value?: Pick<Campaign, "name" | "businessName" | "city" | "state" | "placeId" | "listingTitle" | "listingAddress" | "keywords" | "gridSize" | "spacingMiles" | "zoom" | "pinSource" | "center">
   error?: string
 } {
   const name = input.name?.trim() ?? ""
@@ -307,6 +314,7 @@ export function validateCampaign(input: CampaignInput): {
       gridSize: grid.value,
       spacingMiles: spacing.value,
       zoom: normalizeZoom(input.zoom, spacing.value),
+      pinSource: normalizePinSource(input.pinSource),
       center: input.center === undefined ? null : normalizeCenter(input.center),
     },
   }
@@ -340,20 +348,80 @@ export function buildGridPoints(center: GeoPoint, gridSize: number, spacingMiles
 }
 
 export function gridPointsForCampaign(
-  campaign: Pick<Campaign, "center" | "gridSize" | "spacingMiles" | "zoom">,
+  campaign: Pick<Campaign, "center" | "city" | "state" | "gridSize" | "spacingMiles" | "zoom" | "pinSource">,
   gridSize?: number,
   spacingMiles?: number,
+  pinSource?: PinSource,
 ): GridPoint[] {
   const center = normalizeCenter(campaign.center)
   if (!center) return []
-  return buildGridPoints(center, gridSize ?? campaign.gridSize, spacingMiles ?? campaign.spacingMiles, campaign.zoom)
+  return resolveCampaignScanPoints(campaign, center, {
+    gridSize: gridSize ?? campaign.gridSize,
+    spacingMiles: spacingMiles ?? campaign.spacingMiles,
+    pinSource: pinSource ?? campaign.pinSource,
+  }).points
+}
+
+export function previewScanPoints(input: {
+  city: string
+  state: string
+  center: GeoPoint
+  gridSize?: number
+  spacingMiles?: number
+  zoom?: number
+  pinSource?: PinSource
+}) {
+  const grid = normalizeGridSize(input.gridSize)
+  if (grid.error || grid.value == null) throw new CampaignError(grid.error || "Choose a grid size.")
+  const spacing = normalizeSpacingMiles(input.spacingMiles)
+  if (spacing.error || spacing.value == null) throw new CampaignError(spacing.error || "Enter the distance between points.")
+  const center = normalizeCenter(input.center)
+  if (!center) throw new CampaignError("Confirm a Maps listing before placing points.")
+  return resolveScanPoints({
+    center,
+    city: input.city,
+    state: input.state,
+    gridSize: grid.value,
+    spacingMiles: spacing.value,
+    zoom: normalizeZoom(input.zoom, spacing.value),
+    pinSource: input.pinSource,
+    buildGrid: buildGridPoints,
+  })
+}
+
+export function resolveCampaignScanPoints(
+  campaign: Pick<Campaign, "city" | "state" | "gridSize" | "spacingMiles" | "zoom" | "pinSource">,
+  center: GeoPoint,
+  input: { gridSize?: number; spacingMiles?: number; pinSource?: PinSource } = {},
+) {
+  const gridSize = input.gridSize ?? campaign.gridSize
+  const spacingMiles = input.spacingMiles ?? campaign.spacingMiles
+  return resolveScanPoints({
+    center,
+    city: campaign.city,
+    state: campaign.state,
+    gridSize,
+    spacingMiles,
+    zoom: campaign.zoom,
+    pinSource: input.pinSource ?? campaign.pinSource,
+    buildGrid: buildGridPoints,
+  })
 }
 
 export async function loadCampaignGrid(
   id: string,
   userId?: string | null,
-  input: { gridSize?: number; spacingMiles?: number } = {},
-): Promise<{ campaign: Campaign; center: GeoPoint; points: GridPoint[]; gridSize: number; spacingMiles: number }> {
+  input: { gridSize?: number; spacingMiles?: number; pinSource?: PinSource } = {},
+): Promise<{
+  campaign: Campaign
+  center: GeoPoint
+  points: GridPoint[]
+  gridSize: number
+  spacingMiles: number
+  pinSource: PinSource
+  usedCityGps: boolean
+  cityPointCount: number
+}> {
   const campaign = getCampaign(id, userId)
   if (!campaign) throw new CampaignError("That campaign was not found.", 404)
 
@@ -361,6 +429,7 @@ export async function loadCampaignGrid(
   if (grid.error || grid.value == null) throw new CampaignError(grid.error || "Choose a grid size.")
   const spacing = normalizeSpacingMiles(input.spacingMiles ?? campaign.spacingMiles)
   if (spacing.error || spacing.value == null) throw new CampaignError(spacing.error || "Enter the distance between points.")
+  const pinSource = normalizePinSource(input.pinSource ?? campaign.pinSource)
 
   let next = campaign
   let center = normalizeCenter(campaign.center)
@@ -377,12 +446,20 @@ export async function loadCampaignGrid(
     })
   }
 
+  const resolved = resolveCampaignScanPoints(next, center, {
+    gridSize: grid.value,
+    spacingMiles: spacing.value,
+    pinSource,
+  })
   return {
     campaign: next,
     center,
-    points: buildGridPoints(center, grid.value, spacing.value, next.zoom),
+    points: resolved.points,
     gridSize: grid.value,
     spacingMiles: spacing.value,
+    pinSource,
+    usedCityGps: resolved.usedCityGps,
+    cityPointCount: resolved.cityPointCount,
   }
 }
 
@@ -425,6 +502,8 @@ function normalizeStoredScanRun(row: GridScanRun): GridScanRun {
     foundCount: row.foundCount ?? 0,
     points: Array.isArray(row.points) ? row.points : [],
     status: row.status === "running" || row.status === "ok" || row.status === "error" ? row.status : undefined,
+    pinSource: normalizePinSource(row.pinSource),
+    usedCityGps: Boolean(row.usedCityGps),
   }
 }
 
@@ -563,6 +642,7 @@ function normalizeStoredCampaign(row: Campaign): Campaign {
     gridSize: grid.value ?? DEFAULT_GRID_SIZE,
     spacingMiles: spacing.value ?? DEFAULT_SPACING_MILES,
     zoom: normalizeZoom(row.zoom, spacing.value ?? DEFAULT_SPACING_MILES),
+    pinSource: normalizePinSource(row.pinSource),
     center: normalizeCenter(row.center),
     createdAt: row.createdAt || new Date().toISOString(),
     updatedAt: row.updatedAt || row.createdAt || new Date().toISOString(),
@@ -623,6 +703,7 @@ export function updateCampaign(id: string, input: CampaignInput, userId?: string
     gridSize: input.gridSize !== undefined ? input.gridSize : current.gridSize,
     spacingMiles: input.spacingMiles !== undefined ? input.spacingMiles : current.spacingMiles,
     zoom: input.zoom !== undefined ? input.zoom : current.zoom,
+    pinSource: input.pinSource !== undefined ? input.pinSource : current.pinSource,
     center: input.center !== undefined ? input.center : current.center,
   })
   if (parsed.error || !parsed.value) throw new CampaignError(parsed.error || "Could not update the campaign.")
@@ -852,8 +933,9 @@ export async function scanCampaign(
     }
     const placeId = campaign.placeId.trim()
     const targetName = campaign.listingTitle.trim() || campaign.businessName
-    const zoom = gridCellZoom(campaign.spacingMiles, campaign.zoom)
-    const gridPoints = buildGridPoints(center, campaign.gridSize, campaign.spacingMiles, zoom)
+    const resolved = resolveCampaignScanPoints(campaign, center)
+    const zoom = resolved.zoom
+    const gridPoints = resolved.points
     const mapsPoints = gridPoints.map(
       (point): MapsGridPoint => ({
         id: `${point.row}:${point.col}`,
@@ -897,6 +979,8 @@ export async function scanCampaign(
       foundCount: 0,
       points: pendingPoints,
       status: "running",
+      pinSource: resolved.pinSource,
+      usedCityGps: resolved.usedCityGps,
     }
     persistLiveGrid(campaign.id, liveGrid)
 
@@ -942,6 +1026,8 @@ export async function scanCampaign(
       foundCount: points.filter((row) => row.rank != null).length,
       points,
       status: allFailed ? "error" : "ok",
+      pinSource: resolved.pinSource,
+      usedCityGps: resolved.usedCityGps,
     }
 
     const keywordRank: KeywordRank = {

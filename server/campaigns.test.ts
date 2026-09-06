@@ -32,6 +32,7 @@ import {
 } from "./campaigns.ts"
 import type { MapsGridClient, MapsItem } from "./dataforseo.ts"
 import { emptyApiKeys, resetHostedKeysCacheForTests } from "./hosted-keys.ts"
+import { importGeoPoints, resetGeoPointsForTests } from "./geo-points.ts"
 import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
 
 function rank(keyword: string, position: number | null): KeywordRank {
@@ -111,6 +112,7 @@ describe("validateCampaign", () => {
     })
     assert.equal(parsed.value?.gridSize, 5)
     assert.equal(parsed.value?.spacingMiles, 1)
+    assert.equal(parsed.value?.pinSource, "grid")
   })
 
   it("rejects a grid larger than 7×7", () => {
@@ -265,6 +267,36 @@ describe("campaign store", () => {
     assert.equal(three.points.length, 9)
     const seven = await loadCampaignGrid(campaign.id, "user-a", { gridSize: 7 })
     assert.equal(seven.points.length, 49)
+  })
+
+  it("stores city GPS backup as the pin source and snaps preview points", async () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-city-gps-")))
+    resetGeoPointsForTests()
+    importGeoPoints([{ city: "Austin", state: "TX", lat: 30.280128, lng: -97.739998 }])
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue"],
+        gridSize: 3,
+        pinSource: "city_gps",
+        center: { lat: 30.270128, lng: -97.739998 },
+      },
+      "user-a",
+    )
+    assert.equal(campaign.pinSource, "city_gps")
+    const preview = await loadCampaignGrid(campaign.id, "user-a")
+    assert.equal(preview.usedCityGps, true)
+    assert.equal(preview.pinSource, "city_gps")
+    assert.equal(preview.points.length, 9)
+    assert.ok(preview.points.some((point) => Math.abs(point.lat - 30.280128) < 1e-9))
+    const gridOnly = await loadCampaignGrid(campaign.id, "user-a", { pinSource: "grid" })
+    assert.equal(gridOnly.usedCityGps, false)
+    const middle = gridOnly.points.find((point) => point.row === 1 && point.col === 1)
+    assert.ok(middle)
+    assert.ok(Math.abs(middle.lat - 30.270128) < 1e-9)
   })
 
   it("persists the confirmed listing fields", () => {

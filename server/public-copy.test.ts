@@ -6,6 +6,7 @@ import {
   publicPinScanMessage,
   publicSearchMessage,
   publicTrafficMessage,
+  usingCityGpsBackupNote,
 } from "./public-copy.ts"
 
 describe("publicSearchMessage", () => {
@@ -52,6 +53,13 @@ describe("publicTrafficMessage", () => {
     const keyed = publicTrafficMessage("POST https://example.test/api?key=scp_secret_value failed")
     assert.equal(keyed.includes("scp_secret_value"), false)
     assert.equal(keyed.includes("key="), false)
+  })
+})
+
+describe("usingCityGpsBackupNote", () => {
+  it("does not name vendors", () => {
+    assert.equal(usingCityGpsBackupNote(), "Using city GPS backup")
+    assert.equal(leaksVendorTalk(usingCityGpsBackupNote()), false)
   })
 })
 

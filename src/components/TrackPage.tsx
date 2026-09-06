@@ -9,6 +9,7 @@ import {
   loadCampaignScans,
   loadCampaigns,
   loadCampaignTraffic,
+  previewGeoPoints,
   rerunCampaignScan,
   scanCampaign,
   searchBusiness,
@@ -18,7 +19,7 @@ import {
 } from "../lib/api.ts"
 import { buildPreviewPoints, gridPinId, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
 import { pointsWithCompare, rankChangeColor, rankChangeLabel } from "../lib/scan-compare.ts"
-import { mapsKeysMissingAdminMessage, publicPinScanMessage, publicSearchMessage } from "../lib/public-copy.ts"
+import { mapsKeysMissingAdminMessage, publicPinScanMessage, publicSearchMessage, usingCityGpsBackupNote } from "../lib/public-copy.ts"
 import { CityStateFields } from "./CityStateFields.tsx"
 import {
   campaignInputFromListing,
@@ -59,7 +60,9 @@ import type {
   Campaign,
   ConfirmedListing,
   GeoPoint,
+  GridPoint,
   GridPointResult,
+  PinSource,
   HostedKeyStatus,
   SearchQuery,
   SearchResponse,
@@ -123,6 +126,9 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [activeKeyword, setActiveKeyword] = useState("")
   const [gridSize, setGridSize] = useState(5)
   const [spacingMiles, setSpacingMiles] = useState(1)
+  const [pinSource, setPinSource] = useState<PinSource>("grid")
+  const [cityGpsPreview, setCityGpsPreview] = useState<GridPoint[] | null>(null)
+  const [usedCityGps, setUsedCityGps] = useState(false)
   const [creating, setCreating] = useState(true)
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
@@ -170,15 +176,30 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     const scanMatches =
       Boolean(grid) &&
       grid!.gridSize === gridSize &&
-      Math.abs(grid!.spacingMiles - spacingMiles) < 1e-6
+      Math.abs(grid!.spacingMiles - spacingMiles) < 1e-6 &&
+      (grid!.pinSource ?? "grid") === pinSource
     if (scanMatches && grid) {
       if (!activeKeyword) return grid.points
       const keyed = grid.points.filter((point) => point.keyword.toLowerCase() === activeKeyword.toLowerCase())
       return keyed.length > 0 ? keyed : grid.points
     }
     if (!mapCenter || !confirmed) return []
+    if (pinSource === "city_gps" && cityGpsPreview && cityGpsPreview.length > 0) {
+      return cityGpsPreview.map((point) => ({
+        ...point,
+        keyword,
+        rank: null,
+        listingTitle: null,
+        rating: null,
+        address: null,
+        mapsUrl: null,
+        scannedAt: "",
+        status: "unset" as const,
+        error: undefined,
+      }))
+    }
     return buildPreviewPoints(mapCenter, gridSize, spacingMiles, keyword)
-  }, [comparedPoints, grid, activeKeyword, gridSize, spacingMiles, mapCenter, selected?.keywords, keywordDraft, confirmed])
+  }, [comparedPoints, grid, activeKeyword, gridSize, spacingMiles, pinSource, cityGpsPreview, mapCenter, selected?.keywords, keywordDraft, confirmed])
 
   function applyCampaign(campaign: Campaign | null) {
     if (!campaign) {
@@ -188,6 +209,9 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setKeywordDraft("")
       setGridSize(5)
       setSpacingMiles(1)
+      setPinSource("grid")
+      setCityGpsPreview(null)
+      setUsedCityGps(false)
       setPreviewCenter(null)
       setSelectedPinIds([])
       setSelectedKeywords([])
@@ -202,6 +226,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setKeywordDraft("")
     setGridSize(campaign.gridSize ?? 5)
     setSpacingMiles(campaign.spacingMiles ?? 1)
+    setPinSource(campaign.pinSource === "city_gps" ? "city_gps" : "grid")
+    setUsedCityGps(Boolean(campaign.lastGridScan?.usedCityGps))
     setPreviewCenter(campaign.center || campaign.lastGridScan?.center || null)
     setSelectedPinIds(campaign.trafficSchedule?.lastSelectedPinIds ?? [])
     const listed = listedTrafficKeywords(campaign)
@@ -294,6 +320,42 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       active = false
     }
   }, [selected?.id, selected?.center, creating, confirmed, gridSize, spacingMiles])
+
+  useEffect(() => {
+    if (!confirmed) {
+      setCityGpsPreview(null)
+      setUsedCityGps(false)
+      return
+    }
+    if (pinSource !== "city_gps") {
+      setCityGpsPreview(null)
+      setUsedCityGps(false)
+      return
+    }
+    let active = true
+    void previewGeoPoints({
+      city: confirmed.city || query.city,
+      state: confirmed.state || query.state,
+      lat: confirmed.lat,
+      lng: confirmed.lng,
+      gridSize,
+      spacingMiles,
+      pinSource: "city_gps",
+    })
+      .then((payload) => {
+        if (!active) return
+        setCityGpsPreview(payload.points)
+        setUsedCityGps(payload.usedCityGps)
+      })
+      .catch(() => {
+        if (!active) return
+        setCityGpsPreview(null)
+        setUsedCityGps(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [confirmed, query.city, query.state, gridSize, spacingMiles, pinSource])
 
   useEffect(() => {
     if (!selectedPoint) return
@@ -438,6 +500,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             keywords: selected.keywords,
             gridSize,
             spacingMiles,
+            pinSource,
           }),
         ),
       )
@@ -448,11 +511,12 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     }
   }
 
-  async function persistGrid(nextSize: number, nextSpacing: number) {
+  async function persistGrid(nextSize: number, nextSpacing: number, nextSource = pinSource) {
     setGridSize(nextSize)
     setSpacingMiles(nextSpacing)
+    setPinSource(nextSource)
     if (!selected || creating) return
-    void updateCampaign(selected.id, { gridSize: nextSize, spacingMiles: nextSpacing })
+    void updateCampaign(selected.id, { gridSize: nextSize, spacingMiles: nextSpacing, pinSource: nextSource })
       .then(replaceCampaign)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not save the grid."))
   }
@@ -557,6 +621,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             keywords: [target],
             gridSize,
             spacingMiles,
+            pinSource,
           }),
         )
         setCreating(false)
@@ -568,7 +633,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
           : [...campaign.keywords, target]
         campaign = await updateCampaign(
           campaign.id,
-          campaignInputFromListing(confirmed, query, { keywords, gridSize, spacingMiles }),
+          campaignInputFromListing(confirmed, query, { keywords, gridSize, spacingMiles, pinSource }),
         )
         replaceCampaign(campaign)
       }
@@ -582,6 +647,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
           keyword: target,
           gridSize,
           spacingMiles,
+          pinSource,
+          usedCityGps,
           center: { lat: confirmed.lat, lng: confirmed.lng },
           placeId: confirmed.placeId,
           pointCount: gridSearchCount(gridSize),
@@ -631,7 +698,12 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       }
       const found = payload.grid?.foundCount ?? 0
       const total = payload.grid?.pointCount ?? 0
-      setNotice(`Scan finished and saved. ${confirmed.title} appeared at ${found} of ${total} grid points for “${target}”.`)
+      setUsedCityGps(Boolean(payload.grid?.usedCityGps))
+      setNotice(
+        `Scan finished and saved. ${confirmed.title} appeared at ${found} of ${total} grid points for “${target}”.${
+          payload.grid?.usedCityGps ? ` ${usingCityGpsBackupNote()}.` : ""
+        }`,
+      )
     } catch (err) {
       setError(err instanceof Error ? publicSearchMessage(err.message) || err.message : "Could not scan Maps.")
     } finally {
@@ -1156,6 +1228,39 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               </label>
             </div>
 
+            <div className="mt-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Scan points</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => void persistGrid(gridSize, spacingMiles, "grid")}
+                  className={`rounded-xl border px-4 py-3 text-left ${pinSource === "grid" ? "border-brass bg-brass/10 text-paper" : "border-line bg-ink text-paper/80"}`}
+                >
+                  <span className="block text-sm font-semibold">Grid around listing</span>
+                  <span className="mt-1 block text-xs text-muted">Even 3×3 / 5×5 / 7×7 around the confirmed pin.</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void persistGrid(gridSize, spacingMiles, "city_gps")}
+                  className={`rounded-xl border px-4 py-3 text-left ${pinSource === "city_gps" ? "border-brass bg-brass/10 text-paper" : "border-line bg-ink text-paper/80"}`}
+                >
+                  <span className="block text-sm font-semibold">City GPS backup</span>
+                  <span className="mt-1 block text-xs text-muted">Nearest city GPS points around the listing, same size.</span>
+                </button>
+              </div>
+              {pinSource === "city_gps" && usedCityGps && (
+                <p className="mt-3 rounded-xl border border-brass/25 bg-brass/5 px-4 py-3 text-sm text-paper/80">
+                  {usingCityGpsBackupNote()}
+                </p>
+              )}
+              {pinSource === "city_gps" && !usedCityGps && (
+                <p className="mt-3 text-sm text-muted">
+                  No city GPS points for this city yet. Upload a US city GPS CSV in Admin, or keep using the grid around
+                  the listing.
+                </p>
+              )}
+            </div>
+
             {selected && !creating && (
               <form
                 className="mt-4 flex flex-col gap-2 sm:flex-row"
@@ -1277,7 +1382,9 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               <h4 className="font-display text-2xl text-paper">Where the listing ranks</h4>
               <p className="mt-1 text-sm text-muted">
                 {confirmed
-                  ? `Pins mark every ${gridSize}×${gridSize} search point around ${confirmed.title}. Rank 1 is the darkest green, then 2 and 3 in lighter greens; 4–6 yellow, 7–10 orange, 11–15 orange-red, and 16+ or not found in red.`
+                  ? `Pins mark every ${gridSize}×${gridSize} search point around ${confirmed.title}. Rank 1 is the darkest green, then 2 and 3 in lighter greens; 4–6 yellow, 7–10 orange, 11–15 orange-red, and 16+ or not found in red.${
+                      usedCityGps || grid?.usedCityGps ? ` ${usingCityGpsBackupNote()}.` : ""
+                    }`
                   : "Confirm a listing to drop a pin and center the grid on that business."}
                 {pinsSelectable
                   ? " After a scan, click pins to choose which GPS points get traffic."

@@ -86,6 +86,24 @@ CREATE TABLE IF NOT EXISTS hosted_keys (
   sealed TEXT NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
+CREATE TABLE IF NOT EXISTS geo_points (
+  id TEXT PRIMARY KEY,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL,
+  lat DOUBLE PRECISION NOT NULL,
+  lng DOUBLE PRECISION NOT NULL,
+  zip TEXT,
+  name TEXT,
+  population INTEGER
+);
+ALTER TABLE geo_points ADD COLUMN IF NOT EXISTS population INTEGER;
+CREATE INDEX IF NOT EXISTS geo_points_state_city_idx ON geo_points (state, city);
+CREATE TABLE IF NOT EXISTS geo_imports (
+  id TEXT PRIMARY KEY,
+  imported_at TIMESTAMPTZ,
+  file_name TEXT,
+  point_count INTEGER NOT NULL DEFAULT 0
+);
 `
 
 const memory: Record<StoreCollection, JsonRow[]> = {
@@ -109,6 +127,10 @@ export function dataDir() {
 
 export function storeDriver(): StoreDriver {
   return driver
+}
+
+export function storePool(): import("pg").Pool | null {
+  return pool
 }
 
 function fileFor(name: StoreCollection) {

@@ -69,10 +69,18 @@ import {
   getCampaignScan,
   listCampaignScans,
   loadCampaignGrid,
+  previewScanPoints,
   readCampaigns,
   scanCampaign,
   updateCampaign,
 } from "./campaigns.ts"
+import {
+  geoPointsMeta,
+  importBundledSampleGeoPoints,
+  importGeoCsvText,
+  initGeoPoints,
+  usingCityGpsBackupNote,
+} from "./geo-points.ts"
 import { startScheduler } from "./scheduler.ts"
 import { getCampaignTraffic, recoverStaleTrafficJobs, startCampaignTraffic, stopCampaignTraffic } from "./traffic.ts"
 import { publicCheckoutWarning } from "./public-copy.ts"
@@ -111,10 +119,17 @@ function readQuery(body: Partial<SearchQuery>): { query: SearchQuery; error?: st
 
 async function start() {
   await initStore()
+  await initGeoPoints()
   await hydrateHostedKeys()
   recoverStaleTrafficJobs()
   const app = express()
   app.use(cors({ origin: true, credentials: true }))
+  app.use((req, res, next) => {
+    if (req.path === "/api/admin/geo-points" && req.method === "POST") {
+      return express.json({ limit: "32mb" })(req, res, next)
+    }
+    next()
+  })
   app.use(express.json({ limit: "1mb" }))
 
   function actor(req: express.Request) {
@@ -273,8 +288,13 @@ async function start() {
     const gridSize = req.query.gridSize == null || req.query.gridSize === "" ? undefined : Number(req.query.gridSize)
     const spacingMiles =
       req.query.spacingMiles == null || req.query.spacingMiles === "" ? undefined : Number(req.query.spacingMiles)
+    const pinSource = req.query.pinSource == null || req.query.pinSource === "" ? undefined : String(req.query.pinSource)
     try {
-      const result = await loadCampaignGrid(String(req.params.id ?? ""), user.id, { gridSize, spacingMiles })
+      const result = await loadCampaignGrid(String(req.params.id ?? ""), user.id, {
+        gridSize,
+        spacingMiles,
+        pinSource: pinSource === "city_gps" ? "city_gps" : pinSource === "grid" ? "grid" : undefined,
+      })
       res.json({ ...result, ...campaignMeta() })
     } catch (error) {
       if (error instanceof CampaignError) {
@@ -765,7 +785,79 @@ async function start() {
         detail: row.detail,
       })),
       mailPresets: mailPresets(readProduct()),
+      geoPoints: geoPointsMeta(),
     })
+  })
+
+  app.get("/api/geo-points", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const meta = geoPointsMeta()
+    res.json({
+      available: meta.pointCount > 0,
+      pointCount: meta.pointCount,
+      cityCount: meta.cityCount,
+      importedAt: meta.importedAt,
+    })
+  })
+
+  app.get("/api/geo-points/preview", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    try {
+      const result = previewScanPoints({
+        city: String(req.query.city ?? ""),
+        state: String(req.query.state ?? ""),
+        center: { lat: Number(req.query.lat), lng: Number(req.query.lng) },
+        gridSize: req.query.gridSize == null || req.query.gridSize === "" ? undefined : Number(req.query.gridSize),
+        spacingMiles:
+          req.query.spacingMiles == null || req.query.spacingMiles === "" ? undefined : Number(req.query.spacingMiles),
+        pinSource: String(req.query.pinSource ?? "") === "city_gps" ? "city_gps" : "grid",
+      })
+      res.json({
+        points: result.points,
+        usedCityGps: result.usedCityGps,
+        cityPointCount: result.cityPointCount,
+        pinSource: result.pinSource,
+        note: result.usedCityGps ? usingCityGpsBackupNote() : undefined,
+      })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(400).json({ error: "Could not preview those GPS points." })
+    }
+  })
+
+  app.get("/api/admin/geo-points", (req, res) => {
+    if (!manage(req, res)) return
+    res.json(geoPointsMeta())
+  })
+
+  app.post("/api/admin/geo-points", (req, res) => {
+    if (!manage(req, res)) return
+    const body = (req.body ?? {}) as { csv?: string; fileName?: string }
+    const csv = String(body.csv ?? "")
+    if (!csv.trim()) {
+      res.status(400).json({ error: "Choose a CSV file with city, state, latitude, and longitude columns." })
+      return
+    }
+    try {
+      const imported = importGeoCsvText(csv, String(body.fileName ?? ""))
+      res.json({ ...imported.meta, skipped: imported.skipped })
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Could not import that CSV." })
+    }
+  })
+
+  app.post("/api/admin/geo-points/sample", (req, res) => {
+    if (!manage(req, res)) return
+    try {
+      res.json(importBundledSampleGeoPoints())
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Could not load the sample city GPS file." })
+    }
   })
 
   app.get("/api/admin/users", (req, res) => {

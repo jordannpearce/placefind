@@ -207,6 +207,17 @@ export type GeoPoint = {
   lng: number
 }
 
+export type PinSource = "grid" | "city_gps"
+
+export type GeoPointsStatus = {
+  available: boolean
+  pointCount: number
+  cityCount: number
+  importedAt: string | null
+  fileName?: string
+  skipped?: number
+}
+
 export type KeywordRank = {
   keyword: string
   rank: number | null
@@ -270,6 +281,8 @@ export type GridScanRun = {
   foundCount: number
   points: GridPointResult[]
   status?: "running" | "ok" | "error"
+  pinSource?: PinSource
+  usedCityGps?: boolean
 }
 
 export type ScanComparePin = {
@@ -330,6 +343,7 @@ export type Campaign = {
   gridSize: number
   spacingMiles: number
   zoom?: number
+  pinSource?: PinSource
   center: GeoPoint | null
   createdAt: string
   updatedAt: string
@@ -392,6 +406,7 @@ export type CampaignInput = {
   gridSize?: number
   spacingMiles?: number
   zoom?: number
+  pinSource?: PinSource
   center?: GeoPoint | null
   scanSchedule?: ScanSchedule | null
   trafficSchedule?: TrafficSchedule | null
