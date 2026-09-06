@@ -147,6 +147,33 @@ describe("runCampaignTraffic", () => {
     reloadStoreFromDisk()
   })
 
+  it("returns 400 when the campaign is confirmed but has not been scanned", async () => {
+    isolateKeys()
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-traffic-noscans-")))
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue"],
+        placeId: "ChIJ123",
+        listingTitle: "Franklin Barbecue",
+        center: { lat: 30.27, lng: -97.74 },
+      },
+      "user-a",
+    )
+    assert.equal(confirmedListingForTraffic(campaign), null)
+    await assert.rejects(
+      () => runCampaignTraffic(campaign.id, emptyApiKeys(), 3, "user-a"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error)
+        assert.equal(error.message, listingNotReadyForTrafficMessage())
+        return true
+      },
+    )
+  })
+
   it("returns 400 when the campaign has no confirmed listing", async () => {
     isolateKeys()
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-traffic-none-")))
@@ -197,6 +224,32 @@ describe("runCampaignTraffic", () => {
         return true
       },
     )
+  })
+
+  it("allows traffic after a finished scan even when no ranks were found", () => {
+    isolateKeys()
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-traffic-notfound-")))
+    const created = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: ["barbecue"],
+        placeId: "ChIJ123",
+        listingTitle: "Franklin Barbecue",
+        listingAddress: "900 E 11th St",
+        center: { lat: 30.27, lng: -97.74 },
+      },
+      "user-a",
+    )
+    const scanned = attachScan(created, false)
+    const listing = confirmedListingForTraffic(scanned)
+    assert.ok(listing)
+    assert.match(listing.mapsUrl, /maps/)
+    assert.equal(listing.title, "Franklin Barbecue")
+    const origins = pickTrafficOrigins(scanned, 2)
+    assert.equal(origins.length, 2)
   })
 
   it("spreads traffic origins across scanned grid points", () => {

@@ -18,9 +18,13 @@ import {
   confirmedListingFromCampaign,
   confirmedListingFromSearch,
   listingsFromSearch,
+  campaignScanFinished,
   scanBusinessEnabled,
   searchChanged,
   searchQueryFromCampaign,
+  startTrafficEnabled,
+  startTrafficLabel,
+  startTrafficVisible,
 } from "../lib/track.ts"
 import type {
   ApiKeys,
@@ -400,10 +404,16 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
 
   const mapsReady = Boolean((keys.dataforseoLogin && keys.dataforseoPassword) || hosted?.dataforseo)
   const busy = Boolean(saving || scanning || searching || startingTraffic)
-  const trafficReady = Boolean(
-    (selected?.lastGridScan && selected.lastGridScan.foundCount > 0) ||
-      (selected?.lastScan && selected.lastScan.foundCount > 0),
-  )
+  const scanFinished = campaignScanFinished(selected)
+  const showStartTraffic = startTrafficVisible(confirmed)
+  const canStartTraffic = startTrafficEnabled({
+    listing: confirmed,
+    campaign: selected,
+    scanning,
+    starting: startingTraffic,
+    busy,
+  })
+  const trafficLabel = startTrafficLabel({ scanning, starting: startingTraffic, scanFinished })
   const step = searching ? 1 : confirmed ? 3 : listings.length > 0 ? 2 : 1
 
   async function onStartTraffic() {
@@ -634,15 +644,16 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                   {scanning && <LoaderCircle className="h-4 w-4 animate-spin" />}
                   {scanning ? "Scanning the grid…" : "Scan business"}
                 </button>
-                {trafficReady && (
+                {showStartTraffic && (
                   <button
                     type="button"
+                    data-testid="start-traffic"
                     onClick={() => void onStartTraffic()}
-                    disabled={busy}
+                    disabled={!canStartTraffic}
                     className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-brass bg-brass/10 px-4 font-semibold text-brass hover:bg-brass/20 disabled:opacity-60"
                   >
-                    {startingTraffic && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                    {startingTraffic ? "Starting traffic…" : "Start Traffic"}
+                    {(scanning || startingTraffic) && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                    {trafficLabel}
                   </button>
                 )}
               </div>

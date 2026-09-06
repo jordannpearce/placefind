@@ -2,11 +2,15 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
   campaignInputFromListing,
+  campaignScanFinished,
   confirmedListingFromCampaign,
   confirmedListingFromSearch,
   listingsFromSearch,
   scanBusinessEnabled,
   searchChanged,
+  startTrafficEnabled,
+  startTrafficLabel,
+  startTrafficVisible,
 } from "./track.ts"
 import type { BusinessListing, Campaign, SearchResponse } from "./types.ts"
 
@@ -111,6 +115,45 @@ describe("campaignInputFromListing", () => {
     assert.equal(input.listingTitle, "Franklin Barbecue")
     assert.equal(input.listingAddress, "900 E 11th St, Austin, TX 78702")
     assert.deepEqual(input.keywords, ["barbecue"])
+  })
+})
+
+describe("start traffic button", () => {
+  const scanned = campaign({
+    placeId: "sample-franklin",
+    listingTitle: "Franklin Barbecue",
+    listingAddress: "900 E 11th St, Austin, TX 78702",
+    center: { lat: 30.2701, lng: -97.7313 },
+    lastGridScan: {
+      id: "g1",
+      scannedAt: "2026-09-06T00:00:00.000Z",
+      keyword: "barbecue",
+      gridSize: 3,
+      spacingMiles: 1,
+      center: { lat: 30.2701, lng: -97.7313 },
+      pointCount: 9,
+      foundCount: 0,
+      points: [],
+    },
+  })
+
+  it("is visible after confirm and stays visible when a scan found nothing", () => {
+    const listing = confirmedListingFromCampaign(scanned)
+    assert.equal(startTrafficVisible(listing), true)
+    assert.equal(campaignScanFinished(scanned), true)
+    assert.equal(campaignScanFinished(campaign()), false)
+    assert.equal(startTrafficEnabled({ listing, campaign: scanned }), true)
+    assert.equal(startTrafficEnabled({ listing, campaign: campaign({ placeId: "sample-franklin" }) }), false)
+  })
+
+  it("disables while a scan is running and labels Scan first before one exists", () => {
+    const listing = confirmedListingFromSearch(franklin)
+    assert.equal(startTrafficLabel({ scanFinished: false }), "Scan first")
+    assert.equal(startTrafficLabel({ scanning: true, scanFinished: false }), "Scanning…")
+    assert.equal(startTrafficLabel({ starting: true, scanFinished: true }), "Starting traffic…")
+    assert.equal(startTrafficLabel({ scanFinished: true }), "Start Traffic")
+    assert.equal(startTrafficEnabled({ listing, campaign: scanned, scanning: true }), false)
+    assert.equal(startTrafficVisible(null), false)
   })
 })
 

@@ -48,17 +48,18 @@ export function confirmedListingForTraffic(campaign: Campaign): {
   mapsUrl: string
   keyword: string
 } | null {
+  const placeId = campaign.placeId?.trim() ?? ""
+  const scanned = Boolean(campaign.lastGridScan || campaign.lastScan)
+  if (!placeId || !scanned) return null
+
   const grid = campaign.lastGridScan
   const foundPoint = grid?.points.find((point) => point.rank != null && point.mapsUrl)
   const scanHit = campaign.lastScan?.results.find((row) => row.rank != null && row.mapsUrl)
-  const found = (grid?.foundCount ?? 0) > 0 || (campaign.lastScan?.foundCount ?? 0) > 0
-  if (!found) return null
-
-  const title = foundPoint?.listingTitle || scanHit?.listingTitle || campaign.businessName
+  const title = foundPoint?.listingTitle || scanHit?.listingTitle || campaign.listingTitle || campaign.businessName
   const mapsUrl =
     foundPoint?.mapsUrl ||
     scanHit?.mapsUrl ||
-    mapsPlaceUrlFromCampaign(campaign, title, foundPoint?.address || scanHit?.address || "")
+    mapsPlaceUrlFromCampaign(campaign, title, foundPoint?.address || scanHit?.address || campaign.listingAddress || "")
   if (!mapsUrl) return null
   return {
     title,

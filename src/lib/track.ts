@@ -63,6 +63,33 @@ export function scanBusinessEnabled(listing: ConfirmedListing | null): boolean {
   return Boolean(listing?.placeId && listing.title && Number.isFinite(listing.lat) && Number.isFinite(listing.lng))
 }
 
+export function campaignScanFinished(campaign: Campaign | null | undefined): boolean {
+  return Boolean(campaign?.lastGridScan || campaign?.lastScan)
+}
+
+export function startTrafficVisible(listing: ConfirmedListing | null): boolean {
+  return scanBusinessEnabled(listing)
+}
+
+export function startTrafficEnabled(input: {
+  listing: ConfirmedListing | null
+  campaign: Campaign | null | undefined
+  scanning?: boolean
+  starting?: boolean
+  busy?: boolean
+}): boolean {
+  if (!startTrafficVisible(input.listing)) return false
+  if (input.scanning || input.starting || input.busy) return false
+  return campaignScanFinished(input.campaign)
+}
+
+export function startTrafficLabel(input: { scanning?: boolean; starting?: boolean; scanFinished?: boolean }): string {
+  if (input.scanning) return "Scanning…"
+  if (input.starting) return "Starting traffic…"
+  if (!input.scanFinished) return "Scan first"
+  return "Start Traffic"
+}
+
 export function searchQueryFromCampaign(campaign: Pick<Campaign, "businessName" | "city" | "state">): SearchQuery {
   return {
     name: campaign.businessName,
