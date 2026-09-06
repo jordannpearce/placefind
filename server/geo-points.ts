@@ -375,7 +375,7 @@ export function importGeoCsvText(csv: string, fileName = ""): { meta: GeoPointsM
     throw new Error(missing || "That CSV did not contain any usable city GPS points.")
   }
   mkdirSync(dataDir(), { recursive: true })
-  const looksLikeFullImport = /uscities|us.?cities/i.test(fileName) || parsed.points.length > 1_000
+  const looksLikeFullImport = /^uscities\.csv$/i.test(fileName) || parsed.points.length > 1_000
   if (looksLikeFullImport && csv.length < 15 * 1024 * 1024) {
     writeFileSync(importedCsvPath(), csv.startsWith("\uFEFF") ? csv : csv)
   }
@@ -420,17 +420,6 @@ export async function importBundledUscitiesGeoPoints(): Promise<GeoPointsMeta> {
     throw new Error("The US cities GPS file is missing. Upload it from Admin.")
   }
   return (await importGeoCsvFile(file, "uscities.csv")).meta
-}
-
-function layoutGeoPoints(picks: GeoPoint[], zoom: number): GridPoint[] {
-  const size = Math.max(1, Math.ceil(Math.sqrt(picks.length)))
-  return picks.map((pick, index) => ({
-    row: Math.floor(index / size),
-    col: index % size,
-    lat: pick.lat,
-    lng: pick.lng,
-    locationCoordinate: formatLocationCoordinate(pick.lat, pick.lng, zoom),
-  }))
 }
 
 export function applyCityGpsBackup(
@@ -493,7 +482,6 @@ export function resolveScanPoints(input: {
   const pinSource = normalizePinSource(input.pinSource)
   const zoom = input.zoom == null ? gridCellZoom(input.spacingMiles) : input.zoom
   const grid = input.buildGrid(input.center, input.gridSize, input.spacingMiles, zoom)
-  const needed = grid.length
   if (pinSource !== "city_gps") {
     return {
       points: grid,
