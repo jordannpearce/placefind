@@ -107,9 +107,16 @@ describe("account status", () => {
 
   it("blocks login for a suspended user", () => {
     isolate()
-    const created = signup({ name: "Sam", email: "sam@example.com", password: "password12" })
+    signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const created = createManagedUser({
+      name: "Sam",
+      email: "sam@example.com",
+      password: "password12",
+      role: "customer",
+    })
     assert.equal(created.user?.status, "active")
     const suspended = setUserStatus(created.user!.id, "suspended")
+    assert.equal(suspended.error, undefined)
     assert.equal(suspended.user?.status, "suspended")
     const result = login({ email: "sam@example.com", password: "password12" })
     assert.equal(result.user, undefined)
