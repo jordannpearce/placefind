@@ -33,7 +33,8 @@ Admin is hidden from regular visitors. `/admin` shows a sign-in form only — no
 
 - The first account created on this machine becomes admin.
 - Any later signup whose email matches `ADMIN_EMAIL` (comma-separated in `.env`) also becomes admin. Do not put passwords in source.
-- After an admin signs in, **Admin** and **Sell** appear in the nav.
+- After an admin signs in, **Admin** and **Sell** appear in the nav. Public visitors never see Admin.
+- Signed-in admins use **/admin** to create, edit, delete, or suspend users. Suspended accounts cannot sign in on the website or desktop app.
 - `canManage` is the admin role only. Local/dev mode does not make every visitor an admin.
 
 Create or sign in at [http://127.0.0.1:43141/admin](http://127.0.0.1:43141/admin).

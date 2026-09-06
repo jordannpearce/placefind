@@ -134,6 +134,7 @@ export type AuthUser = {
   name: string
   email: string
   role: "customer" | "admin"
+  status: "active" | "suspended"
   createdAt: string
 }
 

@@ -21,7 +21,7 @@ export function AdminLogin({ bootstrap, onAuthed }: Props) {
       <p className="mt-3 text-sm leading-6 text-muted">
         {bootstrap
           ? "No accounts exist yet. Create the first admin to manage licenses and the Windows setup."
-          : "Sign in with an admin account. This page does not list customers or keys until you are signed in."}
+          : "Sign in with an admin account to manage users. This page stays empty until you are signed in."}
       </p>
       <form
         className="mt-6 grid gap-3"

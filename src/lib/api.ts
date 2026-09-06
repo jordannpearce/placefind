@@ -241,6 +241,45 @@ export async function loadAdmin(): Promise<{
   return request("/api/admin")
 }
 
+export async function listAdminUsers(): Promise<AuthUser[]> {
+  const payload = await request<{ users: AuthUser[] }>("/api/admin/users")
+  return payload.users
+}
+
+export async function createAdminUser(input: {
+  name: string
+  email: string
+  password: string
+  role: "customer" | "admin"
+}): Promise<AuthUser> {
+  const payload = await request<{ user: AuthUser }>("/api/admin/users", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+  return payload.user
+}
+
+export async function updateAdminUser(
+  id: string,
+  input: { name?: string; email?: string; password?: string; role?: "customer" | "admin"; status?: "active" | "suspended" },
+): Promise<AuthUser> {
+  const payload = await request<{ user: AuthUser }>(`/api/admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  })
+  return payload.user
+}
+
+export async function deleteAdminUser(id: string): Promise<void> {
+  await request(`/api/admin/users/${id}`, { method: "DELETE" })
+}
+
+export async function setAdminUserStatus(id: string, status: "active" | "suspended"): Promise<AuthUser> {
+  const path = status === "suspended" ? `/api/admin/users/${id}/suspend` : `/api/admin/users/${id}/unsuspend`
+  const payload = await request<{ user: AuthUser }>(path, { method: "POST" })
+  return payload.user
+}
+
 export async function adminIssueLicense(input: { name: string; email: string; sendEmail?: boolean }): Promise<{
   license: IssuedLicense
   order: OrderInfo | null

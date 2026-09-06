@@ -8,6 +8,7 @@ const user: AuthUser = {
   name: "Pat",
   email: "pat@example.com",
   role: "customer",
+  status: "active",
   createdAt: "2026-09-06T00:00:00.000Z",
 }
 

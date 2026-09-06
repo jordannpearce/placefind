@@ -213,7 +213,7 @@ export default function App() {
         </header>
 
         {admin && path === "/sell" && <SellPage />}
-        {path === "/admin" && admin && <AdminPage />}
+        {path === "/admin" && admin && <AdminPage currentUserId={user?.id} />}
         {path === "/admin" && !admin && <AdminLogin bootstrap={bootstrap} onAuthed={onAdminAuthed} />}
         {!desktop && (admin || store) && path === "/download" && <DownloadPage onTryScan={() => go("/")} />}
         {!desktop && store && path === "/buy" && <BuyPage user={user} onAuthed={onAuthed} onTryScan={() => go("/")} />}

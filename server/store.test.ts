@@ -25,6 +25,7 @@ describe("store", () => {
         email: "pat@example.com",
         passwordHash: "x",
         role: "customer",
+        status: "active",
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ])

@@ -6,10 +6,14 @@ import { after, describe, it } from "node:test"
 import {
   canLocalBootstrap,
   canManage,
+  createManagedUser,
   createSession,
   hashPassword,
+  login,
   parseCookies,
+  setUserStatus,
   signup,
+  userFromCookie,
   verifyPassword,
 } from "./auth.ts"
 import { reloadStoreFromDisk, resetStoreForTests, writeCollection } from "./store.ts"
@@ -49,6 +53,7 @@ describe("canManage", () => {
       email: "casey@example.com",
       passwordHash: hashPassword("password12"),
       role: "customer",
+      status: "active",
       createdAt: new Date().toISOString(),
     }
     writeCollection("users", [customer])
@@ -67,6 +72,7 @@ describe("canManage", () => {
       email: "ada@example.com",
       passwordHash: hashPassword("password12"),
       role: "admin",
+      status: "active",
       createdAt: new Date().toISOString(),
     }
     writeCollection("users", [admin])
@@ -86,5 +92,54 @@ describe("canManage", () => {
     const token = createSession(created.user!.id)
     assert.equal(canManage(`pf_session=${token}`), true)
     assert.equal(canLocalBootstrap(), false)
+  })
+})
+
+describe("account status", () => {
+  function isolate() {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-auth-status-")))
+  }
+
+  after(() => {
+    delete process.env.PLACEFIND_DATA_DIR
+    reloadStoreFromDisk()
+  })
+
+  it("blocks login for a suspended user", () => {
+    isolate()
+    const created = signup({ name: "Sam", email: "sam@example.com", password: "password12" })
+    assert.equal(created.user?.status, "active")
+    const suspended = setUserStatus(created.user!.id, "suspended")
+    assert.equal(suspended.user?.status, "suspended")
+    const result = login({ email: "sam@example.com", password: "password12" })
+    assert.equal(result.user, undefined)
+    assert.equal(result.error, "This account is suspended.")
+    const again = signup({ name: "Sam", email: "sam@example.com", password: "password12" })
+    assert.equal(again.error, "This account is suspended.")
+  })
+
+  it("lets an admin change status and restores login after unsuspend", () => {
+    isolate()
+    const admin = signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const customer = createManagedUser({
+      name: "Casey",
+      email: "casey@example.com",
+      password: "password12",
+      role: "customer",
+    })
+    assert.equal(customer.user?.status, "active")
+    const token = createSession(admin.user!.id)
+    assert.equal(canManage(`pf_session=${token}`), true)
+
+    const suspended = setUserStatus(customer.user!.id, "suspended", admin.user!.id)
+    assert.equal(suspended.user?.status, "suspended")
+    assert.equal(login({ email: "casey@example.com", password: "password12" }).error, "This account is suspended.")
+    assert.equal(userFromCookie(`pf_session=${createSession(customer.user!.id)}`), null)
+
+    const active = setUserStatus(customer.user!.id, "active", admin.user!.id)
+    assert.equal(active.user?.status, "active")
+    const signedIn = login({ email: "casey@example.com", password: "password12" })
+    assert.equal(signedIn.user?.email, "casey@example.com")
+    assert.equal(signedIn.error, undefined)
   })
 })

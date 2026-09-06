@@ -6,14 +6,18 @@ import { fileURLToPath } from "node:url"
 import {
   canManage,
   clearSession,
+  createManagedUser,
   createSession,
+  deleteManagedUser,
   hasAdminUser,
   login,
   publicUser,
   readUsers,
   sessionCookie,
+  setUserStatus,
   signup,
   storeOpen,
+  updateManagedUser,
   userFromCookie,
 } from "./auth.ts"
 import { testDataForSeo } from "./dataforseo.ts"
@@ -503,6 +507,82 @@ async function start() {
         detail: row.detail,
       })),
     })
+  })
+
+  app.get("/api/admin/users", (req, res) => {
+    if (!manage(req, res)) return
+    res.json({ users: readUsers().map(publicUser) })
+  })
+
+  app.post("/api/admin/users", (req, res) => {
+    if (!manage(req, res)) return
+    const body = (req.body ?? {}) as { name?: string; email?: string; password?: string; role?: string }
+    const result = createManagedUser({
+      name: body.name ?? "",
+      email: body.email ?? "",
+      password: body.password ?? "",
+      role: body.role,
+    })
+    if (result.error || !result.user) {
+      res.status(400).json({ error: result.error || "Could not create the user." })
+      return
+    }
+    res.status(201).json({ user: result.user, users: readUsers().map(publicUser) })
+  })
+
+  app.patch("/api/admin/users/:id", (req, res) => {
+    if (!manage(req, res)) return
+    const admin = actor(req)
+    const body = (req.body ?? {}) as {
+      name?: string
+      email?: string
+      password?: string
+      role?: string
+      status?: string
+    }
+    const result = updateManagedUser(String(req.params.id ?? ""), body, admin?.id)
+    if (result.error || !result.user) {
+      const missing = result.error === "That user was not found."
+      res.status(missing ? 404 : 400).json({ error: result.error || "Could not update the user." })
+      return
+    }
+    res.json({ user: result.user, users: readUsers().map(publicUser) })
+  })
+
+  app.delete("/api/admin/users/:id", (req, res) => {
+    if (!manage(req, res)) return
+    const admin = actor(req)
+    const result = deleteManagedUser(String(req.params.id ?? ""), admin?.id)
+    if (result.error) {
+      const missing = result.error === "That user was not found."
+      res.status(missing ? 404 : 400).json({ error: result.error })
+      return
+    }
+    res.json({ ok: true, users: readUsers().map(publicUser) })
+  })
+
+  app.post("/api/admin/users/:id/suspend", (req, res) => {
+    if (!manage(req, res)) return
+    const admin = actor(req)
+    const result = setUserStatus(String(req.params.id ?? ""), "suspended", admin?.id)
+    if (result.error || !result.user) {
+      const missing = result.error === "That user was not found."
+      res.status(missing ? 404 : 400).json({ error: result.error || "Could not suspend the user." })
+      return
+    }
+    res.json({ user: result.user, users: readUsers().map(publicUser) })
+  })
+
+  app.post("/api/admin/users/:id/unsuspend", (req, res) => {
+    if (!manage(req, res)) return
+    const admin = actor(req)
+    const result = setUserStatus(String(req.params.id ?? ""), "active", admin?.id)
+    if (result.error || !result.user) {
+      const missing = result.error === "That user was not found."
+      res.status(missing ? 404 : 400).json({ error: result.error || "Could not unsuspend the user." })
+      return
+    }
+    res.json({ user: result.user, users: readUsers().map(publicUser) })
   })
 
   app.post("/api/admin/licenses", async (req, res) => {

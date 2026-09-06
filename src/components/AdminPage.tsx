@@ -2,8 +2,9 @@ import { Check, Copy, LoaderCircle } from "lucide-react"
 import { useEffect, useState } from "react"
 import { adminIssueLicense, loadAdmin, saveMail, testMail } from "../lib/api.ts"
 import type { AuthUser, IssuedLicense, MailStatus, OrderInfo } from "../lib/types.ts"
+import { AdminUsers } from "./AdminUsers.tsx"
 
-export function AdminPage() {
+export function AdminPage({ currentUserId }: { currentUserId?: string }) {
   const [users, setUsers] = useState<AuthUser[]>([])
   const [orders, setOrders] = useState<OrderInfo[]>([])
   const [issued, setIssued] = useState<IssuedLicense[]>([])
@@ -42,6 +43,16 @@ export function AdminPage() {
 
   return (
     <div className="grid gap-6">
+      {error && <p className="rounded-xl border border-clay/40 bg-clay/10 px-4 py-3 text-sm text-clay">{error}</p>}
+      {message && <p className="rounded-xl border border-moss/40 bg-moss/10 px-4 py-3 text-sm text-moss">{message}</p>}
+      <AdminUsers
+        users={users}
+        currentUserId={currentUserId}
+        onUsers={setUsers}
+        onError={setError}
+        onMessage={setMessage}
+      />
+
       <section className="rounded-2xl border border-line bg-panel p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Admin</p>
         <h2 className="mt-1 font-display text-3xl text-paper">Licenses and email</h2>
@@ -179,25 +190,6 @@ export function AdminPage() {
           </div>
         </section>
       </div>
-
-      <section className="rounded-2xl border border-line bg-panel p-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Customers</p>
-        {users.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">No signups yet.</p>
-        ) : (
-          <ul className="mt-4 grid gap-2">
-            {users.map((row) => (
-              <li key={row.id} className="flex flex-wrap justify-between gap-2 rounded-xl border border-line bg-ink px-4 py-3">
-                <div>
-                  <p className="text-sm text-paper">{row.name}</p>
-                  <p className="text-xs text-muted">{row.email}</p>
-                </div>
-                <p className="text-xs uppercase tracking-[0.12em] text-muted">{row.role}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
 
       <section className="rounded-2xl border border-line bg-panel p-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Orders and keys</p>
