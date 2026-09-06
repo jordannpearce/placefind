@@ -1,22 +1,22 @@
 import { createHash } from "node:crypto"
-import { searchMockBusinesses } from "./mock.ts"
+import { sampleSearchUsedMessage } from "./public-copy.ts"
 import { readCollection, writeCollection } from "./store.ts"
 import type { SearchQuery, SearchResponse } from "./types.ts"
 
 export const VISITOR_SEARCH_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
-
-export const EXAMPLE_QUERY: SearchQuery = {
-  name: "Franklin Barbecue",
-  city: "Austin",
-  state: "TX",
-  keyword: "barbecue",
-}
 
 export type SearchIpRow = {
   hash: string
   firstAt: string
   lastAt: string
   count: number
+}
+
+export class VisitorSearchUsedError extends Error {
+  constructor() {
+    super(sampleSearchUsedMessage())
+    this.name = "VisitorSearchUsedError"
+  }
 }
 
 export function hashSearchIp(ip: string): string {
@@ -57,23 +57,6 @@ export function recordVisitorSearch(hash: string, now = Date.now()) {
   writeCollection("search_ip", rows)
 }
 
-export function exampleSearchResponse(query: SearchQuery): SearchResponse {
-  const hits = searchMockBusinesses(EXAMPLE_QUERY)
-  return {
-    query,
-    best: hits[0] ?? null,
-    others: [],
-    mode: "sample",
-    sources: { dataforseo: false, scrappey: false },
-    warning: "Here's an example of how PlaceFind presents a Google Maps listing.",
-    elapsedMs: 1,
-  }
-}
-
-export function exampleHasLimitCopy(text: string): boolean {
-  return /you('ve| have) used|ip limit|logged your ip|tracking your|fingerprint|already in use|rate limit/i.test(text)
-}
-
 export async function runWebsiteSearch(input: {
   query: SearchQuery
   search: (query: SearchQuery) => Promise<SearchResponse>
@@ -83,7 +66,7 @@ export async function runWebsiteSearch(input: {
 }): Promise<SearchResponse> {
   if (input.signedIn) return input.search(input.query)
   const gate = visitorSearchAllowed(input.ip, input.now)
-  if (!gate.allowed) return exampleSearchResponse(input.query)
+  if (!gate.allowed) throw new VisitorSearchUsedError()
   const result = await input.search(input.query)
   recordVisitorSearch(gate.hash, input.now)
   return result
