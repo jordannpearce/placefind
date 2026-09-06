@@ -78,6 +78,12 @@ export function seedDirectoryReviews(force = false): ListingReview[] {
   return readReviews()
 }
 
+export function deleteReviewsForListings(listingIds: string[]) {
+  if (listingIds.length === 0) return
+  const ids = new Set(listingIds)
+  writeReviews(readReviews().filter((row) => !ids.has(row.listingId)))
+}
+
 export function reviewsForListing(listingId: string): ListingReview[] {
   seedDirectoryReviews()
   return readReviews()

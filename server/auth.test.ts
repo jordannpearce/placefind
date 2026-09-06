@@ -8,6 +8,7 @@ import {
   canManage,
   createManagedUser,
   createSession,
+  deleteManagedUser,
   FORGOT_PASSWORD_MESSAGE,
   hashPassword,
   hashResetToken,
@@ -24,6 +25,7 @@ import {
   signup,
   startImpersonation,
   stopImpersonation,
+  updateManagedUser,
   userFromCookie,
   verifyPassword,
 } from "./auth.ts"
@@ -345,5 +347,55 @@ describe("impersonation", () => {
     assert.equal(canManage(viewingCookie(adminToken, expired)), true)
     assert.equal(impersonatingFromCookie(viewingCookie(adminToken, expired)), null)
     assert.equal(stopImpersonation(viewingCookie(adminToken, expired)).error, "You are not viewing as another user.")
+  })
+})
+
+describe("admin account management", () => {
+  function isolate() {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-auth-admin-")))
+  }
+
+  after(() => {
+    delete process.env.PLACEFIND_DATA_DIR
+    reloadStoreFromDisk()
+  })
+
+  it("lets an admin create, edit, and delete another account", () => {
+    isolate()
+    const admin = signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const created = createManagedUser({
+      name: "Casey",
+      email: "casey@example.com",
+      password: "password12",
+      role: "customer",
+    })
+    assert.equal(created.error, undefined)
+    assert.equal(created.user?.email, "casey@example.com")
+    assert.equal(created.user?.role, "customer")
+    assert.equal(created.user?.status, "active")
+
+    const renamed = updateManagedUser(
+      created.user!.id,
+      { name: "Casey Cole", email: "casey.cole@example.com", role: "customer" },
+      admin.user!.id,
+    )
+    assert.equal(renamed.user?.name, "Casey Cole")
+    assert.equal(renamed.user?.email, "casey.cole@example.com")
+
+    const passworded = updateManagedUser(created.user!.id, { password: "newpassword1" }, admin.user!.id)
+    assert.equal(passworded.error, undefined)
+    assert.equal(login({ email: "casey.cole@example.com", password: "newpassword1" }).user?.name, "Casey Cole")
+
+    const deleted = deleteManagedUser(created.user!.id, admin.user!.id)
+    assert.equal(deleted.ok, true)
+    assert.equal(login({ email: "casey.cole@example.com", password: "newpassword1" }).error, "Email or password is incorrect.")
+  })
+
+  it("blocks deleting or suspending the last admin, including self", () => {
+    isolate()
+    const admin = signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    assert.equal(deleteManagedUser(admin.user!.id, admin.user!.id).error, "You cannot delete your own account.")
+    assert.equal(setUserStatus(admin.user!.id, "suspended", admin.user!.id).error, "You cannot suspend your own account.")
+    assert.equal(updateManagedUser(admin.user!.id, { role: "customer" }, admin.user!.id).error, "Keep at least one active admin.")
   })
 })

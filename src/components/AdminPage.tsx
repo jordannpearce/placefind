@@ -58,8 +58,10 @@ export function AdminPage({
       {message && <p className="rounded-xl border border-moss/40 bg-moss/10 px-4 py-3 text-sm text-moss">{message}</p>}
       <AdminUsers
         users={users}
+        listings={listings}
         currentUserId={currentUserId}
         onUsers={setUsers}
+        onListings={setListings}
         onError={setError}
         onMessage={setMessage}
         onViewAs={onViewAs}

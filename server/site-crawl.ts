@@ -167,6 +167,11 @@ export function publicCrawl(job: CrawlJob) {
   }
 }
 
+export function deleteCrawlsForUser(userId: string, listingIds: string[] = []) {
+  const ids = new Set(listingIds)
+  writeJobs(readJobs().filter((row) => row.userId !== userId && !ids.has(row.listingId)))
+}
+
 export function crawlsForUser(userId: string, admin = false): CrawlJob[] {
   return readJobs()
     .filter((row) => admin || row.userId === userId)

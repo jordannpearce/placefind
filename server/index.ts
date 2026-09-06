@@ -8,7 +8,6 @@ import {
   clearSession,
   createManagedUser,
   createSession,
-  deleteManagedUser,
   hasAdminUser,
   impersonatingFromCookie,
   impersonationCookie,
@@ -28,6 +27,7 @@ import {
   updateManagedUser,
   userFromCookie,
 } from "./auth.ts"
+import { deleteManagedAccount } from "./account-purge.ts"
 import { testDataForSeo } from "./dataforseo.ts"
 import { hostedKeyStatus, hydrateHostedKeys, readHostedKeys, writeHostedKeys } from "./hosted-keys.ts"
 import { getInstallerStatus, installerPath, startInstallerBuild, startSetupRepack } from "./installer.ts"
@@ -379,6 +379,10 @@ async function start() {
       cid?: string
       title?: string
       address?: string
+      phone?: string
+      website?: string
+      hours?: string
+      category?: string
       mapsStatus?: "pending" | "found" | "not_found"
     }
     try {
@@ -1024,7 +1028,7 @@ async function start() {
   app.delete("/api/admin/users/:id", (req, res) => {
     if (!manage(req, res)) return
     const admin = actor(req)
-    const result = deleteManagedUser(String(req.params.id ?? ""), admin?.id)
+    const result = deleteManagedAccount(String(req.params.id ?? ""), admin?.id)
     if (result.error) {
       const missing = result.error === "That user was not found."
       res.status(missing ? 404 : 400).json({ error: result.error })

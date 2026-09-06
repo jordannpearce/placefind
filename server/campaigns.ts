@@ -814,6 +814,14 @@ export function updateCampaign(id: string, input: CampaignInput, userId?: string
   return next
 }
 
+export function deleteCampaignsForUser(userId: string) {
+  const campaigns = readCollection<Campaign>("campaigns").map(normalizeStoredCampaign)
+  const mine = campaigns.filter((row) => row.userId === userId)
+  if (mine.length === 0) return
+  writeCampaigns(campaigns.filter((row) => row.userId !== userId))
+  for (const row of mine) deleteScanRunsForCampaign(row.id)
+}
+
 export function deleteCampaign(id: string, userId?: string | null): boolean {
   const campaigns = readCollection<Campaign>("campaigns").map(normalizeStoredCampaign)
   const current = campaigns.find((row) => row.id === id)

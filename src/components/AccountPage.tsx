@@ -39,10 +39,19 @@ export function AccountPage({ user, onLogout, onGo }: Props) {
         <h2 className="mt-2 font-display text-3xl text-paper">{user.name}</h2>
         <p className="mt-1 text-sm text-muted">{user.email}</p>
         <div className="mt-5 flex flex-wrap gap-3">
+          {user.role === "admin" && (
+            <button
+              type="button"
+              onClick={() => onGo("/admin")}
+              className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
+            >
+              Manage accounts
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onGo("/listings/new")}
-            className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
+            className={`h-11 rounded-lg px-4 font-semibold ${user.role === "admin" ? "border border-line text-paper hover:border-brass" : "bg-brass text-ink hover:bg-[#ecc77a]"}`}
           >
             Create a listing
           </button>

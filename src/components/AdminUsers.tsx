@@ -1,7 +1,7 @@
 import { LoaderCircle } from "lucide-react"
 import { useMemo, useState } from "react"
 import { createAdminUser, deleteAdminUser, impersonateAdminUser, setAdminUserStatus, updateAdminUser } from "../lib/api.ts"
-import type { AuthUser } from "../lib/types.ts"
+import type { AuthUser, DirectoryListing } from "../lib/types.ts"
 
 type Draft = {
   name: string
@@ -20,24 +20,46 @@ function formatCreated(value: string) {
 
 type Props = {
   users: AuthUser[]
+  listings?: DirectoryListing[]
   currentUserId?: string
   onUsers: (users: AuthUser[] | ((current: AuthUser[]) => AuthUser[])) => void
+  onListings?: (listings: DirectoryListing[] | ((current: DirectoryListing[]) => DirectoryListing[])) => void
   onError: (message: string | null) => void
   onMessage: (message: string | null) => void
   onViewAs: (user: AuthUser) => void
 }
 
-export function AdminUsers({ users, currentUserId, onUsers, onError, onMessage, onViewAs }: Props) {
+export function AdminUsers({ users, listings = [], currentUserId, onUsers, onListings, onError, onMessage, onViewAs }: Props) {
   const [createDraft, setCreateDraft] = useState<Draft>(emptyDraft)
   const [editId, setEditId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<Draft>(emptyDraft)
   const [busy, setBusy] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [query, setQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "suspended">("all")
+  const [roleFilter, setRoleFilter] = useState<"all" | "customer" | "admin">("all")
 
-  const rows = useMemo(
-    () => [...users].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
-    [users],
-  )
+  const listingCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const listing of listings) {
+      const owner = listing.ownerUserId
+      if (!owner) continue
+      counts.set(owner, (counts.get(owner) ?? 0) + 1)
+    }
+    return counts
+  }, [listings])
+
+  const rows = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return [...users]
+      .filter((row) => {
+        if (statusFilter !== "all" && row.status !== statusFilter) return false
+        if (roleFilter !== "all" && row.role !== roleFilter) return false
+        if (!needle) return true
+        return `${row.name} ${row.email}`.toLowerCase().includes(needle)
+      })
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+  }, [users, query, statusFilter, roleFilter])
 
   function replaceUser(next: AuthUser) {
     onUsers((current) => current.map((row) => (row.id === next.id ? next : row)))
@@ -61,8 +83,9 @@ export function AdminUsers({ users, currentUserId, onUsers, onError, onMessage, 
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Users</p>
       <h2 className="mt-1 font-display text-3xl text-paper">Manage accounts</h2>
       <p className="mt-3 text-sm leading-6 text-muted">
-        Create, edit, suspend, or delete customer and admin accounts. Use View as user to open the site as that
-        customer. Suspended users cannot sign in, but you can still view as them.
+        Add, edit, suspend, or delete customer and admin accounts. Suspended accounts cannot sign in. Deleting an
+        account also removes that owner’s listings, crawls, and usage. Use View as user to open the site as that
+        customer.
       </p>
 
       <form
@@ -126,17 +149,56 @@ export function AdminUsers({ users, currentUserId, onUsers, onError, onMessage, 
         </button>
       </form>
 
+      <div className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Search accounts</span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Name or email"
+            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+          />
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Status</span>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+          >
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Role</span>
+          <select
+            value={roleFilter}
+            onChange={(event) => setRoleFilter(event.target.value as typeof roleFilter)}
+            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+          >
+            <option value="all">All</option>
+            <option value="customer">Customers</option>
+            <option value="admin">Admins</option>
+          </select>
+        </label>
+      </div>
+
       <div className="mt-6 overflow-x-auto">
-        {rows.length === 0 ? (
-          <p className="text-sm text-muted">No users yet.</p>
+        {users.length === 0 ? (
+          <p className="text-sm text-muted">No users yet. Create one above.</p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted">No accounts match that search.</p>
         ) : (
-          <table className="w-full min-w-[40rem] text-left text-sm">
+          <table className="w-full min-w-[48rem] text-left text-sm">
             <thead>
               <tr className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
                 <th className="pb-2 pr-3">Name</th>
                 <th className="pb-2 pr-3">Email</th>
                 <th className="pb-2 pr-3">Role</th>
                 <th className="pb-2 pr-3">Status</th>
+                <th className="pb-2 pr-3">Listings</th>
                 <th className="pb-2 pr-3">Created</th>
                 <th className="pb-2">Actions</th>
               </tr>
@@ -189,6 +251,7 @@ export function AdminUsers({ users, currentUserId, onUsers, onError, onMessage, 
                         {row.status === "suspended" ? "Suspended" : "Active"}
                       </span>
                     </td>
+                    <td className="py-3 pr-3 text-paper/80">{listingCounts.get(row.id) ?? 0}</td>
                     <td className="py-3 pr-3 text-xs text-muted">{formatCreated(row.createdAt)}</td>
                     <td className="py-3">
                       {editing ? (
@@ -274,7 +337,9 @@ export function AdminUsers({ users, currentUserId, onUsers, onError, onMessage, 
                           </button>
                           {confirmDelete === row.id ? (
                             <span className="flex flex-wrap items-center gap-2 text-xs">
-                              <span className="text-clay">Delete this user?</span>
+                              <span className="text-clay">
+                                Delete this account{(listingCounts.get(row.id) ?? 0) > 0 ? " and its listings" : ""}?
+                              </span>
                               <button
                                 type="button"
                                 disabled={busy === `delete-${row.id}`}
@@ -282,6 +347,7 @@ export function AdminUsers({ users, currentUserId, onUsers, onError, onMessage, 
                                   void run(`delete-${row.id}`, async () => {
                                     await deleteAdminUser(row.id)
                                     onUsers((current) => current.filter((item) => item.id !== row.id))
+                                    onListings?.((current) => current.filter((item) => item.ownerUserId !== row.id))
                                     setConfirmDelete(null)
                                     onMessage(`Deleted ${row.email}.`)
                                   })

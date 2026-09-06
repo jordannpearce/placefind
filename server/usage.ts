@@ -70,6 +70,13 @@ export function roleForUsage(userId: string): UserRole {
   return findUserById(userId)?.role === "admin" ? "admin" : "customer"
 }
 
+export function deleteUsageForUser(userId: string) {
+  writeCollection(
+    "usage",
+    readUsageRows().filter((row) => row.userId !== userId),
+  )
+}
+
 export function readMonthlyUsage(userId: string, now: Date = new Date()): UsageRow {
   const month = usageMonthUtc(now)
   const existing = readUsageRows().find((row) => row.userId === userId && row.month === month)

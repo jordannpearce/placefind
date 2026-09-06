@@ -1,0 +1,41 @@
+import assert from "node:assert/strict"
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { after, describe, it } from "node:test"
+import { deleteManagedAccount } from "./account-purge.ts"
+import { createManagedUser, signup } from "./auth.ts"
+import { createListing, getListing, listingsForUser } from "./listings.ts"
+import { createReview, reviewsForListing } from "./reviews.ts"
+import { consumeMonthlyUsage, readMonthlyUsage } from "./usage.ts"
+import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
+
+describe("admin account purge", () => {
+  after(() => {
+    delete process.env.PLACEFIND_DATA_DIR
+    reloadStoreFromDisk()
+  })
+
+  it("deletes an account and the listings, reviews, and usage it owned", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-account-purge-")))
+    const admin = signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const customer = createManagedUser({
+      name: "Casey",
+      email: "casey@example.com",
+      password: "password12",
+      role: "customer",
+    })
+    const listing = createListing({ name: "Harbor Street Cafe", city: "Portland", state: "OR" }, customer.user!.id)
+    createReview(listing.id, { authorName: "Maya", rating: 5, text: "Strong coffee and a quiet corner." })
+    consumeMonthlyUsage(customer.user!.id, "rankScans")
+    assert.equal(listingsForUser(customer.user!.id).length, 1)
+    assert.equal(reviewsForListing(listing.id).length, 1)
+    assert.equal(readMonthlyUsage(customer.user!.id).rankScans, 1)
+
+    const deleted = deleteManagedAccount(customer.user!.id, admin.user!.id)
+    assert.equal(deleted.ok, true)
+    assert.equal(listingsForUser(customer.user!.id).length, 0)
+    assert.throws(() => getListing(listing.id), /not in the directory/)
+    assert.equal(readMonthlyUsage(customer.user!.id).rankScans, 0)
+  })
+})
