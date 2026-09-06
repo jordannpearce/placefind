@@ -1,11 +1,14 @@
 import { LoaderCircle, Plus, Star, Trash2 } from "lucide-react"
-import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
 import {
+  compareCampaignScans,
   createCampaign,
   deleteCampaign,
   loadCampaignGrid,
+  loadCampaignScans,
   loadCampaigns,
   loadCampaignTraffic,
+  rerunCampaignScan,
   scanCampaign,
   searchBusiness,
   startCampaignTraffic,
@@ -13,6 +16,7 @@ import {
   updateCampaign,
 } from "../lib/api.ts"
 import { buildPreviewPoints, gridPinId, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
+import { pointsWithCompare, rankChangeColor, rankChangeLabel } from "../lib/scan-compare.ts"
 import { publicSearchMessage } from "../lib/public-copy.ts"
 import { US_STATES } from "../lib/states.ts"
 import {
@@ -43,9 +47,13 @@ import type {
   HostedKeyStatus,
   SearchQuery,
   SearchResponse,
+  GridScanRun,
+  ScanCompare,
+  ScanSchedule,
   TrafficJob,
   TrafficLogLine,
   TrafficPinResult,
+  TrafficSchedule,
 } from "../lib/types.ts"
 import { GridMap } from "./GridMap.tsx"
 
@@ -67,6 +75,20 @@ function formatWhen(value: string | null | undefined): string {
 
 function searchCount(gridSize: number) {
   return gridSize * gridSize
+}
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const
+
+function emptyScanSchedule(): ScanSchedule {
+  return { enabled: false, cadence: "daily", hour: 9, minute: 0, timeZone: "local", lastRunAt: null, nextRunAt: null }
+}
+
+function emptyTrafficSchedule(): TrafficSchedule {
+  return { ...emptyScanSchedule(), pinMode: "selected", lastSelectedPinIds: [] }
+}
+
+function scanWhen(run: { finishedAt?: string; scannedAt?: string; startedAt?: string }) {
+  return formatWhen(run.finishedAt || run.scannedAt || run.startedAt)
 }
 
 export function TrackPage({ keys, hosted, seller, desktop }: Props) {
@@ -94,6 +116,14 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [selectedPoint, setSelectedPoint] = useState<GridPointResult | null>(null)
   const [selectedPinIds, setSelectedPinIds] = useState<string[]>([])
   const [previewCenter, setPreviewCenter] = useState<GeoPoint | null>(null)
+  const [scans, setScans] = useState<GridScanRun[]>([])
+  const [compareFromId, setCompareFromId] = useState("")
+  const [compareToId, setCompareToId] = useState("")
+  const [compare, setCompare] = useState<ScanCompare | null>(null)
+  const [comparing, setComparing] = useState(false)
+  const [rerunning, setRerunning] = useState(false)
+  const [scanScheduleDraft, setScanScheduleDraft] = useState<ScanSchedule>(emptyScanSchedule)
+  const [trafficScheduleDraft, setTrafficScheduleDraft] = useState<TrafficSchedule>(emptyTrafficSchedule)
 
   const selected = useMemo(
     () => (campaigns ?? []).find((campaign) => campaign.id === selectedId) ?? null,
@@ -103,10 +133,15 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const listings = listingsFromSearch(searchResult)
   const canScan = scanBusinessEnabled(confirmed)
   const grid = selected?.lastGridScan ?? null
+  const comparedPoints = useMemo(() => {
+    if (!compare) return null
+    return pointsWithCompare(compare.current, compare)
+  }, [compare])
   const mapCenter = confirmed
     ? { lat: confirmed.lat, lng: confirmed.lng }
-    : selected?.center || grid?.center || previewCenter
+    : selected?.center || compare?.current.center || grid?.center || previewCenter
   const points = useMemo(() => {
+    if (comparedPoints) return comparedPoints
     const keyword = activeKeyword || selected?.keywords[0] || keywordDraft.trim() || ""
     const scanMatches =
       Boolean(grid) &&
@@ -121,7 +156,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     }
     if (!mapCenter || !confirmed) return []
     return buildPreviewPoints(mapCenter, gridSize, spacingMiles, keyword)
-  }, [grid, activeKeyword, gridSize, spacingMiles, mapCenter, selected?.keywords, keywordDraft, confirmed])
+  }, [comparedPoints, grid, activeKeyword, gridSize, spacingMiles, mapCenter, selected?.keywords, keywordDraft, confirmed])
 
   function applyCampaign(campaign: Campaign | null) {
     if (!campaign) {
@@ -133,6 +168,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setSpacingMiles(1)
       setPreviewCenter(null)
       setSelectedPinIds([])
+      setScanScheduleDraft(emptyScanSchedule())
+      setTrafficScheduleDraft(emptyTrafficSchedule())
       return
     }
     setQuery(searchQueryFromCampaign(campaign))
@@ -142,6 +179,30 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setGridSize(campaign.gridSize ?? 5)
     setSpacingMiles(campaign.spacingMiles ?? 1)
     setPreviewCenter(campaign.center || campaign.lastGridScan?.center || null)
+    setSelectedPinIds(campaign.trafficSchedule?.lastSelectedPinIds ?? [])
+    setScanScheduleDraft(campaign.scanSchedule ?? emptyScanSchedule())
+    setTrafficScheduleDraft(campaign.trafficSchedule ?? emptyTrafficSchedule())
+  }
+
+  async function refreshScans(campaignId: string) {
+    try {
+      const payload = await loadCampaignScans(campaignId)
+      const rows = payload.scans
+      setScans(rows)
+      if (rows.length >= 2) {
+        setCompareToId((current) => current || rows[0]!.id)
+        setCompareFromId((current) => current || rows[1]!.id)
+      } else if (rows.length === 1) {
+        setCompareToId(rows[0]!.id)
+        setCompareFromId("")
+      } else {
+        setCompareToId("")
+        setCompareFromId("")
+        setCompare(null)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load scan history.")
+    }
   }
 
   async function refresh(nextId?: string | null) {
@@ -156,7 +217,11 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setCreating(!next)
     applyCampaign(next)
     setSelectedPoint(null)
-    setSelectedPinIds([])
+    if (next) void refreshScans(next.id)
+    else {
+      setScans([])
+      setCompare(null)
+    }
     return payload.campaigns
   }
 
@@ -172,6 +237,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
         setSelectedId(next?.id ?? null)
         setCreating(!next)
         applyCampaign(next)
+        if (next) void refreshScans(next.id)
       })
       .catch((err) => {
         if (active) setError(err instanceof Error ? err.message : "Could not load campaigns.")
@@ -430,9 +496,11 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       replaceCampaign(payload.campaign)
       setActiveKeyword(payload.grid?.keyword || target)
       setKeywordDraft("")
+      await refreshScans(campaign.id)
+      setCompare(null)
       const found = payload.grid?.foundCount ?? 0
       const total = payload.grid?.pointCount ?? 0
-      setNotice(`Scan finished. ${confirmed.title} appeared at ${found} of ${total} grid points for “${target}”.`)
+      setNotice(`Scan finished and saved. ${confirmed.title} appeared at ${found} of ${total} grid points for “${target}”.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not scan Maps.")
     } finally {
@@ -447,6 +515,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setSearchResult(null)
     setSelectedPoint(null)
     setSelectedPinIds([])
+    setScans([])
+    setCompare(null)
     setError(null)
     setNotice(null)
   }
@@ -457,15 +527,16 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     applyCampaign(campaign)
     setSearchResult(null)
     setSelectedPoint(null)
-    setSelectedPinIds([])
+    setCompare(null)
     setError(null)
     setNotice(null)
+    void refreshScans(campaign.id)
   }
 
   const mapsReady = Boolean((keys.dataforseoLogin && keys.dataforseoPassword) || hosted?.dataforseo)
   const trafficJob = selected?.lastTrafficJob ?? null
   const trafficRunning = trafficJob?.status === "running"
-  const busy = Boolean(saving || scanning || searching || startingTraffic || stoppingTraffic)
+  const busy = Boolean(saving || scanning || searching || startingTraffic || stoppingTraffic || rerunning || comparing)
   const scanFinished = campaignScanFinished(selected)
   const pinsSelectable = Boolean(scanFinished && points.length > 0 && !scanning)
   const showStartTraffic = startTrafficVisible(confirmed)
@@ -537,6 +608,93 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setError(err instanceof Error ? err.message : "Could not stop traffic.")
     } finally {
       setStoppingTraffic(false)
+    }
+  }
+
+  async function onRerunScan() {
+    if (!selected) return
+    const source = scans[0] || selected.lastGridScan
+    if (!source) {
+      setError("Finish a scan before rerunning.")
+      return
+    }
+    setRerunning(true)
+    setScanning(true)
+    setError(null)
+    setNotice(null)
+    try {
+      if (source.gridSize) setGridSize(source.gridSize)
+      if (source.spacingMiles) setSpacingMiles(source.spacingMiles)
+      if (source.keyword) setActiveKeyword(source.keyword)
+      const payload = await rerunCampaignScan(selected.id, keys, Boolean(hosted?.included && !seller), source.keyword ? [source.keyword] : undefined)
+      replaceCampaign(payload.campaign)
+      await refreshScans(selected.id)
+      setCompare(null)
+      const found = payload.grid?.foundCount ?? 0
+      const total = payload.grid?.pointCount ?? 0
+      setNotice(`Rerun saved. ${found} of ${total} grid points found “${payload.grid?.keyword || source.keyword}”.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not rerun that scan.")
+    } finally {
+      setRerunning(false)
+      setScanning(false)
+    }
+  }
+
+  async function onCompareScans(fromId = compareFromId, toId = compareToId) {
+    if (!selected) return
+    const previousId = fromId || scans[1]?.id
+    const currentId = toId || scans[0]?.id
+    if (!previousId || !currentId) {
+      setError("Save two scans before comparing.")
+      return
+    }
+    setComparing(true)
+    setError(null)
+    try {
+      const result = await compareCampaignScans(selected.id, previousId, currentId)
+      setCompare(result)
+      setCompareFromId(previousId)
+      setCompareToId(currentId)
+      setNotice(
+        `Compared ${scanWhen(result.previous)} with ${scanWhen(result.current)}. ${result.improved} improved, ${result.worse} worse, ${result.added} new, ${result.lost} lost.`,
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not compare those scans.")
+    } finally {
+      setComparing(false)
+    }
+  }
+
+  async function onSaveSchedules() {
+    if (!selected) return
+    if ((scanScheduleDraft.enabled || trafficScheduleDraft.enabled) && !confirmed) {
+      setError("Confirm a Maps listing before scheduling scans or traffic.")
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      const utcOffsetMinutes = -new Date().getTimezoneOffset()
+      const next = await updateCampaign(selected.id, {
+        scanSchedule: {
+          ...scanScheduleDraft,
+          utcOffsetMinutes: scanScheduleDraft.timeZone === "local" ? utcOffsetMinutes : undefined,
+        },
+        trafficSchedule: {
+          ...trafficScheduleDraft,
+          utcOffsetMinutes: trafficScheduleDraft.timeZone === "local" ? utcOffsetMinutes : undefined,
+          lastSelectedPinIds: selectedPinIds,
+        },
+      })
+      replaceCampaign(next)
+      setScanScheduleDraft(next.scanSchedule ?? scanScheduleDraft)
+      setTrafficScheduleDraft(next.trafficSchedule ?? trafficScheduleDraft)
+      setNotice("Schedules saved. This server checks every minute. One web replica is enough; extra copies would run the same job twice.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save schedules.")
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -888,6 +1046,18 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
           </section>
         )}
 
+        {selected && !creating && confirmed && (
+          <SchedulePanel
+            scanSchedule={scanScheduleDraft}
+            trafficSchedule={trafficScheduleDraft}
+            selectedPinCount={selectedPinIds.length}
+            busy={busy}
+            onScanChange={setScanScheduleDraft}
+            onTrafficChange={setTrafficScheduleDraft}
+            onSave={() => void onSaveSchedules()}
+          />
+        )}
+
         <section className="overflow-hidden rounded-2xl border border-line bg-panel p-0 sm:p-6">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3 px-5 pt-5 sm:px-0 sm:pt-0">
             <div>
@@ -935,6 +1105,18 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankColor(16) }} />
                 16+ / not found
               </span>
+              {compare && (
+                <>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankChangeColor("up") }} />
+                    Improved / new
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: rankChangeColor("down") }} />
+                    Worse / lost
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
@@ -1007,6 +1189,13 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               {selectedPoint.address && <p className="mt-1 text-sm text-muted">{selectedPoint.address}</p>}
               {selectedPoint.domain && <p className="mt-1 text-sm text-muted">{selectedPoint.domain}</p>}
               {selectedPoint.placeId && <p className="mt-1 text-xs text-muted">Place ID {selectedPoint.placeId}</p>}
+              {selectedPoint.change && (
+                <p className="mt-2 text-sm" style={{ color: rankChangeColor(selectedPoint.change) }}>
+                  {rankChangeLabel(selectedPoint.change)}
+                  {selectedPoint.previousRank != null ? ` · was #${selectedPoint.previousRank}` : ""}
+                  {selectedPoint.rank != null ? ` · now #${selectedPoint.rank}` : " · now not found"}
+                </p>
+              )}
               {pinsSelectable && (
                 <p className="mt-2 text-xs text-brass">
                   {selectedPinIds.includes(gridPinId(selectedPoint))
@@ -1066,18 +1255,24 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             </div>
           )}
 
-          {selected?.recentGridScans && selected.recentGridScans.length > 0 && (
-            <div className="mt-6 border-t border-line px-5 pt-4 sm:px-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Recent grid scans</p>
-              <ul className="mt-2 grid gap-1 text-sm text-muted">
-                {selected.recentGridScans.slice(0, 5).map((run) => (
-                  <li key={run.id}>
-                    {formatWhen(run.scannedAt)} · {run.keyword} · {run.foundCount} of {run.pointCount} found
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <ScanHistoryPanel
+            scans={scans}
+            compare={compare}
+            compareFromId={compareFromId}
+            compareToId={compareToId}
+            comparing={comparing}
+            rerunning={rerunning}
+            busy={busy}
+            onCompareFrom={setCompareFromId}
+            onCompareTo={setCompareToId}
+            onCompare={() => void onCompareScans()}
+            onLatestVsPrevious={() => {
+              if (scans.length < 2) return
+              void onCompareScans(scans[1]!.id, scans[0]!.id)
+            }}
+            onClearCompare={() => setCompare(null)}
+            onRerun={() => void onRerunScan()}
+          />
         </section>
       </main>
     </div>
@@ -1172,6 +1367,356 @@ function TrafficLivePanel({
         </div>
       )}
     </div>
+  )
+}
+
+function ScanHistoryPanel({
+  scans,
+  compare,
+  compareFromId,
+  compareToId,
+  comparing,
+  rerunning,
+  busy,
+  onCompareFrom,
+  onCompareTo,
+  onCompare,
+  onLatestVsPrevious,
+  onClearCompare,
+  onRerun,
+}: {
+  scans: GridScanRun[]
+  compare: ScanCompare | null
+  compareFromId: string
+  compareToId: string
+  comparing: boolean
+  rerunning: boolean
+  busy: boolean
+  onCompareFrom: (id: string) => void
+  onCompareTo: (id: string) => void
+  onCompare: () => void
+  onLatestVsPrevious: () => void
+  onClearCompare: () => void
+  onRerun: () => void
+}) {
+  return (
+    <div className="mt-6 border-t border-line px-5 pt-4 sm:px-0" data-testid="scan-history">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Scan history</p>
+          <h5 className="font-display text-xl text-paper">Saved grid scans</h5>
+          <p className="mt-1 text-sm text-muted">Every finished scan is kept. Rerun uses the same keyword, grid, and center.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            data-testid="rerun-scan"
+            onClick={onRerun}
+            disabled={busy || scans.length === 0}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-line px-3 text-sm font-semibold text-paper hover:border-brass disabled:opacity-60"
+          >
+            {(rerunning || comparing) && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            Rerun
+          </button>
+          <button
+            type="button"
+            data-testid="compare-latest"
+            onClick={onLatestVsPrevious}
+            disabled={busy || scans.length < 2}
+            className="inline-flex h-9 items-center rounded-lg border border-line px-3 text-sm font-semibold text-paper hover:border-brass disabled:opacity-60"
+          >
+            Latest vs previous
+          </button>
+        </div>
+      </div>
+
+      {scans.length === 0 ? (
+        <p className="mt-3 text-sm text-muted">No saved scans yet. Scan the confirmed listing to create the first snapshot.</p>
+      ) : (
+        <ul className="mt-3 grid gap-1 text-sm text-muted" data-testid="scan-history-list">
+          {scans.map((run) => (
+            <li key={run.id}>
+              {scanWhen(run)} · {run.keyword} · {run.gridSize}×{run.gridSize} · {run.foundCount} of {run.pointCount} found
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {scans.length >= 2 && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Earlier scan</span>
+            <select
+              value={compareFromId}
+              onChange={(event) => onCompareFrom(event.target.value)}
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            >
+              {scans.map((run) => (
+                <option key={run.id} value={run.id}>
+                  {scanWhen(run)} · {run.keyword}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Later scan</span>
+            <select
+              value={compareToId}
+              onChange={(event) => onCompareTo(event.target.value)}
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            >
+              {scans.map((run) => (
+                <option key={run.id} value={run.id}>
+                  {scanWhen(run)} · {run.keyword}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex items-end gap-2">
+            <button
+              type="button"
+              data-testid="compare-scans"
+              onClick={onCompare}
+              disabled={busy || !compareFromId || !compareToId}
+              className="inline-flex h-11 items-center rounded-lg bg-brass px-4 text-sm font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
+            >
+              Compare
+            </button>
+            {compare && (
+              <button
+                type="button"
+                onClick={onClearCompare}
+                className="inline-flex h-11 items-center rounded-lg border border-line px-3 text-sm text-paper hover:border-brass"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {compare && (
+        <div className="mt-4 overflow-x-auto" data-testid="scan-compare-table">
+          <p className="mb-2 text-sm text-paper/80">
+            {compare.improved} improved · {compare.worse} worse · {compare.same} same · {compare.added} new · {compare.lost} lost
+          </p>
+          <table className="w-full min-w-[28rem] text-left text-sm">
+            <thead className="text-[11px] uppercase tracking-[0.12em] text-muted">
+              <tr>
+                <th className="pb-2 pr-3 font-semibold">Pin</th>
+                <th className="pb-2 pr-3 font-semibold">Earlier</th>
+                <th className="pb-2 pr-3 font-semibold">Later</th>
+                <th className="pb-2 font-semibold">Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {compare.pins.map((pin) => (
+                <tr key={`${pin.row}-${pin.col}`} className="border-t border-line">
+                  <td className="py-2 pr-3 text-muted">
+                    R{pin.row + 1} C{pin.col + 1}
+                  </td>
+                  <td className="py-2 pr-3 text-paper/80">{pin.previousRank == null ? "—" : `#${pin.previousRank}`}</td>
+                  <td className="py-2 pr-3 text-paper/80">{pin.currentRank == null ? "—" : `#${pin.currentRank}`}</td>
+                  <td className="py-2 font-semibold" style={{ color: rankChangeColor(pin.change) }}>
+                    {rankChangeLabel(pin.change)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScheduleFieldset({
+  title,
+  detail,
+  schedule,
+  extra,
+  onChange,
+}: {
+  title: string
+  detail: string
+  schedule: ScanSchedule
+  extra?: ReactNode
+  onChange: (next: ScanSchedule) => void
+}) {
+  return (
+    <fieldset className="grid gap-3 rounded-xl border border-line bg-ink px-4 py-4">
+      <legend className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">{title}</legend>
+      <p className="text-sm text-muted">{detail}</p>
+      <label className="inline-flex items-center gap-2 text-sm text-paper">
+        <input
+          type="checkbox"
+          checked={schedule.enabled}
+          onChange={(event) => onChange({ ...schedule, enabled: event.target.checked })}
+        />
+        Run automatically
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Cadence</span>
+          <select
+            value={schedule.cadence}
+            onChange={(event) =>
+              onChange({
+                ...schedule,
+                cadence: event.target.value === "weekly" ? "weekly" : "daily",
+                weekday: event.target.value === "weekly" ? (schedule.weekday ?? 1) : undefined,
+              })
+            }
+            className="h-11 rounded-lg border border-line bg-panel px-3 text-paper outline-none focus:border-brass"
+          >
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+          </select>
+        </label>
+        {schedule.cadence === "weekly" && (
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Weekday</span>
+            <select
+              value={schedule.weekday ?? 1}
+              onChange={(event) => onChange({ ...schedule, weekday: Number(event.target.value) })}
+              className="h-11 rounded-lg border border-line bg-panel px-3 text-paper outline-none focus:border-brass"
+            >
+              {WEEKDAYS.map((label, index) => (
+                <option key={label} value={index}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Hour</span>
+          <select
+            value={schedule.hour}
+            onChange={(event) => onChange({ ...schedule, hour: Number(event.target.value) })}
+            className="h-11 rounded-lg border border-line bg-panel px-3 text-paper outline-none focus:border-brass"
+          >
+            {Array.from({ length: 24 }, (_, hour) => (
+              <option key={hour} value={hour}>
+                {String(hour).padStart(2, "0")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Minute</span>
+          <select
+            value={schedule.minute}
+            onChange={(event) => onChange({ ...schedule, minute: Number(event.target.value) })}
+            className="h-11 rounded-lg border border-line bg-panel px-3 text-paper outline-none focus:border-brass"
+          >
+            {[0, 15, 30, 45, schedule.minute]
+              .filter((value, index, rows) => rows.indexOf(value) === index)
+              .sort((a, b) => a - b)
+              .map((minute) => (
+                <option key={minute} value={minute}>
+                  {String(minute).padStart(2, "0")}
+                </option>
+              ))}
+          </select>
+        </label>
+      </div>
+      <fieldset className="grid gap-2">
+        <legend className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Time zone</legend>
+        <label className="inline-flex items-center gap-2 text-sm text-paper">
+          <input
+            type="radio"
+            name={`${title}-tz`}
+            checked={schedule.timeZone === "local"}
+            onChange={() => onChange({ ...schedule, timeZone: "local" })}
+          />
+          Local (this browser’s clock)
+        </label>
+        <label className="inline-flex items-center gap-2 text-sm text-paper">
+          <input
+            type="radio"
+            name={`${title}-tz`}
+            checked={schedule.timeZone === "utc"}
+            onChange={() => onChange({ ...schedule, timeZone: "utc" })}
+          />
+          UTC (Railway and this server use UTC)
+        </label>
+      </fieldset>
+      {extra}
+      <p className="text-xs text-muted">
+        Last run {schedule.lastRunAt ? formatWhen(schedule.lastRunAt) : "never"} · Next run{" "}
+        {schedule.nextRunAt ? formatWhen(schedule.nextRunAt) : "not scheduled"}
+      </p>
+    </fieldset>
+  )
+}
+
+function SchedulePanel({
+  scanSchedule,
+  trafficSchedule,
+  selectedPinCount,
+  busy,
+  onScanChange,
+  onTrafficChange,
+  onSave,
+}: {
+  scanSchedule: ScanSchedule
+  trafficSchedule: TrafficSchedule
+  selectedPinCount: number
+  busy: boolean
+  onScanChange: (next: ScanSchedule) => void
+  onTrafficChange: (next: TrafficSchedule) => void
+  onSave: () => void
+}) {
+  return (
+    <section className="rounded-2xl border border-line bg-panel p-5 sm:p-6" data-testid="schedules">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Schedules</p>
+      <h4 className="font-display text-2xl text-paper">When scans and traffic run</h4>
+      <p className="mt-1 text-sm text-muted">
+        Automatic jobs start on this web process every minute. Keep a single Railway replica so the same scan or traffic job does not fire twice.
+      </p>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <ScheduleFieldset
+          title="Scan schedule"
+          detail="Rerun the latest keyword and grid at this time."
+          schedule={scanSchedule}
+          onChange={onScanChange}
+        />
+        <ScheduleFieldset
+          title="Traffic schedule"
+          detail="Start traffic from selected pins or every pin where the listing was found."
+          schedule={trafficSchedule}
+          onChange={(next) => onTrafficChange({ ...trafficSchedule, ...next })}
+          extra={
+            <label className="grid gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Pins</span>
+              <select
+                value={trafficSchedule.pinMode}
+                onChange={(event) =>
+                  onTrafficChange({
+                    ...trafficSchedule,
+                    pinMode: event.target.value === "all_found" ? "all_found" : "selected",
+                  })
+                }
+                className="h-11 rounded-lg border border-line bg-panel px-3 text-paper outline-none focus:border-brass"
+              >
+                <option value="selected">Last selected pins ({selectedPinCount})</option>
+                <option value="all_found">Every pin where the listing was found</option>
+              </select>
+            </label>
+          }
+        />
+      </div>
+      <button
+        type="button"
+        data-testid="save-schedules"
+        onClick={onSave}
+        disabled={busy}
+        className="mt-4 inline-flex h-11 items-center rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
+      >
+        Save schedules
+      </button>
+    </section>
   )
 }
 

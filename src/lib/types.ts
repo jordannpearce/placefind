@@ -226,6 +226,8 @@ export type GridPoint = {
   locationCoordinate?: string
 }
 
+export type RankChange = "up" | "down" | "same" | "new" | "lost"
+
 export type GridPointResult = GridPoint & {
   keyword: string
   rank: number | null
@@ -238,6 +240,8 @@ export type GridPointResult = GridPoint & {
   mapsUrl: string | null
   scannedAt: string
   error?: string
+  change?: RankChange
+  previousRank?: number | null
 }
 
 export type ScanRun = {
@@ -250,6 +254,9 @@ export type ScanRun = {
 
 export type GridScanRun = {
   id: string
+  campaignId?: string
+  startedAt?: string
+  finishedAt?: string
   scannedAt: string
   keyword: string
   gridSize: number
@@ -260,6 +267,49 @@ export type GridScanRun = {
   pointCount: number
   foundCount: number
   points: GridPointResult[]
+}
+
+export type ScanComparePin = {
+  row: number
+  col: number
+  lat: number
+  lng: number
+  previousRank: number | null
+  currentRank: number | null
+  change: RankChange
+}
+
+export type ScanCompare = {
+  previous: GridScanRun
+  current: GridScanRun
+  pins: ScanComparePin[]
+  improved: number
+  worse: number
+  same: number
+  added: number
+  lost: number
+}
+
+export type ScheduleCadence = "daily" | "weekly"
+export type ScheduleTimeZone = "local" | "utc"
+export type TrafficPinMode = "selected" | "all_found"
+
+export type ScanSchedule = {
+  enabled: boolean
+  cadence: ScheduleCadence
+  hour: number
+  minute: number
+  weekday?: number
+  timeZone: ScheduleTimeZone
+  utcOffsetMinutes?: number
+  lastRunAt?: string | null
+  nextRunAt?: string | null
+}
+
+export type TrafficSchedule = ScanSchedule & {
+  pinMode: TrafficPinMode
+  lastSelectedPinIds: string[]
+  lastSelectedKeywords?: string[]
 }
 
 export type Campaign = {
@@ -284,6 +334,8 @@ export type Campaign = {
   recentScans: ScanRun[]
   recentGridScans?: GridScanRun[]
   lastTrafficJob?: TrafficJob | null
+  scanSchedule?: ScanSchedule
+  trafficSchedule?: TrafficSchedule
 }
 
 export type TrafficJobStatus = "running" | "ok" | "error" | "stopped"
@@ -292,10 +344,12 @@ export type TrafficLogLine = {
   at: string
   message: string
   pinId?: string
+  keyword?: string
 }
 
 export type TrafficPinResult = {
   pinId: string
+  keyword?: string
   row: number
   col: number
   lat: number
@@ -316,6 +370,8 @@ export type TrafficJob = {
   requestCount: number
   lastError: string | null
   pinIds?: string[]
+  keywords?: string[]
+  keywordIds?: string[]
   log?: TrafficLogLine[]
   results?: TrafficPinResult[]
 }
@@ -333,6 +389,8 @@ export type CampaignInput = {
   spacingMiles?: number
   zoom?: number
   center?: GeoPoint | null
+  scanSchedule?: ScanSchedule | null
+  trafficSchedule?: TrafficSchedule | null
 }
 
 export type ConfirmedListing = {

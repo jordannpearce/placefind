@@ -61,15 +61,19 @@ import {
   CampaignError,
   MAX_GRID_SIZE,
   MAX_KEYWORDS,
+  compareCampaignScans,
   createCampaign,
   deleteCampaign,
   geocodeCity,
   getCampaign,
+  getCampaignScan,
+  listCampaignScans,
   loadCampaignGrid,
   readCampaigns,
   scanCampaign,
   updateCampaign,
 } from "./campaigns.ts"
+import { startScheduler } from "./scheduler.ts"
 import { getCampaignTraffic, startCampaignTraffic, stopCampaignTraffic } from "./traffic.ts"
 import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
@@ -292,6 +296,84 @@ async function start() {
         return
       }
       res.status(500).json({ error: "Could not delete the campaign." })
+    }
+  })
+
+  app.get("/api/campaigns/:id/scans", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    try {
+      res.json({ scans: listCampaignScans(String(req.params.id ?? ""), user.id), ...campaignMeta() })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not load saved scans." })
+    }
+  })
+
+  app.post("/api/campaigns/:id/scans", async (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    const desktop = isDesktopRequest(req)
+    const license = await licenseStatus()
+    if (license.required && !license.valid && (desktop || !storeOpen())) {
+      res.status(402).json({
+        error: license.detail || "Enter a valid PlaceFind license key to scan ranks.",
+        license,
+      })
+      return
+    }
+    const body = (req.body ?? {}) as ApiKeys & { keywords?: string[]; keyword?: string }
+    const keys = isSellerMode() ? body : {}
+    const campaign = getCampaign(String(req.params.id ?? ""), user.id)
+    if (!campaign) {
+      res.status(404).json({ error: "That campaign was not found." })
+      return
+    }
+    const requested = body.keyword ? [body.keyword] : body.keywords
+    const rerunKeyword = requested?.length ? requested : campaign.lastGridScan?.keyword ? [campaign.lastGridScan.keyword] : undefined
+    try {
+      const result = await scanCampaign(campaign.id, keys, rerunKeyword, user.id)
+      res.json({ ...result, ...campaignMeta() })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Rank scan failed unexpectedly." })
+    }
+  })
+
+  app.get("/api/campaigns/:id/scans/:a/compare/:b", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    try {
+      res.json({
+        compare: compareCampaignScans(String(req.params.id ?? ""), String(req.params.a ?? ""), String(req.params.b ?? ""), user.id),
+        ...campaignMeta(),
+      })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not compare those scans." })
+    }
+  })
+
+  app.get("/api/campaigns/:id/scans/:scanId", (req, res) => {
+    const user = requireUser(req, res)
+    if (!user) return
+    try {
+      res.json({ scan: getCampaignScan(String(req.params.id ?? ""), String(req.params.scanId ?? ""), user.id), ...campaignMeta() })
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: "Could not load that scan." })
     }
   })
 
@@ -872,6 +954,7 @@ async function start() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`PlaceFind is running at http://127.0.0.1:${PORT}`)
+    startScheduler()
   })
 }
 

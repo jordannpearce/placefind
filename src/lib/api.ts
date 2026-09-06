@@ -21,6 +21,9 @@ import type {
   SearchQuery,
   SearchResponse,
   TrafficJob,
+  ScanCompare,
+  ScanSchedule,
+  TrafficSchedule,
 } from "./types.ts"
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -409,6 +412,35 @@ export async function scanCampaign(
     method: "POST",
     body: JSON.stringify(hideClientKeys ? { keywords } : { keywords, ...keys }),
   })
+}
+
+export async function loadCampaignScans(id: string): Promise<{ scans: GridScanRun[] }> {
+  const payload = await request<{ scans?: GridScanRun[] }>(`/api/campaigns/${id}/scans`)
+  return { scans: Array.isArray(payload.scans) ? payload.scans : [] }
+}
+
+export async function rerunCampaignScan(
+  id: string,
+  keys: ApiKeys,
+  hideClientKeys = false,
+  keywords?: string[],
+): Promise<{ campaign: Campaign; scan: ScanRun; grid?: GridScanRun }> {
+  return request(`/api/campaigns/${id}/scans`, {
+    method: "POST",
+    body: JSON.stringify(hideClientKeys ? { keywords } : { keywords, ...keys }),
+  })
+}
+
+export async function compareCampaignScans(id: string, previousId: string, currentId: string): Promise<ScanCompare> {
+  const payload = await request<{ compare: ScanCompare }>(`/api/campaigns/${id}/scans/${previousId}/compare/${currentId}`)
+  return payload.compare
+}
+
+export async function updateCampaignSchedule(
+  id: string,
+  input: { scanSchedule?: ScanSchedule | null; trafficSchedule?: TrafficSchedule | null },
+): Promise<Campaign> {
+  return updateCampaign(id, input)
 }
 
 export async function startCampaignTraffic(

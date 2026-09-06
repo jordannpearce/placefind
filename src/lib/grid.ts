@@ -94,7 +94,12 @@ export function rankColor(rank: number | null | undefined): string {
   return "#c5362b"
 }
 
-export function pinColor(point: Pick<GridPointResult, "rank" | "scannedAt" | "error">): string {
+export function pinColor(point: Pick<GridPointResult, "rank" | "scannedAt" | "error"> & { change?: GridPointResult["change"] }): string {
+  if (point.change) {
+    if (point.change === "up" || point.change === "new") return "#2f6b3d"
+    if (point.change === "down" || point.change === "lost") return "#c5362b"
+    return "#b4a793"
+  }
   if (!pointScanned(point)) return "#b4a793"
   return rankColor(point.rank)
 }

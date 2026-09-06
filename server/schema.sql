@@ -53,6 +53,12 @@ CREATE TABLE IF NOT EXISTS campaigns (
   payload JSONB NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS scan_runs (
+  id TEXT PRIMARY KEY,
+  campaign_id TEXT NOT NULL,
+  payload JSONB NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS password_resets (
   token_hash TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
