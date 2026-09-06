@@ -24,7 +24,9 @@ export function DownloadPage() {
         <h2 className="mt-2 font-display text-4xl text-paper">{product?.name ?? "PlaceFind"}</h2>
         <p className="mt-3 text-sm leading-6 text-muted">{product?.pitch}</p>
         <p className="mt-4 font-display text-3xl text-brass">${product?.price ?? "49"}</p>
-        <p className="mt-1 text-xs text-muted">One-time license for the Windows app. Buyers use their own DataForSEO and Scrappey keys.</p>
+        <p className="mt-1 text-xs text-muted">
+          One-time license for the Windows app. Maps lookups use the seller’s DataForSEO and Scrappey keys when those were included in this setup.
+        </p>
 
         {setup ? (
           <a
@@ -55,7 +57,7 @@ export function DownloadPage() {
         <ol className="mt-4 grid gap-3 text-sm leading-6 text-paper/80">
           <li>1. Run the Setup file on Windows 10 or 11 (64-bit).</li>
           <li>2. Choose an install folder. A desktop shortcut is created for you.</li>
-          <li>3. Open PlaceFind, go to Settings, and paste your Scrappey and DataForSEO keys.</li>
+          <li>3. Open PlaceFind. If the seller included API keys, you can search right away.</li>
           <li>4. Search a business by name, city, and state.</li>
         </ol>
       </section>

@@ -1,4 +1,5 @@
 import { searchDataForSeo } from "./dataforseo.ts"
+import { mergeHostedKeys } from "./hosted-keys.ts"
 import { rankListings } from "./match.ts"
 import { searchMockBusinesses } from "./mock.ts"
 import { enrichWithScrappey, searchScrappey } from "./scrappey.ts"
@@ -13,12 +14,7 @@ function hasScrappey(keys: ApiKeys): boolean {
 }
 
 function envKeys(keys: ApiKeys): ApiKeys {
-  return {
-    scrappeyKey: keys.scrappeyKey?.trim() || process.env.SCRAPPEY_API_KEY?.trim(),
-    dataforseoLogin: keys.dataforseoLogin?.trim() || process.env.DATAFORSEO_LOGIN?.trim(),
-    dataforseoPassword: keys.dataforseoPassword?.trim() || process.env.DATAFORSEO_PASSWORD?.trim(),
-    enrichWithScrappey: keys.enrichWithScrappey !== false,
-  }
+  return mergeHostedKeys(keys)
 }
 
 function finalize(query: SearchQuery, listings: BusinessListing[], extras: Omit<SearchResponse, "query" | "best" | "others" | "elapsedMs">, started: number): SearchResponse {

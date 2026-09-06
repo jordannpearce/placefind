@@ -32,8 +32,8 @@ export function SettingsPanel({ open, keys, onChange, onClose }: Props) {
 
         <div className="grid gap-4 overflow-y-auto pr-1">
           <p className="text-sm leading-6 text-muted">
-            Keys stay on this computer. DataForSEO uses your dashboard login plus API password. Scrappey uses the key
-            from scrappey.com.
+            Optional. If the seller already put keys in this copy, you can leave these blank and search. Otherwise paste
+            a Scrappey key and a DataForSEO login plus API password.
           </p>
 
           <label className="grid gap-1.5">

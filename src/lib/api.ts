@@ -1,4 +1,4 @@
-import type { ApiKeys, InstallerStatus, KeyTestResult, ProductInfo, SearchQuery, SearchResponse } from "./types.ts"
+import type { ApiKeys, HostedKeyStatus, InstallerStatus, KeyTestResult, ProductInfo, SearchQuery, SearchResponse } from "./types.ts"
 
 export async function searchBusiness(query: SearchQuery, keys: ApiKeys): Promise<SearchResponse> {
   const response = await fetch("/api/search", {
@@ -24,10 +24,27 @@ export async function testKeys(keys: ApiKeys): Promise<KeyTestResult[]> {
   return payload.results ?? []
 }
 
-export async function loadStore(): Promise<{ product: ProductInfo; installer: InstallerStatus }> {
+export async function loadStore(): Promise<{ product: ProductInfo; installer: InstallerStatus; hosted: HostedKeyStatus }> {
   const response = await fetch("/api/product")
   if (!response.ok) throw new Error("Could not load product info.")
-  return (await response.json()) as { product: ProductInfo; installer: InstallerStatus }
+  return (await response.json()) as { product: ProductInfo; installer: InstallerStatus; hosted: HostedKeyStatus }
+}
+
+export async function saveHostedKeys(input: {
+  scrappeyKey?: string
+  dataforseoLogin?: string
+  dataforseoPassword?: string
+}): Promise<{ hosted: HostedKeyStatus; installer: InstallerStatus }> {
+  const response = await fetch("/api/hosted-keys", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  })
+  const payload = (await response.json()) as { hosted?: HostedKeyStatus; installer?: InstallerStatus; error?: string }
+  if (!response.ok || !payload.hosted || !payload.installer) {
+    throw new Error(payload.error || "Could not save API keys into the installer.")
+  }
+  return { hosted: payload.hosted, installer: payload.installer }
 }
 
 export async function saveProduct(input: Pick<ProductInfo, "price" | "pitch">): Promise<ProductInfo> {

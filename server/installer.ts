@@ -18,6 +18,8 @@ export type InstallerStatus = {
   startedAt?: string
   finishedAt?: string
   files: InstallerFile[]
+  folder: string
+  setupPath: string
 }
 
 const RELEASE = path.resolve(process.cwd(), "release")
@@ -28,6 +30,8 @@ let state: InstallerStatus = {
   status: "idle",
   log: "",
   files: [],
+  folder: RELEASE,
+  setupPath: path.join(RELEASE, "PlaceFind-Setup-1.0.0.exe"),
 }
 
 export function releaseDir() {
@@ -69,25 +73,32 @@ export function installerPath(name: string): string | null {
 
 export function getInstallerStatus(): InstallerStatus {
   const files = listInstallers()
+  const setupPath = path.join(RELEASE, "PlaceFind-Setup-1.0.0.exe")
   const ready = files.some((file) => file.kind === "setup" && file.size > 1_000_000)
+  const base = { ...state, files, folder: RELEASE, setupPath }
   if (ready && state.status !== "running") {
-    return { ...state, status: "ok", error: undefined, files }
+    return { ...base, status: "ok", error: undefined }
   }
-  return { ...state, files }
+  return base
+}
+
+function paths() {
+  return { folder: RELEASE, setupPath: path.join(RELEASE, "PlaceFind-Setup-1.0.0.exe") }
 }
 
 function appendLog(chunk: string) {
   state = { ...state, log: (state.log + chunk).slice(-MAX_LOG) }
 }
 
-export function startInstallerBuild(): InstallerStatus {
+function runBuild(command: string, args: string[], heading: string): InstallerStatus {
   if (state.status === "running") return getInstallerStatus()
 
   state = {
     status: "running",
-    log: "Creating the Windows setup application…\n",
+    log: heading,
     startedAt: new Date().toISOString(),
     files: listInstallers(),
+    ...paths(),
   }
 
   const env = {
@@ -96,7 +107,7 @@ export function startInstallerBuild(): InstallerStatus {
     SKIP_NOTARIZATION: "true",
   }
 
-  child = spawn("npm", ["run", "dist:win"], {
+  child = spawn(command, args, {
     cwd: process.cwd(),
     env,
     shell: true,
@@ -111,6 +122,7 @@ export function startInstallerBuild(): InstallerStatus {
       finishedAt: new Date().toISOString(),
       error: error.message,
       files: listInstallers(),
+      ...paths(),
     }
     child = null
   })
@@ -123,9 +135,18 @@ export function startInstallerBuild(): InstallerStatus {
       finishedAt: new Date().toISOString(),
       error: ok ? undefined : `Installer build exited with code ${code ?? "unknown"}.`,
       files,
+      ...paths(),
     }
     child = null
   })
 
   return getInstallerStatus()
+}
+
+export function startInstallerBuild(): InstallerStatus {
+  return runBuild("npm", ["run", "dist:win"], "Creating the Windows setup application…\n")
+}
+
+export function startSetupRepack(): InstallerStatus {
+  return runBuild("npx", ["tsx", "scripts/make-windows-setup.ts"], "Putting your API keys into the Windows setup file…\n")
 }

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process"
-import { existsSync, statSync } from "node:fs"
+import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs"
 import path from "node:path"
 
 const root = process.cwd()
@@ -11,6 +11,17 @@ const outFile = path.join(root, "release", "PlaceFind-Setup-1.0.0.exe")
 if (!existsSync(exe)) {
   console.error("Windows app is not packaged yet. Expected", exe)
   process.exit(1)
+}
+
+const hostedKeys = path.join(root, ".data", "hosted-keys.json")
+const resourcesDir = path.join(unpacked, "resources")
+if (existsSync(hostedKeys) && existsSync(resourcesDir)) {
+  copyFileSync(hostedKeys, path.join(resourcesDir, "hosted-keys.json"))
+  console.log("Included hosted API keys in the Windows app.")
+} else if (existsSync(hostedKeys)) {
+  mkdirSync(resourcesDir, { recursive: true })
+  copyFileSync(hostedKeys, path.join(resourcesDir, "hosted-keys.json"))
+  console.log("Included hosted API keys in the Windows app.")
 }
 
 const icon = path.join(root, "release", ".icon-ico", "icon.ico")

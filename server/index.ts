@@ -4,7 +4,8 @@ import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { testDataForSeo } from "./dataforseo.ts"
-import { getInstallerStatus, installerPath, startInstallerBuild } from "./installer.ts"
+import { hostedKeyStatus, writeHostedKeys } from "./hosted-keys.ts"
+import { getInstallerStatus, installerPath, startInstallerBuild, startSetupRepack } from "./installer.ts"
 import { readProduct, writeProduct } from "./product.ts"
 import { searchBusiness } from "./search.ts"
 import { testScrappey } from "./scrappey.ts"
@@ -82,7 +83,24 @@ async function start() {
   })
 
   app.get("/api/product", (_req, res) => {
-    res.json({ product: readProduct(), installer: getInstallerStatus() })
+    res.json({ product: readProduct(), installer: getInstallerStatus(), hosted: hostedKeyStatus() })
+  })
+
+  app.get("/api/hosted-keys", (_req, res) => {
+    res.json(hostedKeyStatus())
+  })
+
+  app.post("/api/hosted-keys", (req, res) => {
+    const body = (req.body ?? {}) as {
+      scrappeyKey?: string
+      dataforseoLogin?: string
+      dataforseoPassword?: string
+      rebuild?: boolean
+    }
+    const hosted = writeHostedKeys(body)
+    const unpacked = existsSync(path.join(process.cwd(), "release", "win-unpacked", "PlaceFind.exe"))
+    const installer = unpacked && body.rebuild !== false ? startSetupRepack() : getInstallerStatus()
+    res.json({ hosted, installer })
   })
 
   app.post("/api/product", (req, res) => {

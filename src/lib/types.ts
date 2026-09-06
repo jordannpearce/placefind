@@ -80,6 +80,8 @@ export type InstallerStatus = {
   startedAt?: string
   finishedAt?: string
   files: InstallerFile[]
+  folder: string
+  setupPath: string
 }
 
 export type ProductInfo = {
@@ -87,4 +89,11 @@ export type ProductInfo = {
   version: string
   price: string
   pitch: string
+}
+
+export type HostedKeyStatus = {
+  scrappey: boolean
+  dataforseo: boolean
+  scrappeyHint: string
+  dataforseoHint: string
 }

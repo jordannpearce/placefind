@@ -6,10 +6,10 @@ import { ResultPanel } from "./components/ResultPanel.tsx"
 import { SearchForm } from "./components/SearchForm.tsx"
 import { SellPage } from "./components/SellPage.tsx"
 import { SettingsPanel } from "./components/SettingsPanel.tsx"
-import { searchBusiness } from "./lib/api.ts"
+import { loadStore, searchBusiness } from "./lib/api.ts"
 import { currentPath, type AppPath } from "./lib/nav.ts"
 import { loadHistory, loadKeys, pushHistory, saveKeys } from "./lib/storage.ts"
-import type { HistoryItem, SearchQuery, SearchResponse } from "./lib/types.ts"
+import type { HistoryItem, HostedKeyStatus, SearchQuery, SearchResponse } from "./lib/types.ts"
 
 const emptyQuery = (): SearchQuery => ({ name: "", city: "", state: "" })
 
@@ -22,11 +22,18 @@ export default function App() {
   const [result, setResult] = useState<SearchResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [hosted, setHosted] = useState<HostedKeyStatus | null>(null)
 
   useEffect(() => {
     const onPop = () => setPath(currentPath())
     window.addEventListener("popstate", onPop)
     return () => window.removeEventListener("popstate", onPop)
+  }, [])
+
+  useEffect(() => {
+    void loadStore()
+      .then((store) => setHosted(store.hosted))
+      .catch(() => setHosted(null))
   }, [])
 
   function go(next: AppPath) {
@@ -35,13 +42,13 @@ export default function App() {
   }
 
   const modeLabel = useMemo(() => {
-    const dfs = Boolean(keys.dataforseoLogin && keys.dataforseoPassword)
-    const scrappey = Boolean(keys.scrappeyKey)
-    if (dfs && scrappey) return "Live Maps + listing page"
+    const dfs = Boolean((keys.dataforseoLogin && keys.dataforseoPassword) || hosted?.dataforseo)
+    const scrappey = Boolean(keys.scrappeyKey || hosted?.scrappey)
+    if (dfs && scrappey) return hosted?.dataforseo || hosted?.scrappey ? "Live Maps with included keys" : "Live Maps + listing page"
     if (dfs) return "Live Maps (DataForSEO)"
     if (scrappey) return "Live Maps page (Scrappey)"
     return "Sample mode"
-  }, [keys])
+  }, [keys, hosted])
 
   async function runSearch(next = query) {
     setLoading(true)

@@ -2,10 +2,7 @@
 
 Windows desktop software that looks up a Google Maps listing from a business name, city, and state.
 
-It uses two keys the buyer already has:
-
-- **DataForSEO** — live Google Maps search (`serp/google/maps/live/advanced`).
-- **Scrappey** — opens the Maps listing page and fills in extra details.
+It uses DataForSEO for live Google Maps search and Scrappey to open the listing page. You can bake your keys into the Windows installer so buyers search without pasting keys. Your API accounts are billed for those searches.
 
 Without keys, PlaceFind still runs in sample mode.
 
@@ -27,10 +24,12 @@ npm run desktop
 ## Sell it and create a Windows setup
 
 1. Open **Sell**.
-2. Set the price you charge (shown on the customer download page).
-3. Click **Create Windows setup**.
-4. When the build finishes, download `PlaceFind-Setup-1.0.0.exe`.
-5. Send buyers to **Download**, or attach the Setup file after they pay you.
+2. Paste your Scrappey key and DataForSEO login + API password, then click **Save keys into the setup**.
+3. Set the price you charge (shown on the customer download page).
+4. Download `PlaceFind-Setup-1.0.0.exe`, or copy it from `/workspace/release/`.
+5. Send buyers the Setup file after they pay.
+
+Keys stay in `.data/hosted-keys.json` on this machine (not committed) and are copied into the Windows app.
 
 You can also build from a terminal:
 
@@ -40,7 +39,7 @@ sudo apt-get install -y nsis
 npm run dist:win
 ```
 
-That writes `release/PlaceFind-Setup-1.0.0.exe` — a Windows installer with a license page, folder picker, desktop shortcut, Start menu shortcut, and uninstaller.
+That writes `/workspace/release/PlaceFind-Setup-1.0.0.exe` — a Windows installer with a license page, folder picker, desktop shortcut, Start menu shortcut, and uninstaller. On this computer the folder is `/workspace/release`. Copy that `.exe` to a Windows PC to test the installer. This Cloud machine is Linux, so the Setup file will not install here.
 
 The setup file is unsigned unless you add your own Windows code-signing certificate. Windows may show SmartScreen the first time; buyers choose **More info → Run anyway**.
 
@@ -52,7 +51,7 @@ Open **Settings** in the app:
 2. Paste your DataForSEO dashboard login and **API password**.
 3. Click **Test connection**, then search.
 
-Keys stay on that computer. Buyers use their own keys.
+If you saved keys on **Sell**, buyers can skip this step.
 
 ## How a search works
 

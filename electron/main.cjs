@@ -23,6 +23,11 @@ function packagedUiDir() {
   return fs.existsSync(fromResources) ? fromResources : fromApp
 }
 
+function packagedKeysFile() {
+  const fromResources = path.join(process.resourcesPath, "hosted-keys.json")
+  return fs.existsSync(fromResources) ? fromResources : ""
+}
+
 function startPackagedServer() {
   if (!app.isPackaged) return
   serverProcess = spawn(process.execPath, [packagedServerEntry()], {
@@ -32,6 +37,7 @@ function startPackagedServer() {
       NODE_ENV: "production",
       PLACEFIND_STATIC: "1",
       PLACEFIND_UI_DIR: packagedUiDir(),
+      PLACEFIND_KEYS_FILE: packagedKeysFile(),
       PORT,
     },
     stdio: "inherit",
