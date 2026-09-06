@@ -71,7 +71,9 @@ describe("public website copy", () => {
 
   it("keeps Google Maps off the homepage and prices a listing at $150 per month", () => {
     const home = readFileSync(path.join(root, "components/HomePage.tsx"), "utf8")
+    const listingForm = readFileSync(path.join(root, "components/ListingFormPage.tsx"), "utf8")
     assert.equal(/google maps/i.test(home), false)
+    assert.match(listingForm, /Search Google Maps/)
     assert.match(home, /LISTING_PRICE_LABEL|listingPriceCopy|\$150/)
     assert.match(home, /business directory/i)
     assert.match(home, /No listings yet/)

@@ -1,5 +1,17 @@
-import { formatStreetAddress } from "./address.ts"
-import type { DirectoryListing, MapsStatus } from "./types.ts"
+import { parseStreetAddress, formatStreetAddress } from "./address.ts"
+import type { BusinessListing, DirectoryListing, ListingInput, MapsStatus } from "./types.ts"
+
+export type ListingMapsMatch = {
+  placeId?: string
+  cid?: string
+  title?: string
+  address?: string
+  phone?: string
+  website?: string
+  hours?: string
+  category?: string
+  categories?: string[]
+}
 
 export function mapsStatusLabel(status: MapsStatus): string {
   if (status === "found") return "Found on Google Maps"
@@ -23,6 +35,50 @@ export function mapsCategory(place: { category?: string | null; categories?: str
   const primary = place.category?.trim() ?? ""
   if (primary) return primary
   return place.categories?.map((row) => row.trim()).find(Boolean) ?? ""
+}
+
+export function listingFormFromPlace(
+  place: Pick<BusinessListing, "title" | "address" | "phone" | "website" | "hours" | "category" | "categories"> & {
+    city?: string | null
+    state?: string | null
+  },
+  fallback: Partial<ListingInput> = {},
+): ListingInput {
+  const parsed = parseStreetAddress(place.address ?? "", {
+    city: fallback.city || place.city || "",
+    state: fallback.state || place.state || "",
+  })
+  return {
+    name: fallback.name?.trim() || place.title?.trim() || "",
+    street: parsed.street,
+    city: parsed.city || fallback.city?.trim() || place.city?.trim() || "",
+    state: parsed.state || fallback.state?.trim() || place.state?.trim() || "",
+    zip: parsed.zip || fallback.zip?.trim() || "",
+    category: mapsCategory(place) || fallback.category?.trim() || "",
+    keywords: fallback.keywords ?? "",
+    phone: place.phone?.trim() || fallback.phone?.trim() || "",
+    email: fallback.email ?? "",
+    website: place.website?.trim() || fallback.website?.trim() || "",
+    hours: place.hours?.trim() || fallback.hours?.trim() || "",
+  }
+}
+
+export function listingMapsMatchFromPlace(place: BusinessListing): ListingMapsMatch {
+  return {
+    placeId: place.placeId ?? undefined,
+    cid: place.cid ?? undefined,
+    title: place.title,
+    address: place.address,
+    phone: place.phone ?? undefined,
+    website: place.website ?? undefined,
+    hours: place.hours ?? undefined,
+    category: mapsCategory(place) || undefined,
+    categories: place.categories,
+  }
+}
+
+export function mapsSearchCandidates(result: { best: BusinessListing | null; others?: BusinessListing[] }): BusinessListing[] {
+  return [result.best, ...(result.others ?? [])].filter((row): row is BusinessListing => Boolean(row))
 }
 
 export function slugifyListingPart(value: string): string {

@@ -1,11 +1,14 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+  listingFormFromPlace,
   listingLocation,
+  listingMapsMatchFromPlace,
   listingPath,
   listingRedirectPath,
   listingSlugFromParts,
   mapsCategory,
+  mapsSearchCandidates,
   mapsStatusDetail,
   mapsStatusLabel,
 } from "./listings.ts"
@@ -34,6 +37,79 @@ describe("listing copy", () => {
     assert.equal(mapsCategory({ category: "", categories: ["Bakery", "Cafe"] }), "Bakery")
     assert.equal(mapsCategory({ categories: ["  Dentist  "] }), "Dentist")
     assert.equal(mapsCategory({ category: null, categories: [] }), "")
+  })
+
+  it("fills listing fields from a Maps place and keeps placeId for confirm", () => {
+    const filled = listingFormFromPlace(
+      {
+        title: "Maple Oven",
+        address: "10 Congress St, Portland, ME 04101",
+        phone: "(207) 555-0100",
+        website: "https://mapleoven.example",
+        hours: "Tue–Sun 7:00 AM–3:00 PM",
+        category: "",
+        categories: ["Bakery", "Cafe"],
+      },
+      { name: "Maple Oven", city: "Portland", state: "ME", email: "hello@mapleoven.example", keywords: "sourdough" },
+    )
+    assert.equal(filled.street, "10 Congress St")
+    assert.equal(filled.city, "Portland")
+    assert.equal(filled.state, "ME")
+    assert.equal(filled.zip, "04101")
+    assert.equal(filled.category, "Bakery")
+    assert.equal(filled.phone, "(207) 555-0100")
+    assert.equal(filled.website, "https://mapleoven.example")
+    assert.equal(filled.hours, "Tue–Sun 7:00 AM–3:00 PM")
+    assert.equal(filled.email, "hello@mapleoven.example")
+    assert.equal(filled.keywords, "sourdough")
+
+    const noStreet = listingFormFromPlace(
+      { title: "Downtown Cart", address: "Austin, TX 78702", categories: ["Food truck"] },
+      { name: "Downtown Cart", city: "Austin", state: "TX" },
+    )
+    assert.equal(noStreet.street, "")
+    assert.equal(noStreet.city, "Austin")
+    assert.equal(noStreet.state, "TX")
+    assert.equal(noStreet.zip, "78702")
+    assert.equal(noStreet.category, "Food truck")
+
+    const match = listingMapsMatchFromPlace({
+      title: "Maple Oven",
+      address: "10 Congress St, Portland, ME 04101",
+      placeId: "sample-maple",
+      cid: "cid-maple",
+      categories: ["Bakery"],
+      mapsUrl: "",
+      source: "sample",
+      matchScore: 100,
+      isBestMatch: true,
+    })
+    assert.equal(match.placeId, "sample-maple")
+    assert.equal(match.cid, "cid-maple")
+    assert.equal(match.category, "Bakery")
+    assert.deepEqual(
+      mapsSearchCandidates({
+        best: {
+          title: "Best",
+          address: "1 Main",
+          mapsUrl: "",
+          source: "sample",
+          matchScore: 100,
+          isBestMatch: true,
+        },
+        others: [
+          {
+            title: "Other",
+            address: "2 Main",
+            mapsUrl: "",
+            source: "sample",
+            matchScore: 40,
+            isBestMatch: false,
+          },
+        ],
+      }).map((row) => row.title),
+      ["Best", "Other"],
+    )
   })
 
   it("builds a brand-and-category listing slug and keeps the old id path as a redirect", () => {
