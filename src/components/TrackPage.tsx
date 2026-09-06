@@ -353,11 +353,11 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
         setSelectedId(campaign.id)
         setCampaigns((current) => [campaign!, ...current.filter((row) => row.id !== campaign!.id)])
       } else {
-        const keywords = selected.keywords.some((row) => row.toLowerCase() === target.toLowerCase())
-          ? selected.keywords
-          : [...selected.keywords, target]
+        const keywords = campaign.keywords.some((row) => row.toLowerCase() === target.toLowerCase())
+          ? campaign.keywords
+          : [...campaign.keywords, target]
         campaign = await updateCampaign(
-          selected.id,
+          campaign.id,
           campaignInputFromListing(confirmed, query, { keywords, gridSize, spacingMiles }),
         )
         replaceCampaign(campaign)
