@@ -1,10 +1,18 @@
 import { LoaderCircle, Plus, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
-import { createCampaign, deleteCampaign, loadCampaigns, scanCampaign, updateCampaign } from "../lib/api.ts"
-import { rankColor, rankLabel, rankTone } from "../lib/grid.ts"
+import {
+  createCampaign,
+  deleteCampaign,
+  geocodePlace,
+  loadCampaignGrid,
+  loadCampaigns,
+  scanCampaign,
+  updateCampaign,
+} from "../lib/api.ts"
+import { buildPreviewPoints, pinColor, rankLabel, rankTone } from "../lib/grid.ts"
 import { publicSearchMessage } from "../lib/public-copy.ts"
 import { US_STATES } from "../lib/states.ts"
-import type { ApiKeys, Campaign, CampaignInput, GridPointResult, HostedKeyStatus } from "../lib/types.ts"
+import type { ApiKeys, Campaign, CampaignInput, GeoPoint, GridPointResult, HostedKeyStatus } from "../lib/types.ts"
 import { GridMap } from "./GridMap.tsx"
 
 type Props = {
@@ -62,6 +70,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [selectedPoint, setSelectedPoint] = useState<GridPointResult | null>(null)
+  const [previewCenter, setPreviewCenter] = useState<GeoPoint | null>(null)
+  const [locating, setLocating] = useState(false)
 
   const selected = useMemo(
     () => (campaigns ?? []).find((campaign) => campaign.id === selectedId) ?? null,
@@ -69,11 +79,25 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   )
 
   const grid = selected?.lastGridScan ?? null
+  const gridSize = Number(draft.gridSize || selected?.gridSize || 5)
+  const spacingMiles = Number(draft.spacingMiles || selected?.spacingMiles || 1)
+  const mapCenter = selected?.center || grid?.center || previewCenter
   const points = useMemo(() => {
-    if (!grid) return []
-    if (!activeKeyword) return grid.points
-    return grid.points.filter((point) => point.keyword.toLowerCase() === activeKeyword.toLowerCase())
-  }, [grid, activeKeyword])
+    const keyword = activeKeyword || selected?.keywords[0] || ""
+    const scanMatches =
+      Boolean(grid) &&
+      grid!.gridSize === gridSize &&
+      Math.abs(grid!.spacingMiles - spacingMiles) < 1e-6 &&
+      Boolean(mapCenter) &&
+      Math.abs(grid!.center.lat - mapCenter!.lat) < 1e-6 &&
+      Math.abs(grid!.center.lng - mapCenter!.lng) < 1e-6
+    if (scanMatches && grid) {
+      if (!activeKeyword) return grid.points
+      return grid.points.filter((point) => point.keyword.toLowerCase() === activeKeyword.toLowerCase())
+    }
+    if (!mapCenter) return []
+    return buildPreviewPoints(mapCenter, gridSize, spacingMiles, keyword)
+  }, [grid, activeKeyword, gridSize, spacingMiles, mapCenter, selected?.keywords])
 
   async function refresh(nextId?: string | null) {
     const payload = await loadCampaigns()
@@ -123,6 +147,56 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     }
   }, [])
 
+  useEffect(() => {
+    if (!creating) return
+    const city = draft.city?.trim() ?? ""
+    const state = draft.state?.trim() ?? ""
+    if (city.length < 2 || !state) {
+      setPreviewCenter(null)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setLocating(true)
+      void geocodePlace(city, state)
+        .then((center) => setPreviewCenter(center))
+        .catch(() => setPreviewCenter(null))
+        .finally(() => setLocating(false))
+    }, 400)
+    return () => window.clearTimeout(timer)
+  }, [creating, draft.city, draft.state])
+
+  useEffect(() => {
+    if (!selected || creating) return
+    if (selected.center || selected.lastGridScan?.center) {
+      setPreviewCenter(selected.center || selected.lastGridScan?.center || null)
+      return
+    }
+    let active = true
+    setLocating(true)
+    void loadCampaignGrid(selected.id, { gridSize, spacingMiles })
+      .then((payload) => {
+        if (!active) return
+        replaceCampaign(payload.campaign)
+        setPreviewCenter(payload.center)
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "Could not place the grid on the map.")
+      })
+      .finally(() => {
+        if (active) setLocating(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [selected?.id, selected?.center, selected?.city, selected?.state, creating, gridSize, spacingMiles])
+
+  useEffect(() => {
+    if (!selectedPoint) return
+    const next = points.find((point) => point.row === selectedPoint.row && point.col === selectedPoint.col)
+    if (!next) setSelectedPoint(null)
+    else if (next !== selectedPoint) setSelectedPoint(next)
+  }, [points, selectedPoint])
+
   function replaceCampaign(next: Campaign) {
     setCampaigns((current) => current.map((row) => (row.id === next.id ? next : row)))
     if (selectedId === next.id) {
@@ -143,6 +217,16 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setKeywordDraft("")
       await refresh(campaign.id)
       setActiveKeyword(campaign.keywords[0] || "")
+      try {
+        const preview = await loadCampaignGrid(campaign.id, {
+          gridSize: campaign.gridSize,
+          spacingMiles: campaign.spacingMiles,
+        })
+        replaceCampaign(preview.campaign)
+        setPreviewCenter(preview.center)
+      } catch {
+        // Map stays on the city pin after the next locate pass.
+      }
       setNotice(
         `Campaign saved. A ${campaign.gridSize}×${campaign.gridSize} scan runs ${searchCount(campaign.gridSize)} Maps searches.`,
       )
@@ -253,7 +337,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
         `Scan finished. ${selected.businessName} appeared at ${found} of ${total} grid points for “${target}”.`,
       )
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not scan Google Maps.")
+      setError(err instanceof Error ? err.message : "Could not scan Maps.")
     } finally {
       setScanning(false)
     }
@@ -266,6 +350,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setKeywordDraft("")
     setActiveKeyword("")
     setSelectedPoint(null)
+    setPreviewCenter(null)
     setError(null)
     setNotice(null)
   }
@@ -277,13 +362,22 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setKeywordDraft("")
     setActiveKeyword(campaign.lastGridScan?.keyword || campaign.keywords[0] || "")
     setSelectedPoint(null)
+    setPreviewCenter(campaign.center || campaign.lastGridScan?.center || null)
     setError(null)
     setNotice(null)
   }
 
+  function onDraftChange(next: CampaignInput) {
+    const gridChanged = next.gridSize !== draft.gridSize || next.spacingMiles !== draft.spacingMiles
+    setDraft(next)
+    if (!selected || creating || !gridChanged) return
+    void updateCampaign(selected.id, { gridSize: next.gridSize, spacingMiles: next.spacingMiles })
+      .then(replaceCampaign)
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not save the grid."))
+  }
+
   const mapsReady = Boolean((keys.dataforseoLogin && keys.dataforseoPassword) || hosted?.dataforseo)
   const busy = Boolean(saving || scanning)
-  const gridSize = Number(draft.gridSize || selected?.gridSize || 5)
 
   if (loading) {
     return (
@@ -312,7 +406,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
           </button>
         </div>
         <p className="mb-4 text-sm leading-6 text-muted">
-          Drop a grid around a listing and see where it ranks on Google Maps from each point.
+          Drop a grid around a listing and see where it ranks on Maps from each point.
         </p>
         {campaigns.length === 0 ? (
           <p className="rounded-xl border border-dashed border-line px-3 py-4 text-sm text-muted">
@@ -360,7 +454,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               is 25 Maps searches. 7×7 is 49 — that costs more.
             </p>
             <form className="mt-6 grid gap-4" onSubmit={(event) => void onCreate(event)}>
-              <CampaignFields draft={draft} onChange={setDraft} allowedGridSizes={allowedGridSizes} />
+              <CampaignFields draft={draft} onChange={onDraftChange} allowedGridSizes={allowedGridSizes} />
               <label className="grid gap-1.5">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">First keyword</span>
                 <input
@@ -383,6 +477,20 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 {saving ? "Saving campaign…" : "Create campaign"}
               </button>
             </form>
+            <div className="mt-6 overflow-hidden rounded-2xl border border-line">
+              <div className="flex flex-wrap items-end justify-between gap-3 px-4 py-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Preview grid</p>
+                  <p className="mt-1 text-sm text-muted">
+                    {mapCenter
+                      ? `A ${gridSize}×${gridSize} pin grid around ${draft.city || "this city"}, ${draft.state || ""}.`
+                      : "Add a city and state to drop GPS pins on the map."}
+                  </p>
+                </div>
+                {locating && <LoaderCircle className="h-4 w-4 animate-spin text-brass" />}
+              </div>
+              <GridMap center={mapCenter} points={points} selected={selectedPoint} onSelect={setSelectedPoint} />
+            </div>
           </section>
         ) : (
           <>
@@ -406,7 +514,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 </button>
               </div>
               <div className="mt-5 grid gap-4">
-                <CampaignFields draft={draft} onChange={setDraft} allowedGridSizes={allowedGridSizes} />
+                <CampaignFields draft={draft} onChange={onDraftChange} allowedGridSizes={allowedGridSizes} />
                 <button
                   type="button"
                   onClick={() => void onSave()}
@@ -514,16 +622,21 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               )}
             </section>
 
-            <section className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
-              <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <section className="overflow-hidden rounded-2xl border border-line bg-panel p-0 sm:p-6">
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-3 px-5 pt-5 sm:px-0 sm:pt-0">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Map grid</p>
                   <h4 className="font-display text-2xl text-paper">Where the listing ranks</h4>
                   <p className="mt-1 text-sm text-muted">
-                    Green is ranks 1–3, brass is 4–10, clay is 11+ or not found. Click a point for details.
+                    Pins mark every {gridSize}×{gridSize} search point. Green is ranks 1–3, brass is 4–10, clay is 11+
+                    or not found. Click a pin for coordinates and the listing snippet.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3 text-xs text-muted">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-muted" />
+                    Not scanned
+                  </span>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-full bg-moss" />
                     1–3
@@ -539,40 +652,38 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 </div>
               </div>
 
-              {scanning ? (
-                <div className="flex h-[22rem] items-center justify-center rounded-2xl border border-dashed border-line lg:h-[32rem]">
-                  <div className="grid justify-items-center gap-3 text-center">
-                    <LoaderCircle className="h-6 w-6 animate-spin text-brass" />
-                    <p className="text-sm text-paper">Scanning {searchCount(selected.gridSize)} map points…</p>
-                    <p className="max-w-sm text-xs text-muted">
-                      Each point is a live Maps search. A larger grid takes longer and costs more.
-                    </p>
-                  </div>
+              {(scanning || locating) && (
+                <div className="mx-5 mb-3 flex items-center gap-2 rounded-xl border border-brass/25 bg-brass/5 px-4 py-2 text-sm text-paper/80 sm:mx-0">
+                  <LoaderCircle className="h-4 w-4 animate-spin text-brass" />
+                  {scanning
+                    ? `Scanning ${searchCount(gridSize)} map points…`
+                    : `Placing a ${gridSize}×${gridSize} grid around ${selected.city}, ${selected.state}…`}
                 </div>
-              ) : !grid ? (
-                <div className="flex h-[22rem] items-center justify-center rounded-2xl border border-dashed border-line lg:h-[32rem]">
-                  <p className="max-w-md px-6 text-center text-sm leading-6 text-muted">
-                    No grid yet. Add a keyword, then scan to plot ranks around {selected.businessName}.
-                  </p>
-                </div>
-              ) : (
-                <GridMap
-                  center={grid.center || selected.center}
-                  points={points}
-                  selected={selectedPoint}
-                  onSelect={setSelectedPoint}
-                />
               )}
 
+              <GridMap
+                center={mapCenter}
+                points={points}
+                selected={selectedPoint}
+                onSelect={setSelectedPoint}
+              />
+
               {selectedPoint && (
-                <div className="mt-4 rounded-xl border border-line bg-ink px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Selected point</p>
+                <div className="mx-5 mt-4 rounded-xl border border-line bg-ink px-4 py-3 sm:mx-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Selected pin</p>
                   <p className="mt-1 text-sm text-paper">
-                    {selectedPoint.keyword} · {rankLabel(selectedPoint.rank, selectedPoint.error)}
+                    {selectedPoint.lat.toFixed(5)}, {selectedPoint.lng.toFixed(5)}
+                  </p>
+                  <p className="mt-1 text-sm text-paper">
+                    {selectedPoint.keyword ? `${selectedPoint.keyword} · ` : ""}
+                    {rankLabel(selectedPoint.rank, selectedPoint.error, selectedPoint.scannedAt)}
                     {selectedPoint.rating != null ? ` · ${selectedPoint.rating.toFixed(1)}` : ""}
                     {selectedPoint.reviewCount != null ? ` (${selectedPoint.reviewCount} reviews)` : ""}
                   </p>
-                  <p className="mt-1 text-sm text-paper/80">{selectedPoint.listingTitle || "No matching listing at this point"}</p>
+                  <p className="mt-1 text-sm text-paper/80">
+                    {selectedPoint.listingTitle ||
+                      (selectedPoint.scannedAt ? "No matching listing at this point" : "Scan this grid to fill ranks and listing details.")}
+                  </p>
                   {selectedPoint.address && <p className="mt-1 text-sm text-muted">{selectedPoint.address}</p>}
                   {selectedPoint.domain && <p className="mt-1 text-sm text-muted">{selectedPoint.domain}</p>}
                   {selectedPoint.placeId && <p className="mt-1 text-xs text-muted">Place ID {selectedPoint.placeId}</p>}
@@ -587,8 +698,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 </div>
               )}
 
-              {grid && !scanning && (
-                <div className="mt-4 overflow-x-auto">
+              {points.length > 0 && !scanning && (
+                <div className="mt-4 overflow-x-auto px-5 sm:px-0">
                   <table className="w-full min-w-[36rem] text-left text-sm">
                     <thead className="text-[11px] uppercase tracking-[0.12em] text-muted">
                       <tr>
@@ -607,15 +718,18 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                         >
                           <td className="py-2.5 pr-3 text-muted">
                             R{point.row + 1} C{point.col + 1}
+                            <span className="block text-xs">
+                              {point.lat.toFixed(4)}, {point.lng.toFixed(4)}
+                            </span>
                           </td>
                           <td className="py-2.5 pr-3">
                             <span className="inline-flex items-center gap-2">
                               <span
                                 className="h-2.5 w-2.5 rounded-full"
-                                style={{ background: rankColor(point.rank) }}
+                                style={{ background: pinColor(point) }}
                               />
                               <span className={rankTone(point.rank) === "red" ? "text-clay" : "text-brass"}>
-                                {rankLabel(point.rank, point.error)}
+                                {rankLabel(point.rank, point.error, point.scannedAt)}
                               </span>
                             </span>
                           </td>
@@ -629,7 +743,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               )}
 
               {selected.recentGridScans && selected.recentGridScans.length > 0 && (
-                <div className="mt-6 border-t border-line pt-4">
+                <div className="mt-6 border-t border-line px-5 pt-4 sm:px-0">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Recent grid scans</p>
                   <ul className="mt-2 grid gap-1 text-sm text-muted">
                     {selected.recentGridScans.slice(0, 5).map((run) => (

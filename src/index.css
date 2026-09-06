@@ -79,3 +79,85 @@ textarea {
   border-color: #3d362c;
   color: #f3ead8;
 }
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #221e18;
+  color: #f3ead8;
+  border: 1px solid #3d362c;
+  box-shadow: none;
+}
+
+.leaflet-popup-content {
+  margin: 10px 12px;
+}
+
+.leaflet-popup-close-button {
+  color: #b4a793 !important;
+}
+
+.pf-pin {
+  background: none !important;
+  border: none !important;
+}
+
+.pf-pin-wrap {
+  display: block;
+  width: 22px;
+  height: 32px;
+}
+
+.pf-pin-head {
+  display: block;
+  width: 16px;
+  height: 16px;
+  margin: 0 auto;
+  border: 2px solid #f3ead8;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+.pf-pin-wrap.is-selected .pf-pin-head {
+  width: 18px;
+  height: 18px;
+  box-shadow: 0 0 0 2px #e0b15b;
+}
+
+.pf-pin-point {
+  display: block;
+  width: 0;
+  height: 0;
+  margin: -2px auto 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 10px solid #d07252;
+}
+
+.pf-popup-coords,
+.pf-popup-rank,
+.pf-popup-listing,
+.pf-popup-address {
+  margin: 0;
+}
+
+.pf-popup-coords {
+  font-size: 12px;
+  color: #b4a793;
+}
+
+.pf-popup-rank {
+  margin-top: 4px;
+  font-weight: 600;
+  color: #e0b15b;
+}
+
+.pf-popup-listing {
+  margin-top: 4px;
+  color: #f3ead8;
+}
+
+.pf-popup-address {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #b4a793;
+}

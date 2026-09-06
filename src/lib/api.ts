@@ -16,6 +16,8 @@ import type {
   RuntimeInfo,
   ScanRun,
   GridScanRun,
+  GridPoint,
+  GeoPoint,
   SearchQuery,
   SearchResponse,
 } from "./types.ts"
@@ -367,6 +369,23 @@ export async function updateCampaign(id: string, input: CampaignInput): Promise<
 
 export async function deleteCampaign(id: string): Promise<void> {
   await request(`/api/campaigns/${id}`, { method: "DELETE" })
+}
+
+export async function loadCampaignGrid(
+  id: string,
+  input?: { gridSize?: number; spacingMiles?: number },
+): Promise<{ campaign: Campaign; center: GeoPoint; points: GridPoint[]; gridSize: number; spacingMiles: number }> {
+  const query = new URLSearchParams()
+  if (input?.gridSize != null) query.set("gridSize", String(input.gridSize))
+  if (input?.spacingMiles != null) query.set("spacingMiles", String(input.spacingMiles))
+  const suffix = query.size ? `?${query}` : ""
+  return request(`/api/campaigns/${id}/grid${suffix}`)
+}
+
+export async function geocodePlace(city: string, state: string): Promise<GeoPoint> {
+  const query = new URLSearchParams({ city, state })
+  const payload = await request<{ center: GeoPoint }>(`/api/geocode?${query}`)
+  return payload.center
 }
 
 export async function scanCampaign(

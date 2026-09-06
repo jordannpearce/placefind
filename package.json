@@ -10,7 +10,7 @@
     "dev": "tsx server/index.ts",
     "desktop": "concurrently -k \"tsx server/index.ts\" \"wait-on http://127.0.0.1:43141 && electron .\"",
     "build": "tsc -b && vite build && esbuild server/index.ts --bundle --platform=node --format=esm --outfile=dist-server/index.js --packages=external",
-    "test": "tsx --test server/*.test.ts",
+    "test": "tsx --test server/*.test.ts src/lib/*.test.ts",
     "lint": "oxlint",
     "preview": "tsx server/index.ts",
     "start": "NODE_ENV=production node dist-server/index.js",
