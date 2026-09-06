@@ -91,8 +91,8 @@ export default function App() {
     const scrappey = Boolean(keys.scrappeyKey || hosted?.scrappey)
     const licensed = license?.configured ? (license.valid ? "Licensed · " : "License needed · ") : ""
     if (dfs && scrappey) return `${licensed}${hosted?.included ? "Maps search is ready" : "Live Maps + listing page"}`
-    if (dfs) return `${licensed}Live Maps (DataForSEO)`
-    if (scrappey) return `${licensed}Live Maps page (Scrappey)`
+    if (dfs) return `${licensed}Live Maps search`
+    if (scrappey) return `${licensed}Live listing page`
     return `${licensed}Sample mode`
   }, [keys, hosted, license])
 

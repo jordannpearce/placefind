@@ -46,7 +46,7 @@ export async function searchBusiness(query: SearchQuery, rawKeys: ApiKeys): Prom
         warning:
           sample.length === 0
             ? "No API keys yet, and no sample listing matches that search. Try Franklin Barbecue in Austin, TX, or add keys in Settings."
-            : "Sample listing. Add your DataForSEO and Scrappey keys in Settings to search live Google Maps.",
+            : "Sample listing. Add your Maps keys in Settings to search live Google Maps.",
       },
       started,
     )

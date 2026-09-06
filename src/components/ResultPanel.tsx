@@ -3,9 +3,13 @@ import { useState } from "react"
 import type { BusinessListing, SearchResponse } from "../lib/types.ts"
 
 function sourceLabel(source: BusinessListing["source"]) {
-  if (source === "dataforseo") return "DataForSEO"
-  if (source === "scrappey") return "Scrappey"
+  if (source === "dataforseo") return "Maps"
+  if (source === "scrappey") return "Listing page"
   return "Sample"
+}
+
+function publicText(text: string) {
+  return text.replaceAll("DataForSEO", "Maps").replaceAll("Scrappey", "the listing page")
 }
 
 async function copyText(value: string) {
@@ -130,11 +134,11 @@ export function ResultPanel({ loading, result, error }: Props) {
         <ol className="mt-5 space-y-3 text-sm text-muted">
           <li className="flex gap-3">
             <span className="mt-1 h-2 w-2 rounded-full bg-brass" />
-            Asking DataForSEO for Google Maps results in that city
+            Searching Google Maps for results in that city
           </li>
           <li className="flex gap-3">
             <span className="mt-1 h-2 w-2 animate-pulse rounded-full bg-brass/50" />
-            Opening the listing page with Scrappey when a key is saved
+            Opening the listing page to fill in extra details
           </li>
         </ol>
       </div>
@@ -145,7 +149,7 @@ export function ResultPanel({ loading, result, error }: Props) {
     return (
       <div className="rounded-2xl border border-clay/40 bg-panel p-8">
         <p className="font-display text-2xl text-paper">Search did not finish</p>
-        <p className="mt-2 text-sm text-muted">{error}</p>
+        <p className="mt-2 text-sm text-muted">{publicText(error)}</p>
       </div>
     )
   }
@@ -155,8 +159,8 @@ export function ResultPanel({ loading, result, error }: Props) {
       <div className="rounded-2xl border border-dashed border-line bg-panel/60 p-8">
         <p className="font-display text-3xl text-paper">Find a Google Maps listing</p>
         <p className="mt-3 max-w-md text-sm leading-6 text-muted">
-          Type the business name, city, and state. PlaceFind searches Maps through DataForSEO, then uses Scrappey to
-          open the listing page and fill in extra details.
+          Type the business name, city, and state. PlaceFind finds the matching Google Maps listing and fills in extra
+          details.
         </p>
       </div>
     )
@@ -167,7 +171,7 @@ export function ResultPanel({ loading, result, error }: Props) {
       <div className="rounded-2xl border border-line bg-panel p-8">
         <p className="font-display text-2xl text-paper">No listing matched</p>
         <p className="mt-2 text-sm text-muted">
-          {result.error || result.warning || "Check the spelling, or try a closer city name."}
+          {publicText(result.error || result.warning || "Check the spelling, or try a closer city name.")}
         </p>
       </div>
     )
@@ -176,7 +180,7 @@ export function ResultPanel({ loading, result, error }: Props) {
   return (
     <div className="grid gap-4">
       {result.warning && (
-        <p className="rounded-xl border border-brass/30 bg-brass/10 px-4 py-3 text-sm text-brass">{result.warning}</p>
+        <p className="rounded-xl border border-brass/30 bg-brass/10 px-4 py-3 text-sm text-brass">{publicText(result.warning)}</p>
       )}
       <ListingCard listing={result.best} featured />
       {result.others.length > 0 && (
