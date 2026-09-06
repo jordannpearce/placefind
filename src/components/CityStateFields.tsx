@@ -11,7 +11,7 @@ type Props = {
 
 export function CityStateFields({ city, state, onCity, onState, fieldClassName }: Props) {
   return (
-    <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+    <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(7rem,7.5rem)]">
       <label className="grid min-w-0 gap-1.5">
         <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">City</span>
         <input
