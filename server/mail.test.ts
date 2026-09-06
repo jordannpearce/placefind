@@ -6,6 +6,7 @@ import { after, describe, it } from "node:test"
 import {
   licenseEmail,
   mailPresets,
+  passwordResetEmail,
   personalizeMail,
   selectMailRecipients,
   sendBroadcast,
@@ -28,6 +29,18 @@ describe("licenseEmail", () => {
   })
 })
 
+describe("passwordResetEmail", () => {
+  it("includes the reset link and no vendor names", () => {
+    const message = passwordResetEmail({
+      name: "Jordan Pearce",
+      resetUrl: "https://placefind-production.up.railway.app/reset?token=abc",
+    })
+    assert.match(message.subject, /reset/i)
+    assert.equal(message.text.includes("https://placefind-production.up.railway.app/reset?token=abc"), true)
+    assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.text + message.html), false)
+  })
+})
+
 describe("welcomeEmail", () => {
   it("names the product and price", () => {
     const message = welcomeEmail({ name: "Jordan", product: "PlaceFind", price: "49" })
@@ -35,6 +48,17 @@ describe("welcomeEmail", () => {
     assert.equal(message.text.includes("$49"), true)
     assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.text), false)
     assert.equal(/keygen|resend|dataforseo|scrappey/i.test(message.html), false)
+  })
+})
+
+describe("passwordResetEmail", () => {
+  it("includes the reset subject and one-time website link", () => {
+    const resetUrl = "https://placefind-production.up.railway.app/reset?token=abc123"
+    const message = passwordResetEmail({ name: "Jordan Pearce", resetUrl })
+    assert.equal(message.subject, "Reset your PlaceFind password")
+    assert.equal(message.text.includes(resetUrl), true)
+    assert.equal(message.html.includes(resetUrl), true)
+    assert.equal(message.text.includes("one hour"), true)
   })
 })
 
