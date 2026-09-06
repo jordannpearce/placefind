@@ -107,10 +107,14 @@ describe("directory listings", () => {
       hours: candidate?.hours ?? undefined,
       category: candidate?.category ?? undefined,
       categories: candidate?.categories,
+      lat: candidate?.lat,
+      lng: candidate?.lng,
     })
     const parsed = parseStreetAddress(candidate?.address ?? "", { city: "New York", state: "NY" })
     assert.equal(confirmed.mapsStatus, "found")
     assert.ok(confirmed.placeId)
+    if (candidate?.lat != null) assert.equal(confirmed.lat, candidate.lat)
+    if (candidate?.lng != null) assert.equal(confirmed.lng, candidate.lng)
     assert.equal(confirmed.street, parsed.street)
     assert.equal(confirmed.city, parsed.city || "New York")
     assert.equal(confirmed.state, parsed.state || "NY")
@@ -141,10 +145,17 @@ describe("directory listings", () => {
       title: "Maple Oven",
       address: "10 Congress St, Portland, ME 04101",
       categories: ["Bakery", "Cafe"],
+      lat: 43.6575,
+      lng: -70.258,
     })
     assert.equal(fromCategories.category, "Bakery")
     assert.equal(fromCategories.slug, "maple-oven-bakery")
+    assert.equal(fromCategories.lat, 43.6575)
+    assert.equal(fromCategories.lng, -70.258)
+    assert.equal(publicListing(fromCategories).lat, 43.6575)
+    assert.equal(publicListing(fromCategories).lng, -70.258)
     assert.equal(getListing("maple-oven-bakery").id, bakery.id)
+    assert.equal(getListing(bakery.id).lat, 43.6575)
 
     deleteListing(created.id, "user-1")
     assert.throws(() => getListing(created.id), /not in the directory/)

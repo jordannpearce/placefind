@@ -1,9 +1,11 @@
+import { listingLocation } from "./listings.ts"
 import type {
   BusinessListing,
   Campaign,
   CampaignInput,
   CompetitorListing,
   ConfirmedListing,
+  DirectoryListing,
   SearchQuery,
   SearchResponse,
   TrafficJob,
@@ -44,6 +46,83 @@ export function confirmedListingFromSearch(listing: BusinessListing): ConfirmedL
     city: listing.city,
     state: listing.state,
   }
+}
+
+export function listingHasTrackCoords(listing: Pick<DirectoryListing, "lat" | "lng">): boolean {
+  return listing.lat != null && listing.lng != null && Number.isFinite(listing.lat) && Number.isFinite(listing.lng)
+}
+
+export function searchQueryFromListing(
+  listing: Pick<DirectoryListing, "name" | "city" | "state" | "keywords">,
+): SearchQuery {
+  return {
+    name: listing.name,
+    city: listing.city,
+    state: listing.state,
+    keyword: listing.keywords[0] ?? "",
+  }
+}
+
+export function confirmedListingFromDirectory(listing: DirectoryListing): ConfirmedListing | null {
+  const placeId = listing.placeId?.trim() ?? ""
+  const title = (listing.mapsTitle || listing.name).trim()
+  const lat = listing.lat
+  const lng = listing.lng
+  if (!placeId || !title || lat == null || lng == null) return null
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  return {
+    title,
+    address: (listing.mapsAddress || listingLocation(listing)).trim(),
+    placeId,
+    lat,
+    lng,
+    city: listing.city,
+    state: listing.state,
+  }
+}
+
+export function pickMapsPlaceForListing(
+  result: SearchResponse | null,
+  listing: Pick<DirectoryListing, "placeId">,
+): BusinessListing | null {
+  const placeId = listing.placeId?.trim() ?? ""
+  if (!placeId) return null
+  return listingsFromSearch(result).find((row) => (row.placeId?.trim() ?? "") === placeId) ?? null
+}
+
+export function listingNeedsMapsLookup(listing: Pick<DirectoryListing, "placeId" | "lat" | "lng">): boolean {
+  const placeId = listing.placeId?.trim() ?? ""
+  if (!placeId) return true
+  return !listingHasTrackCoords(listing)
+}
+
+export function ownedListingTrackHint(listing: Pick<DirectoryListing, "placeId" | "lat" | "lng">): string {
+  if (listingHasTrackCoords(listing) && listing.placeId?.trim()) return "Ready to track"
+  if (listing.placeId?.trim()) return "Has a Maps match — we'll look up the pin"
+  return "Fill the form — confirm the Maps listing once"
+}
+
+export function shouldPersistOwnedListingMatch(
+  owned: Pick<DirectoryListing, "placeId">,
+  place: Pick<BusinessListing, "placeId" | "lat" | "lng">,
+): boolean {
+  const ownedId = owned.placeId?.trim() ?? ""
+  const placeId = place.placeId?.trim() ?? ""
+  if (!placeId || place.lat == null || place.lng == null) return false
+  if (!Number.isFinite(place.lat) || !Number.isFinite(place.lng)) return false
+  return !ownedId || ownedId === placeId
+}
+
+export function ownedListingLookupFailedMessage() {
+  return "Could not find that listing on Maps. Search the name and click the matching business."
+}
+
+export function ownedListingNeedsConfirmMessage() {
+  return "Choose the matching Maps listing to confirm this business."
+}
+
+export function confirmedFromOwnedListingNotice(title: string) {
+  return `Confirmed ${title} from your PlaceFind listing. Set a keyword and grid, then scan.`
 }
 
 export function confirmedListingFromCampaign(campaign: Campaign): ConfirmedListing | null {

@@ -11,6 +11,8 @@ export type ListingMapsMatch = {
   hours?: string
   category?: string
   categories?: string[]
+  lat?: number | null
+  lng?: number | null
 }
 
 export function mapsStatusLabel(status: MapsStatus): string {
@@ -84,6 +86,8 @@ export function listingMapsMatchFromPlace(place: BusinessListing): ListingMapsMa
     hours: hoursFromPlace(place) || undefined,
     category: mapsCategory(place) || undefined,
     categories: place.categories,
+    lat: place.lat ?? undefined,
+    lng: place.lng ?? undefined,
   }
 }
 

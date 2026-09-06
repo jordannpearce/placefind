@@ -89,6 +89,8 @@ describe("listing copy", () => {
       placeId: "sample-maple",
       cid: "cid-maple",
       categories: ["Bakery"],
+      lat: 43.6575,
+      lng: -70.258,
       mapsUrl: "",
       source: "sample",
       matchScore: 100,
@@ -97,6 +99,8 @@ describe("listing copy", () => {
     assert.equal(match.placeId, "sample-maple")
     assert.equal(match.cid, "cid-maple")
     assert.equal(match.category, "Bakery")
+    assert.equal(match.lat, 43.6575)
+    assert.equal(match.lng, -70.258)
     assert.deepEqual(
       mapsSearchCandidates({
         best: {

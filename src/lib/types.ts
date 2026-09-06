@@ -233,6 +233,8 @@ export type DirectoryListing = {
   hasQuoteEmail?: boolean
   placeId: string | null
   cid: string | null
+  lat?: number | null
+  lng?: number | null
   mapsStatus: MapsStatus
   mapsTitle: string
   mapsAddress: string

@@ -375,6 +375,8 @@ async function start() {
       category?: string
       categories?: string[]
       mapsStatus?: "pending" | "found" | "not_found"
+      lat?: number | null
+      lng?: number | null
     }
     try {
       const listing = confirmListingMatch(String(req.params.id ?? ""), user.id, user.role === "admin", body)

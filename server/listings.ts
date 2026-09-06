@@ -30,6 +30,8 @@ export type DirectoryListing = {
   hours: string
   placeId: string
   cid: string
+  lat: number | null
+  lng: number | null
   mapsStatus: MapsStatus
   mapsTitle: string
   mapsAddress: string
@@ -71,6 +73,8 @@ export type MapsMatchInput = {
   category?: string
   categories?: string[]
   mapsStatus?: MapsStatus
+  lat?: number | null
+  lng?: number | null
 }
 
 export type ListingQuery = {
@@ -89,7 +93,13 @@ export class ListingError extends Error {
   }
 }
 
-const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt" | "slug">[] = [
+function parseCoord(value: unknown): number | null {
+  if (value == null || value === "") return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt" | "slug" | "lat" | "lng">[] = [
   {
     ownerUserId: SEED_OWNER_ID,
     name: "Harbor & Oak Bakery",
@@ -303,6 +313,8 @@ function asListing(row: Partial<DirectoryListing> | null | undefined): Directory
     hours: String(row.hours ?? ""),
     placeId: String(row.placeId ?? ""),
     cid: String(row.cid ?? ""),
+    lat: parseCoord(row.lat),
+    lng: parseCoord(row.lng),
     mapsStatus: mapsStatusOf(row.mapsStatus),
     mapsTitle: String(row.mapsTitle ?? ""),
     mapsAddress: String(row.mapsAddress ?? ""),
@@ -405,6 +417,8 @@ export function publicListing(listing: DirectoryListing, includeOwner = false) {
     hours: listing.hours,
     placeId: listing.placeId || null,
     cid: listing.cid || null,
+    lat: listing.lat ?? null,
+    lng: listing.lng ?? null,
     mapsStatus: listing.mapsStatus,
     mapsTitle: listing.mapsTitle,
     mapsAddress: listing.mapsAddress,
@@ -443,7 +457,7 @@ export function seedDirectoryListings(force = false): DirectoryListing[] {
     const seeded = new Map(
       SEED_LISTINGS.map((row, index) => [
         `seed-${index + 1}`,
-        { ...row, id: `seed-${index + 1}`, slug: listingSlugFromParts(row), createdAt: existing.find((item) => item.id === `seed-${index + 1}`)?.createdAt ?? "2026-08-12T14:00:00.000Z", updatedAt: existing.find((item) => item.id === `seed-${index + 1}`)?.updatedAt ?? "2026-08-12T14:00:00.000Z" },
+        { ...row, lat: null, lng: null, id: `seed-${index + 1}`, slug: listingSlugFromParts(row), createdAt: existing.find((item) => item.id === `seed-${index + 1}`)?.createdAt ?? "2026-08-12T14:00:00.000Z", updatedAt: existing.find((item) => item.id === `seed-${index + 1}`)?.updatedAt ?? "2026-08-12T14:00:00.000Z" },
       ]),
     )
     let changed = false
@@ -464,6 +478,8 @@ export function seedDirectoryListings(force = false): DirectoryListing[] {
   const at = "2026-08-12T14:00:00.000Z"
   const seeded = SEED_LISTINGS.map((row, index) => ({
     ...row,
+    lat: null,
+    lng: null,
     id: `seed-${index + 1}`,
     slug: listingSlugFromParts(row),
     createdAt: at,
@@ -530,6 +546,8 @@ export function createListing(input: ListingInput, ownerUserId: string): Directo
     hours: parsed.value.hours ?? "",
     placeId: "",
     cid: "",
+    lat: null,
+    lng: null,
     mapsStatus: "pending",
     mapsTitle: "",
     mapsAddress: "",
@@ -604,10 +622,14 @@ export function applyMapsMatch(
 ): DirectoryListing {
   const address = match?.address?.trim() ?? ""
   const parsed = parseStreetAddress(address, { city: listing.city, state: listing.state })
+  const lat = parseCoord(match?.lat)
+  const lng = parseCoord(match?.lng)
   const next: DirectoryListing = {
     ...listing,
     placeId: match?.placeId?.trim() ?? "",
     cid: match?.cid?.trim() ?? "",
+    lat: lat ?? (status === "not_found" ? null : listing.lat ?? null),
+    lng: lng ?? (status === "not_found" ? null : listing.lng ?? null),
     mapsTitle: match?.title?.trim() ?? "",
     mapsAddress: address,
     street: parsed.street || listing.street,
@@ -652,6 +674,8 @@ export function confirmListingMatch(
       hours: match.hours,
       category: match.category,
       categories: match.categories,
+      lat: match.lat,
+      lng: match.lng,
     },
     "found",
   )

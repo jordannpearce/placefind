@@ -293,6 +293,8 @@ export async function confirmListingMatch(
     category?: string
     categories?: string[]
     mapsStatus?: "pending" | "found" | "not_found"
+    lat?: number | null
+    lng?: number | null
   },
 ): Promise<DirectoryListing> {
   const payload = await request<{ listing: DirectoryListing }>(`/api/listings/${encodeURIComponent(id)}/confirm`, {

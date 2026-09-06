@@ -5,11 +5,21 @@ import {
   campaignScanFinished,
   countFinishedScanPins,
   confirmedListingFromCampaign,
+  confirmedListingFromDirectory,
+  confirmedFromOwnedListingNotice,
   competitorHasGeo,
   competitorsGeoFilterLabel,
   confirmedListingFromSearch,
   filterCompetitors,
+  listingHasTrackCoords,
+  listingNeedsMapsLookup,
   listingsFromSearch,
+  ownedListingLookupFailedMessage,
+  ownedListingNeedsConfirmMessage,
+  ownedListingTrackHint,
+  pickMapsPlaceForListing,
+  searchQueryFromListing,
+  shouldPersistOwnedListingMatch,
   scanBusinessEnabled,
   searchChanged,
   listedTrafficKeywords,
@@ -26,7 +36,7 @@ import {
   trafficLogEmptyCopy,
 } from "./track.ts"
 import { isPublicVendorLeak } from "./public-copy.ts"
-import type { BusinessListing, Campaign, SearchResponse, TrafficJob } from "./types.ts"
+import type { BusinessListing, Campaign, DirectoryListing, SearchResponse, TrafficJob } from "./types.ts"
 
 const franklin: BusinessListing = {
   title: "Franklin Barbecue",
@@ -95,6 +105,99 @@ describe("listingsFromSearch", () => {
     assert.equal(rows.length, 2)
     assert.equal(rows[0]?.title, "Franklin Barbecue")
     assert.equal(rows[1]?.title, "Franklin BBQ Truck")
+  })
+})
+
+function directoryListing(partial: Partial<DirectoryListing> = {}): DirectoryListing {
+  return {
+    id: "l1",
+    name: "Franklin Barbecue",
+    street: "900 E 11th St",
+    city: "Austin",
+    state: "TX",
+    zip: "78702",
+    category: "Barbecue restaurant",
+    keywords: ["barbecue", "brisket"],
+    phone: "",
+    website: "",
+    hours: "",
+    placeId: "sample-franklin",
+    cid: null,
+    mapsStatus: "found",
+    mapsTitle: "Franklin Barbecue",
+    mapsAddress: "900 E 11th St, Austin, TX 78702",
+    mapsUrl: null,
+    createdAt: "2026-09-06T00:00:00.000Z",
+    updatedAt: "2026-09-06T00:00:00.000Z",
+    ...partial,
+  }
+}
+
+describe("owned PlaceFind listings", () => {
+  it("fills the rank query from a directory listing", () => {
+    const query = searchQueryFromListing(directoryListing())
+    assert.equal(query.name, "Franklin Barbecue")
+    assert.equal(query.city, "Austin")
+    assert.equal(query.state, "TX")
+    assert.equal(query.keyword, "barbecue")
+  })
+
+  it("confirms a listing that already has a Maps place and coordinates", () => {
+    const ready = directoryListing({ lat: 30.2701, lng: -97.7313 })
+    assert.equal(listingHasTrackCoords(ready), true)
+    assert.equal(listingNeedsMapsLookup(ready), false)
+    const selected = confirmedListingFromDirectory(ready)
+    assert.ok(selected)
+    assert.equal(scanBusinessEnabled(selected), true)
+    assert.equal(selected?.placeId, "sample-franklin")
+    assert.equal(selected?.lat, 30.2701)
+    assert.equal(selected?.lng, -97.7313)
+    assert.equal(ownedListingTrackHint(ready), "Ready to track")
+    assert.match(confirmedFromOwnedListingNotice("Franklin Barbecue"), /your PlaceFind listing/)
+  })
+
+  it("needs a silent Maps lookup when placeId is stored without coordinates", () => {
+    const listing = directoryListing({ lat: null, lng: null })
+    assert.equal(confirmedListingFromDirectory(listing), null)
+    assert.equal(listingNeedsMapsLookup(listing), true)
+    assert.equal(ownedListingTrackHint(listing), "Has a Maps match — we'll look up the pin")
+    const result: SearchResponse = {
+      query: { name: "Franklin Barbecue", city: "Austin", state: "TX" },
+      best: franklin,
+      others: [{ ...franklin, title: "Franklin BBQ Truck", placeId: "sample-truck", isBestMatch: false }],
+      mode: "sample",
+      sources: { dataforseo: false, scrappey: false },
+      elapsedMs: 12,
+    }
+    assert.equal(pickMapsPlaceForListing(result, listing)?.placeId, "sample-franklin")
+    assert.equal(pickMapsPlaceForListing(result, directoryListing({ placeId: "missing" })), null)
+    assert.match(ownedListingLookupFailedMessage(), /Search the name/)
+  })
+
+  it("prefills a listing with no Maps match and still lets the owner search once", () => {
+    const listing = directoryListing({ placeId: "", mapsStatus: "pending", mapsTitle: "", mapsAddress: "" })
+    assert.equal(confirmedListingFromDirectory(listing), null)
+    assert.equal(listingNeedsMapsLookup(listing), true)
+    assert.equal(ownedListingTrackHint(listing), "Fill the form — confirm the Maps listing once")
+    assert.equal(
+      pickMapsPlaceForListing(
+        {
+          query: { name: listing.name, city: listing.city, state: listing.state },
+          best: franklin,
+          others: [],
+          mode: "sample",
+          sources: { dataforseo: false, scrappey: false },
+          elapsedMs: 1,
+        },
+        listing,
+      ),
+      null,
+    )
+    assert.match(ownedListingNeedsConfirmMessage(), /matching Maps listing/)
+    assert.equal(shouldPersistOwnedListingMatch(listing, franklin), true)
+    assert.equal(shouldPersistOwnedListingMatch(directoryListing(), { ...franklin, placeId: "other" }), false)
+    assert.equal(shouldPersistOwnedListingMatch(directoryListing(), franklin), true)
+    assert.equal(shouldPersistOwnedListingMatch(directoryListing(), { ...franklin, lat: null }), false)
   })
 })
 

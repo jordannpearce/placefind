@@ -2,8 +2,10 @@ import { LoaderCircle, Plus, Star, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
 import {
   compareCampaignScans,
+  confirmListingMatch,
   createCampaign,
   deleteCampaign,
+  loadAccount,
   loadCampaign,
   loadCampaignGrid,
   loadCampaignScans,
@@ -17,6 +19,7 @@ import {
   stopCampaignTraffic,
   updateCampaign,
 } from "../lib/api.ts"
+import { listingLocation, listingMapsMatchFromPlace } from "../lib/listings.ts"
 import { buildPreviewPoints, gridPinId, gridPinLabel, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
 import { pointsWithCompare, rankChangeColor, rankChangeLabel } from "../lib/scan-compare.ts"
 import { mapsKeysMissingAdminMessage, publicPinScanMessage, publicSearchMessage, usingCityGpsBackupNote } from "../lib/public-copy.ts"
@@ -24,10 +27,16 @@ import { CityStateFields } from "./CityStateFields.tsx"
 import {
   campaignInputFromListing,
   competitorsGeoFilterLabel,
+  confirmedFromOwnedListingNotice,
   confirmedListingFromCampaign,
+  confirmedListingFromDirectory,
   confirmedListingFromSearch,
   filterCompetitors,
   listingsFromSearch,
+  ownedListingLookupFailedMessage,
+  ownedListingNeedsConfirmMessage,
+  ownedListingTrackHint,
+  pickMapsPlaceForListing,
   rollupCompetitors,
   campaignScanFinished,
   countFinishedScanPins,
@@ -37,7 +46,9 @@ import {
   scanBusinessEnabled,
   scanGridPageError,
   scanLiveStatus,
+  searchQueryFromListing,
   selectedKeywordsInListedOrder,
+  shouldPersistOwnedListingMatch,
   trafficKeywordHelpCopy,
   searchChanged,
   searchQueryFromCampaign,
@@ -72,6 +83,7 @@ import type {
   Campaign,
   CompetitorListing,
   ConfirmedListing,
+  DirectoryListing,
   GeoPoint,
   GridPoint,
   GridPointResult,
@@ -171,6 +183,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [trafficScheduleDraft, setTrafficScheduleDraft] = useState<TrafficSchedule>(emptyTrafficSchedule)
   const [competitorsGeoOnly, setCompetitorsGeoOnly] = useState(false)
   const [competitorsScope, setCompetitorsScope] = useState<"all" | "pin">("all")
+  const [ownedListings, setOwnedListings] = useState<DirectoryListing[]>([])
+  const [selectedListingId, setSelectedListingId] = useState<string | null>(null)
 
   const selected = useMemo(
     () => (campaigns ?? []).find((campaign) => campaign.id === selectedId) ?? null,
@@ -317,6 +331,20 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       })
       .finally(() => {
         if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    void loadAccount()
+      .then((account) => {
+        if (active) setOwnedListings(account.listings ?? [])
+      })
+      .catch(() => {
+        if (active) setOwnedListings([])
       })
     return () => {
       active = false
@@ -473,12 +501,14 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setPreviewCenter(null)
       setSelectedPoint(null)
       setSelectedPinIds([])
+      setSelectedListingId(null)
       setNotice(null)
     }
     setQuery(next)
   }
 
   async function onSearch() {
+    setSelectedListingId(null)
     setSearching(true)
     setError(null)
     setNotice(null)
@@ -499,23 +529,33 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     }
   }
 
-  async function confirmListing(listing: BusinessListing) {
-    const next = confirmedListingFromSearch(listing)
-    if (!next) {
-      setError("That listing is missing a map location. Choose another one.")
-      return
-    }
+  async function applyConfirmedListing(
+    next: ConfirmedListing,
+    persistFrom?: BusinessListing,
+    queryOverride?: SearchQuery,
+    ownedOverride?: DirectoryListing,
+  ) {
+    const usedQuery = queryOverride ?? query
     setConfirmed(next)
     setPreviewCenter({ lat: next.lat, lng: next.lng })
     setError(null)
     setNotice(`Confirmed ${next.title}. Set a keyword and grid, then scan.`)
+    const owned = ownedOverride ?? ownedListings.find((row) => row.id === selectedListingId)
+    if (persistFrom && owned && shouldPersistOwnedListingMatch(owned, persistFrom)) {
+      try {
+        const saved = await confirmListingMatch(owned.id, listingMapsMatchFromPlace(persistFrom))
+        setOwnedListings((rows) => rows.map((row) => (row.id === saved.id ? saved : row)))
+      } catch {
+        // Tracker confirm still works if we cannot save coordinates on the listing.
+      }
+    }
     if (!selected || creating) return
     setSaving(true)
     try {
       replaceCampaign(
         await updateCampaign(
           selected.id,
-          campaignInputFromListing(next, query, {
+          campaignInputFromListing(next, usedQuery, {
             keywords: selected.keywords,
             gridSize,
             spacingMiles,
@@ -527,6 +567,64 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setError(err instanceof Error ? err.message : "Could not save the confirmed listing.")
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function confirmListing(listing: BusinessListing) {
+    const next = confirmedListingFromSearch(listing)
+    if (!next) {
+      setError("That listing is missing a map location. Choose another one.")
+      return
+    }
+    const owned = ownedListings.find((row) => row.id === selectedListingId)
+    await applyConfirmedListing(next, listing, undefined, owned)
+  }
+
+  async function onPickOwnedListing(listing: DirectoryListing) {
+    setSelectedListingId(listing.id)
+    const nextQuery = searchQueryFromListing(listing)
+    setQuery(nextQuery)
+    setKeywordDraft(formatKeywordText(listing.keywords))
+    if (listing.keywords[0]) setActiveKeyword(listing.keywords[0])
+    setSearchResult(null)
+    setSelectedPoint(null)
+    setSelectedPinIds([])
+    setError(null)
+    setNotice(null)
+
+    const ready = confirmedListingFromDirectory(listing)
+    if (ready) {
+      await applyConfirmedListing(ready, undefined, nextQuery, listing)
+      setNotice(confirmedFromOwnedListingNotice(ready.title))
+      return
+    }
+
+    setSearching(true)
+    try {
+      const payload = await searchBusiness(nextQuery, keys, Boolean(hosted?.included && !seller))
+      setSearchResult(payload)
+      if (listing.placeId?.trim()) {
+        const match = pickMapsPlaceForListing(payload, listing)
+        const confirmed = match ? confirmedListingFromSearch(match) : null
+        if (match && confirmed) {
+          await applyConfirmedListing(confirmed, match, nextQuery, listing)
+          return
+        }
+        setConfirmed(null)
+        setError(ownedListingLookupFailedMessage())
+        return
+      }
+      if (payload.error && !payload.best && payload.others.length === 0) {
+        setError(publicSearchMessage(payload.error) || payload.error)
+      } else {
+        setNotice(ownedListingNeedsConfirmMessage())
+      }
+    } catch (err) {
+      setSearchResult(null)
+      setConfirmed(null)
+      setError(err instanceof Error ? err.message : ownedListingLookupFailedMessage())
+    } finally {
+      setSearching(false)
     }
   }
 
@@ -753,6 +851,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setSearchResult(null)
     setSelectedPoint(null)
     setSelectedPinIds([])
+    setSelectedListingId(null)
     setScans([])
     setCompare(null)
     setError(null)
@@ -765,6 +864,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     applyCampaign(campaign)
     setSearchResult(null)
     setSelectedPoint(null)
+    setSelectedListingId(null)
     setCompare(null)
     setError(null)
     setNotice(null)
@@ -1025,11 +1125,15 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
           </button>
         </div>
         <p className="mb-4 text-sm leading-6 text-muted">
-          Search for the business, click the right Maps listing, then scan ranks around it.
+          {ownedListings.length > 0
+            ? "Pick one of your listings, or search Maps, then scan ranks around it."
+            : "Search for the business, click the right Maps listing, then scan ranks around it."}
         </p>
         {campaigns.length === 0 ? (
           <p className="rounded-xl border border-dashed border-line px-3 py-4 text-sm text-muted">
-            No campaigns yet. Search a business, confirm the listing, then scan.
+            {ownedListings.length > 0
+              ? "No campaigns yet. Pick one of your businesses or search, confirm the listing, then scan."
+              : "No campaigns yet. Search a business, confirm the listing, then scan."}
           </p>
         ) : (
           <ul className="grid gap-1">
@@ -1069,12 +1173,20 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Track a business</p>
               <h3 className="font-display text-3xl text-paper">
-                {confirmed ? confirmed.title : selected && !creating ? selected.name : "Search, confirm, then scan"}
+                {confirmed
+                  ? confirmed.title
+                  : selected && !creating
+                    ? selected.name
+                    : ownedListings.length > 0
+                      ? "Pick a listing, or search"
+                      : "Search, confirm, then scan"}
               </h3>
               <p className="mt-1 text-sm text-muted">
                 {confirmed
                   ? confirmed.address
-                  : "Find the listing first. Do not scan until you have clicked the correct business."}
+                  : ownedListings.length > 0
+                    ? "Choose one of your PlaceFind listings, or search Maps for a different business."
+                    : "Find the listing first. Do not scan until you have clicked the correct business."}
               </p>
             </div>
             {selected && !creating && (
@@ -1092,7 +1204,11 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
 
           <ol className="mt-5 grid gap-2 sm:grid-cols-3">
             {[
-              { n: 1, label: "Search", detail: "Name, city, and state" },
+              {
+                n: 1,
+                label: ownedListings.length > 0 ? "Pick or search" : "Search",
+                detail: ownedListings.length > 0 ? "Your listing or a Maps search" : "Name, city, and state",
+              },
               { n: 2, label: "Confirm", detail: "Click the right listing" },
               { n: 3, label: "Scan business", detail: "Keywords and grid" },
             ].map((row) => (
@@ -1108,6 +1224,36 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             ))}
           </ol>
 
+          {ownedListings.length > 0 && (
+            <div className="mt-6" data-testid="owned-listings">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Your businesses</p>
+              <p className="mt-1 text-sm text-muted">
+                Pick a listing you already created. If it has a Maps match, we confirm it here so you can scan without
+                searching again.
+              </p>
+              <ul className="mt-3 grid gap-2">
+                {ownedListings.map((listing) => {
+                  const picked = selectedListingId === listing.id
+                  return (
+                    <li key={listing.id}>
+                      <button
+                        type="button"
+                        data-testid={`owned-listing-${listing.id}`}
+                        disabled={busy}
+                        onClick={() => void onPickOwnedListing(listing)}
+                        className={`w-full rounded-xl border px-4 py-3 text-left ${picked ? "border-brass bg-brass/10" : "border-line bg-ink hover:border-brass/60"}`}
+                      >
+                        <span className="block font-display text-xl text-paper">{listing.name}</span>
+                        <span className="mt-1 block text-sm text-muted">{listingLocation(listing)}</span>
+                        <span className="mt-1 block text-xs text-muted">{ownedListingTrackHint(listing)}</span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+
           <form
             className="mt-6 grid gap-4"
             onSubmit={(event: FormEvent) => {
@@ -1115,6 +1261,11 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               void onSearch()
             }}
           >
+            {ownedListings.length > 0 && (
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                Or search a different business
+              </p>
+            )}
             <label className="grid gap-1.5">
               <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Business name</span>
               <input
