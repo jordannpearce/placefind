@@ -120,10 +120,10 @@ export function listingProfileHeadings(
   })
 }
 
-export function listingHeroHeading(
-  listing: Pick<DirectoryListing, "name"> & { brand?: string; profileH1?: string },
+export function listingBusinessName(
+  listing: Pick<DirectoryListing, "name"> & { brand?: string },
 ): string {
-  return listing.profileH1?.trim() || listing.brand?.trim() || listing.name
+  return listing.brand?.trim() || listing.name
 }
 
 export function escapeOwnerText(value: string): string {
@@ -159,7 +159,7 @@ export function listingHasEnhancedProfile(
   return Boolean(
     listing.profileContent?.trim() ||
       listing.profileHtml?.trim() ||
-      listingProfileHeadings(listing).some((row) => row.level > 1),
+      listingProfileHeadings(listing).length > 0,
   )
 }
 

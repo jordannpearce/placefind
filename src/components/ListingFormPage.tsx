@@ -485,7 +485,7 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
                       maxLength={200}
                       placeholder={
                         level === 1
-                          ? "Main heading on the public profile"
+                          ? "Profile H1 — does not change the business name"
                           : level === 2
                             ? "Tagline or second heading"
                             : `H${level} heading`
@@ -496,8 +496,8 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
                 ))}
               </div>
               <p className="text-xs leading-5 text-muted">
-                H1 replaces the big heading visitors see. H2–H6 appear in the enhanced profile. You can also put
-                heading tags in custom HTML, or start an article line with # through ######.
+                H1–H6 appear in the enhanced profile. They do not change the business name on the listing. You can also
+                put heading tags in custom HTML, or start an article line with # through ######.
               </p>
               <label className="grid gap-1.5">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Meta description</span>

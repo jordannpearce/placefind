@@ -6,8 +6,8 @@ import { listingLocation, listingPath, listingRedirectPath, mapsStatusDetail } f
 import { LISTING_PRICE_LABEL } from "../lib/pricing.ts"
 import {
   applyListingDocumentHead,
+  listingBusinessName,
   listingHasEnhancedProfile,
-  listingHeroHeading,
   listingProfileHeadings,
   renderProfileArticle,
   sanitizeOwnerHtml,
@@ -130,9 +130,9 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
   const article = stripCrawlArticleFooter(listing.profileContent ?? "")
   const articleHtml = renderProfileArticle(article)
   const customHtml = sanitizeOwnerHtml(listing.profileHtml ?? "")
-  const extraHeadings = listingProfileHeadings(listing).filter((row) => row.level > 1)
+  const profileHeadings = listingProfileHeadings(listing)
   const enhanced = listingHasEnhancedProfile(listing)
-  const heroHeading = listingHeroHeading(listing)
+  const businessName = listingBusinessName(listing)
 
   return (
     <article className="mx-auto grid w-full max-w-3xl gap-6">
@@ -140,7 +140,7 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">
           {listing.category || "PlaceFind listing"}
         </p>
-        <h1 className="mt-2 font-display text-4xl text-paper">{heroHeading}</h1>
+        <h1 className="mt-2 font-display text-4xl text-paper">{businessName}</h1>
         <p className="mt-2 flex items-start gap-2 text-sm text-muted">
           <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
           {listingLocation(listing)}
@@ -197,8 +197,8 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Enhanced profile</p>
         {enhanced ? (
           <div className="mt-4 grid gap-4">
-            {extraHeadings.map((row) => {
-              const Tag = `h${row.level}` as "h2" | "h3" | "h4" | "h5" | "h6"
+            {profileHeadings.map((row) => {
+              const Tag = `h${row.level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
               return (
                 <Tag key={`h${row.level}`} className="profile-heading">
                   {row.text}

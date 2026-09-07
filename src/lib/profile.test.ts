@@ -4,7 +4,7 @@ import {
   CRAWL_ARTICLE_FOOTER,
   listingDocumentTitle,
   listingHasEnhancedProfile,
-  listingHeroHeading,
+  listingBusinessName,
   listingProfileFromInput,
   listingProfileHeadings,
   renderProfileArticle,
@@ -81,8 +81,9 @@ describe("listing profile helpers", () => {
     assert.equal(listingHasEnhancedProfile({ profileContent: "Hello", profileHtml: "" }), true)
     assert.equal(listingHasEnhancedProfile({ profileContent: "", profileHtml: "<p>Hi</p>" }), true)
     assert.equal(listingHasEnhancedProfile({ profileContent: "  ", profileHtml: "" }), false)
-    assert.equal(listingHeroHeading(listing({ profileH1: "Morning bread in Portland" })), "Morning bread in Portland")
-    assert.equal(listingHeroHeading(listing()), "Harbor & Oak Bakery")
+    assert.equal(listingBusinessName(listing({ profileH1: "Morning bread in Portland" })), "Harbor & Oak Bakery")
+    assert.equal(listingBusinessName(listing()), "Harbor & Oak Bakery")
+    assert.equal(listingHasEnhancedProfile({ profileContent: "", profileHtml: "", profileH1: "Morning bread" }), true)
     assert.deepEqual(listingProfileHeadings({ profileH2: "Pastry counter", profileH4: "Hours" }), [
       { level: 2, text: "Pastry counter" },
       { level: 4, text: "Hours" },

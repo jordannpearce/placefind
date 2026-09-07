@@ -188,7 +188,7 @@ describe("directory listings", () => {
         name: "Harbor Street Cafe",
         city: "Portland",
         state: "OR",
-        profileH1: "Harbor Street Cafe",
+        profileH1: "Coffee by the harbor",
         profileH2: "Coffee on the waterfront",
         profileH3: "Weekend hours",
         profilePageTitle: "Harbor Street Cafe · Portland",
@@ -202,7 +202,8 @@ describe("directory listings", () => {
       "user-1",
     )
     assert.equal(created.profileCustomized, true)
-    assert.equal(created.profileH1, "Harbor Street Cafe")
+    assert.equal(created.name, "Harbor Street Cafe")
+    assert.equal(created.profileH1, "Coffee by the harbor")
     assert.equal(created.profileH2, "Coffee on the waterfront")
     assert.equal(created.profileH3, "Weekend hours")
     assert.equal(created.profilePageTitle, "Harbor Street Cafe · Portland")
@@ -212,6 +213,8 @@ describe("directory listings", () => {
     assert.doesNotMatch(created.profileHtml, /script/i)
     assert.match(created.profileHtml, /Weekend hours/)
     const published = publicListing(created)
+    assert.equal(published.name, "Harbor Street Cafe")
+    assert.equal(published.profileH1, "Coffee by the harbor")
     assert.equal(published.profilePageTitle, "Harbor Street Cafe · Portland")
     assert.equal(published.profileHtml.includes("Weekend hours"), true)
     assert.equal(published.profileCustomized, true)
@@ -229,6 +232,14 @@ describe("directory listings", () => {
     assert.equal(phoneOnly.phone, "(503) 555-0100")
     assert.equal(phoneOnly.profileContent, "We roast on Harbor Street.")
     assert.equal(phoneOnly.profileCustomized, true)
+
+    const headingOnly = updateListing(
+      created.id,
+      { name: "Harbor Street Cafe", city: "Portland", state: "OR", profileH1: "A different H1" },
+      "user-1",
+    )
+    assert.equal(headingOnly.name, "Harbor Street Cafe")
+    assert.equal(headingOnly.profileH1, "A different H1")
 
     const blank = createListing({ name: "Plain Oven", city: "Portland", state: "OR" }, "user-1")
     assert.equal(blank.profileCustomized, false)
