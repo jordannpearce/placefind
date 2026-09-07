@@ -20,6 +20,7 @@ describe("allowedPath", () => {
     assert.equal(allowedPath("/", guest), "/login")
     assert.equal(allowedPath("/track", guest), "/login")
     assert.equal(allowedPath("/join", guest), "/join")
+    assert.equal(allowedPath("/create-profile", guest), "/create-profile")
     assert.equal(allowedPath("/download", guest), "/login")
     assert.equal(allowedPath("/buy", guest), "/login")
     assert.equal(allowedPath("/reset", guest), "/reset")
@@ -35,6 +36,7 @@ describe("allowedPath", () => {
     assert.equal(allowedPath("/try", guest), "/try")
     assert.equal(allowedPath("/demo", guest), "/demo")
     assert.equal(allowedPath("/join", guest), "/join")
+    assert.equal(allowedPath("/create-profile", guest), "/create-profile")
     assert.equal(allowedPath("/download", guest), "/")
     assert.equal(allowedPath("/buy", guest), "/")
     assert.equal(allowedPath("/reset", guest), "/reset")
@@ -44,6 +46,12 @@ describe("allowedPath", () => {
     assert.equal(allowedPath("/email-policy", guest), "/email-policy")
     assert.equal(allowedPath("/data-policy", guest), "/data-policy")
     assert.equal(allowedPath("/refund", guest), "/refund")
+  })
+
+  it("sends signed-in visitors from Create a Profile to the listing form", () => {
+    const access = { desktop: false, store: true, admin: false, user } satisfies NavAccess
+    assert.equal(allowedPath("/create-profile", access), "/listings")
+    assert.equal(allowedPath("/join", access), "/account")
   })
 
   it("lets a signed-in leftover desktop customer use Lookup, Track, and Account", () => {
@@ -79,7 +87,7 @@ describe("navLinks", () => {
 
   it("uses a directory nav on the public website and hides Test scan for visitors", () => {
     const guest = navLinks({ desktop: false, store: true, admin: false, user: null }).map((link) => link.label)
-    assert.deepEqual(guest, ["Home", "Directory", "Pricing", "How it works", "Join", "Sign in"])
+    assert.deepEqual(guest, ["Home", "Directory", "Pricing", "How it works", "Join", "Create a Profile", "Sign in"])
     assert.equal(guest.includes("Test scan"), false)
     assert.equal(guest.includes("Download"), false)
     assert.equal(guest.includes("Buy"), false)
@@ -88,6 +96,8 @@ describe("navLinks", () => {
     assert.equal(guest.includes("Rank tracker"), false)
     assert.equal(guest.includes("Maps"), false)
     const guestHrefs = navLinks({ desktop: false, store: true, admin: false, user: null }).map((link) => link.href)
+    assert.equal(guestHrefs.includes("/join"), true)
+    assert.equal(guestHrefs.includes("/create-profile"), true)
     assert.equal(guestHrefs.some((href) => href.startsWith("/track")), false)
     const signedIn = navLinks({ desktop: false, store: true, admin: false, user })
     const labels = signedIn.map((link) => link.label)

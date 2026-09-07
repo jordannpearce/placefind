@@ -16,6 +16,8 @@ describe("robots and sitemap", () => {
     assert.match(xml, /<loc>https:\/\/placefind.example\/<\/loc>/)
     assert.match(xml, /<loc>https:\/\/placefind.example\/directory<\/loc>/)
     assert.match(xml, /<loc>https:\/\/placefind.example\/pricing<\/loc>/)
+    assert.match(xml, /<loc>https:\/\/placefind.example\/join<\/loc>/)
+    assert.match(xml, /<loc>https:\/\/placefind.example\/create-profile<\/loc>/)
     assert.match(xml, /<loc>https:\/\/placefind.example\/listings\/harbor-oak-bakery<\/loc>/)
     assert.match(xml, /<loc>https:\/\/placefind.example\/refund<\/loc>/)
   })

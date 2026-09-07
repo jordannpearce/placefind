@@ -4,6 +4,8 @@ import { AdminLogin } from "./components/AdminLogin.tsx"
 import { AdminPage } from "./components/AdminPage.tsx"
 import { AppNav } from "./components/AppNav.tsx"
 import { AuthPage } from "./components/AuthPage.tsx"
+import { CreateProfilePage } from "./components/CreateProfilePage.tsx"
+import { JoinPage } from "./components/JoinPage.tsx"
 import { ResetPage } from "./components/ResetPage.tsx"
 import { CrawlDashboard } from "./components/CrawlDashboard.tsx"
 import { DirectoryPage } from "./components/DirectoryPage.tsx"
@@ -17,7 +19,16 @@ import { ResultPanel } from "./components/ResultPanel.tsx"
 import { SearchForm } from "./components/SearchForm.tsx"
 import { SiteFooter } from "./components/SiteFooter.tsx"
 import { TrackPage } from "./components/TrackPage.tsx"
-import { canPublishListing, joinHref, joinIntentFromSearch, loginHref, safeAuthNext } from "./lib/account.ts"
+import {
+  afterSignupHref,
+  canPublishListing,
+  createProfileHref,
+  isCreateProfilePath,
+  joinHref,
+  joinIntentFromSearch,
+  loginHref,
+  safeAuthNext,
+} from "./lib/account.ts"
 import { isLegalPath } from "./lib/legal.ts"
 import { loadRuntime, searchBusiness, stopImpersonation } from "./lib/api.ts"
 import {
@@ -46,7 +57,21 @@ function scrollToHash(hash: string) {
 
 function requestedAppPath(raw: string): AppPath {
   if (raw.startsWith("/listings")) return "/listings"
+  if (isCreateProfilePath(raw)) return "/create-profile"
   return isAppPath(raw) ? raw : "/"
+}
+
+function rewriteLegacyJoinUrl() {
+  const pathname = window.location.pathname
+  const params = new URLSearchParams(window.location.search)
+  const next = params.get("next")
+  if (pathname === "/join/business" || pathname === "/join/business/") {
+    window.history.replaceState({}, "", createProfileHref(next))
+    return
+  }
+  if ((pathname === "/join" || pathname === "/join/") && joinIntentFromSearch(window.location.search) === "business") {
+    window.history.replaceState({}, "", createProfileHref(next))
+  }
 }
 
 export default function App() {
@@ -79,7 +104,10 @@ export default function App() {
   }
 
   useEffect(() => {
+    rewriteLegacyJoinUrl()
+    setPath(currentPath())
     const onPop = () => {
+      rewriteLegacyJoinUrl()
       setPath(currentPath())
       syncListingRoute()
     }
@@ -116,7 +144,8 @@ export default function App() {
           impersonating: runtime.impersonating ?? null,
         })
         if (dest !== currentPath()) {
-          window.history.replaceState({}, "", dest)
+          const url = dest === "/listings" && currentPath() === "/create-profile" ? "/listings/new" : dest
+          window.history.replaceState({}, "", url)
           setPath(dest)
           syncListingRoute()
         }
@@ -137,7 +166,12 @@ export default function App() {
     const search = queryIndex === -1 ? "" : beforeHash.slice(queryIndex)
     const requested = requestedAppPath(raw)
     const dest = allowedPath(requested, access)
-    const urlPath = dest === "/listings" && raw.startsWith("/listings") ? raw : dest
+    const urlPath =
+      dest === "/listings" && requested === "/create-profile"
+        ? "/listings/new"
+        : dest === "/listings" && raw.startsWith("/listings")
+          ? raw
+          : dest
     const url = `${urlPath}${dest === requested ? search : ""}${hash ? `#${hash}` : ""}`
     window.history.pushState({}, "", url)
     setPath(dest)
@@ -180,6 +214,14 @@ export default function App() {
 
   function onAuthed(next: AuthUser) {
     const nextPath = safeAuthNext(new URLSearchParams(window.location.search).get("next"))
+    if (path === "/join") {
+      void refreshSession(next, afterSignupHref("member", nextPath))
+      return
+    }
+    if (path === "/create-profile" || (path === "/listings" && listingCreate && !user)) {
+      void refreshSession(next, afterSignupHref("business", nextPath))
+      return
+    }
     const stay =
       path === "/track" ||
       path === "/try" ||
@@ -220,7 +262,15 @@ export default function App() {
     void runSearch(next)
   }
 
-  const needsDesktopLogin = desktop && !user && path !== "/admin" && path !== "/reset" && path !== "/pricing" && !isLegalPath(path)
+  const needsDesktopLogin =
+    desktop &&
+    !user &&
+    path !== "/admin" &&
+    path !== "/reset" &&
+    path !== "/pricing" &&
+    path !== "/join" &&
+    path !== "/create-profile" &&
+    !isLegalPath(path)
   const needsTrackLogin = !desktop && path === "/track" && !user
   const needsTryLogin = !desktop && (path === "/try" || path === "/demo") && !user
   const needsListingLogin = !desktop && path === "/listings" && listingCreate && !user
@@ -309,23 +359,17 @@ export default function App() {
         {path === "/listings" && listingId && !listingEdit && (
           <ListingDetailPage listingId={listingId} user={user} onGo={go} />
         )}
+        {path === "/join" && !user && <JoinPage onAuthed={onAuthed} onGo={go} />}
+        {(path === "/create-profile" || needsListingLogin) && !user && (
+          <CreateProfilePage onAuthed={onAuthed} onGo={go} />
+        )}
         {(needsDesktopLogin ||
           needsTrackLogin ||
           needsTryLogin ||
-          needsListingLogin ||
           needsDashboardLogin ||
-          (path === "/login" && !user) ||
-          (path === "/join" && !user)) && (
+          (path === "/login" && !user)) && (
           <AuthPage
-            mode={path === "/join" || needsListingLogin ? "join" : "login"}
             publicUrl={publicUrl}
-            joinIntent={
-              needsListingLogin
-                ? "business"
-                : path === "/join"
-                  ? joinIntentFromSearch(window.location.search)
-                  : "business"
-            }
             title={
               needsTrackLogin
                 ? "Sign in to track ranks"
@@ -333,13 +377,7 @@ export default function App() {
                   ? "Sign in to run a test scan"
                   : needsDashboardLogin
                     ? "Sign in to crawl a website"
-                    : needsListingLogin
-                      ? "Create a business account"
-                      : path === "/join" && joinIntentFromSearch(window.location.search) === "member"
-                        ? "Create a free account"
-                        : path === "/join"
-                          ? "Create a PlaceFind account"
-                          : undefined
+                    : undefined
             }
             intro={
               needsTrackLogin
@@ -348,20 +386,13 @@ export default function App() {
                   ? "The live test scan is for signed-in business owners."
                   : needsDashboardLogin
                     ? "Website crawls are a signed-in dashboard tool. Create a business account to request Crawl Website."
-                    : needsListingLogin
-                      ? "Create a business account to publish a PlaceFind listing for $150 per month and build a public profile."
-                      : path === "/join" && joinIntentFromSearch(window.location.search) === "member"
-                        ? "Leave reviews from a free neighbor account. Anyone can request a quote. PlaceFind does not charge $150 for reviews."
-                        : path === "/join"
-                          ? "Create an account to publish a PlaceFind listing for $150 per month and build a public profile."
-                          : undefined
+                    : undefined
             }
             onAuthed={onAuthed}
             onGoLogin={() => go(loginHref(new URLSearchParams(window.location.search).get("next")))}
             onGoJoin={() => {
               const params = new URLSearchParams(window.location.search)
-              const intent = path === "/join" ? joinIntentFromSearch(window.location.search) : "business"
-              go(joinHref(intent, params.get("next")))
+              go(joinHref("member", params.get("next")))
             }}
           />
         )}

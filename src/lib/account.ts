@@ -25,12 +25,33 @@ export function canUseOwnerTools(user: Pick<AuthUser, "role" | "accountKind"> | 
   return canPublishListing(user)
 }
 
+export const JOIN_PATH = "/join"
+export const CREATE_PROFILE_PATH = "/create-profile"
+
+export function isCreateProfilePath(pathname = typeof window === "undefined" ? "/" : window.location.pathname): boolean {
+  return (
+    pathname === CREATE_PROFILE_PATH ||
+    pathname === `${CREATE_PROFILE_PATH}/` ||
+    pathname === "/join/business" ||
+    pathname === "/join/business/"
+  )
+}
+
 export function joinIntentFromSearch(search = ""): JoinIntent {
   const raw = search.startsWith("?") ? search.slice(1) : search
   const params = new URLSearchParams(raw)
   const value = (params.get("for") || params.get("intent") || "").trim().toLowerCase()
-  if (value === "review" || value === "quote" || value === "member" || value === "neighbor") return "member"
-  return "business"
+  if (value === "business" || value === "listing" || value === "owner" || value === "profile") return "business"
+  return "member"
+}
+
+export function createProfileHref(next?: string | null): string {
+  const dest = safeAuthNext(next)
+  return dest ? `${CREATE_PROFILE_PATH}?${new URLSearchParams({ next: dest }).toString()}` : CREATE_PROFILE_PATH
+}
+
+export function afterSignupHref(kind: AccountKind, next?: string | null): string {
+  return safeAuthNext(next) ?? (kind === "member" ? "/directory" : "/listings/new")
 }
 
 export function safeAuthNext(next: string | null | undefined): string | null {
@@ -43,13 +64,10 @@ export function safeAuthNext(next: string | null | undefined): string | null {
   return null
 }
 
-export function joinHref(intent: JoinIntent = "business", next?: string | null): string {
-  const params = new URLSearchParams()
-  if (intent === "member") params.set("for", "review")
+export function joinHref(intent: JoinIntent = "member", next?: string | null): string {
+  if (intent === "business") return createProfileHref(next)
   const dest = safeAuthNext(next)
-  if (dest) params.set("next", dest)
-  const query = params.toString()
-  return query ? `/join?${query}` : "/join"
+  return dest ? `${JOIN_PATH}?${new URLSearchParams({ next: dest }).toString()}` : JOIN_PATH
 }
 
 export function loginHref(next?: string | null): string {
@@ -58,5 +76,5 @@ export function loginHref(next?: string | null): string {
 }
 
 export function listBusinessHref(user: Pick<AuthUser, "role" | "accountKind"> | null | undefined): string {
-  return user ? "/listings/new" : "/join"
+  return user ? "/listings/new" : CREATE_PROFILE_PATH
 }

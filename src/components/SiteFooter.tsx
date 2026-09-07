@@ -39,6 +39,26 @@ export function SiteFooter({ onGo }: Props) {
             >
               Directory
             </a>
+            <a
+              href="/join"
+              onClick={(event) => {
+                event.preventDefault()
+                onGo("/join")
+              }}
+              className="text-paper/75 hover:text-brass"
+            >
+              Join
+            </a>
+            <a
+              href="/create-profile"
+              onClick={(event) => {
+                event.preventDefault()
+                onGo("/create-profile")
+              }}
+              className="text-paper/75 hover:text-brass"
+            >
+              Create a Profile
+            </a>
           </nav>
           <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm" aria-label="Legal">
             {legal.map((link) => (

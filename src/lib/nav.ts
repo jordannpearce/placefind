@@ -1,4 +1,4 @@
-import { canUseOwnerTools } from "./account.ts"
+import { canUseOwnerTools, isCreateProfilePath } from "./account.ts"
 import { isLegalPath } from "./legal.ts"
 import type { AuthUser } from "./types.ts"
 
@@ -11,6 +11,7 @@ export type AppPath =
   | "/account"
   | "/login"
   | "/join"
+  | "/create-profile"
   | "/admin"
   | "/reset"
   | "/try"
@@ -48,6 +49,7 @@ const PATHS: AppPath[] = [
   "/account",
   "/login",
   "/join",
+  "/create-profile",
   "/admin",
   "/reset",
   "/try",
@@ -94,6 +96,7 @@ export function currentPath(): AppPath {
   if (path.startsWith("/buy")) return "/buy"
   if (path.startsWith("/account")) return "/account"
   if (path.startsWith("/login")) return "/login"
+  if (isCreateProfilePath(path)) return "/create-profile"
   if (path.startsWith("/join")) return "/join"
   if (path.startsWith("/admin")) return "/admin"
   if (path.startsWith("/reset")) return "/reset"
@@ -127,6 +130,7 @@ export function allowedPath(next: AppPath, access: NavAccess): AppPath {
   if (next === "/reset") return "/reset"
   if (next === "/sell") return admin ? "/sell" : impersonating ? "/account" : "/admin"
   if (next === "/join") return user ? "/account" : "/join"
+  if (next === "/create-profile") return user ? "/listings" : "/create-profile"
   if (next === "/directory" || next === "/listings" || next === "/pricing") return next
   if (next === "/dashboard") return canUseOwnerTools(user) ? "/dashboard" : user ? "/account" : "/login"
   if (next === "/try" || next === "/demo") {
@@ -177,7 +181,11 @@ export function navLinks(access: NavAccess): NavLink[] {
     }
     links.push({ href: "/account", label: "Account" })
   } else {
-    links.push({ href: "/join", label: "Join" }, { href: "/login", label: "Sign in" })
+    links.push(
+      { href: "/join", label: "Join" },
+      { href: "/create-profile", label: "Create a Profile" },
+      { href: "/login", label: "Sign in" },
+    )
   }
   if (admin) links.push({ href: "/admin", label: "Admin" })
   return links
@@ -191,6 +199,7 @@ export function pageTitle(path: AppPath): string {
   if (path === "/listings") return "Listing · PlaceFind"
   if (path === "/try" || path === "/demo") return "Test scan · PlaceFind"
   if (path === "/join") return "Join · PlaceFind"
+  if (path === "/create-profile") return "Create a Profile · PlaceFind"
   if (path === "/login") return "Sign in · PlaceFind"
   if (path === "/track") return "Rank tracker · PlaceFind"
   if (path === "/terms") return "Terms of use · PlaceFind"

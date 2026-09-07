@@ -4,8 +4,12 @@ import {
   accountKindOf,
   canPublishListing,
   canUseOwnerTools,
+  afterSignupHref,
+  createProfileHref,
+  isCreateProfilePath,
   joinHref,
   joinIntentFromSearch,
+  listBusinessHref,
   loginHref,
   MEMBER_LISTING_MESSAGE,
   parseAccountKind,
@@ -42,17 +46,30 @@ describe("account kinds", () => {
     assert.match(MEMBER_LISTING_MESSAGE, /Anyone can request a quote/)
   })
 
-  it("reads free-neighbor join intent and blocks unsafe next paths", () => {
-    assert.equal(joinIntentFromSearch(""), "business")
+  it("sends Join and Create a Profile to separate routes", () => {
+    assert.equal(joinIntentFromSearch(""), "member")
     assert.equal(joinIntentFromSearch("?for=review"), "member")
     assert.equal(joinIntentFromSearch("for=quote&next=/listings/oak-bakery"), "member")
+    assert.equal(joinIntentFromSearch("?for=business"), "business")
+    assert.equal(joinIntentFromSearch("intent=owner"), "business")
     assert.equal(safeAuthNext("/listings/oak-bakery"), "/listings/oak-bakery")
     assert.equal(safeAuthNext("/pricing"), "/pricing")
     assert.equal(safeAuthNext("https://evil.example/listings/oak"), null)
     assert.equal(safeAuthNext("//evil.example"), null)
     assert.equal(safeAuthNext("/track"), null)
-    assert.equal(joinHref("member", "/listings/oak-bakery"), "/join?for=review&next=%2Flistings%2Foak-bakery")
+    assert.equal(joinHref("member", "/listings/oak-bakery"), "/join?next=%2Flistings%2Foak-bakery")
+    assert.equal(joinHref("member"), "/join")
+    assert.equal(joinHref("business"), "/create-profile")
+    assert.equal(createProfileHref("/listings/new"), "/create-profile?next=%2Flistings%2Fnew")
     assert.equal(loginHref("/listings/oak-bakery"), "/login?next=%2Flistings%2Foak-bakery")
-    assert.equal(joinHref("business"), "/join")
+    assert.equal(afterSignupHref("member"), "/directory")
+    assert.equal(afterSignupHref("business"), "/listings/new")
+    assert.equal(afterSignupHref("member", "/listings/oak-bakery"), "/listings/oak-bakery")
+    assert.equal(isCreateProfilePath("/create-profile"), true)
+    assert.equal(isCreateProfilePath("/join/business"), true)
+    assert.equal(isCreateProfilePath("/join"), false)
+    assert.equal(listBusinessHref(null), "/create-profile")
+    assert.equal(listBusinessHref(business), "/listings/new")
+    assert.equal(listBusinessHref(member), "/listings/new")
   })
 })

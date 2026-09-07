@@ -182,6 +182,18 @@ function adminEmails() {
     .filter(Boolean)
 }
 
+export function signupIgnoringClientKind(
+  input: { name: string; email: string; password: string; kind?: string },
+  lockedKind: AccountKind,
+): { user?: PublicUser; error?: string } {
+  return signup({
+    name: input.name,
+    email: input.email,
+    password: input.password,
+    kind: lockedKind,
+  })
+}
+
 export function signup(input: {
   name: string
   email: string

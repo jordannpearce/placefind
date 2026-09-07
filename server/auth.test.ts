@@ -26,6 +26,7 @@ import {
   setUserStatus,
   signImpersonation,
   signup,
+  signupIgnoringClientKind,
   startImpersonation,
   stopImpersonation,
   updateManagedUser,
@@ -473,6 +474,21 @@ describe("account kinds", () => {
       kind: "member",
     })
     assert.equal(neighbor.user?.accountKind, "member")
+  })
+
+  it("locks public Join and Create a Profile signups to the route kind", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-locked-kind-")))
+    signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const spoofedBusiness = signupIgnoringClientKind(
+      { name: "Maya Chen", email: "maya-lock@example.com", password: "password12", kind: "business" },
+      "member",
+    )
+    const spoofedMember = signupIgnoringClientKind(
+      { name: "Pat Owner", email: "pat-lock@example.com", password: "password12", kind: "member" },
+      "business",
+    )
+    assert.equal(spoofedBusiness.user?.accountKind, "member")
+    assert.equal(spoofedMember.user?.accountKind, "business")
   })
 })
 

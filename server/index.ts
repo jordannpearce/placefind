@@ -21,7 +21,7 @@ import {
   SESSION_COOKIE,
   sessionCookie,
   setUserStatus,
-  signup,
+  signupIgnoringClientKind,
   startImpersonation,
   stopImpersonation,
   storeOpen,
@@ -747,18 +747,21 @@ async function start() {
     res.json(startInstallerBuild())
   })
 
-  app.post("/api/auth/signup", async (req, res) => {
+  async function completePublicSignup(req: express.Request, res: express.Response, lockedKind: "member" | "business") {
     if (isDesktopRequest(req)) {
       res.status(403).json({ error: "Create your account on the PlaceFind website." })
       return
     }
     const body = (req.body ?? {}) as { name?: string; email?: string; password?: string; kind?: string }
-    const result = signup({
-      name: body.name ?? "",
-      email: body.email ?? "",
-      password: body.password ?? "",
-      kind: body.kind,
-    })
+    const result = signupIgnoringClientKind(
+      {
+        name: body.name ?? "",
+        email: body.email ?? "",
+        password: body.password ?? "",
+        kind: body.kind,
+      },
+      lockedKind,
+    )
     if (result.error || !result.user) {
       res.status(400).json({ error: result.error || "Could not create the account." })
       return
@@ -767,6 +770,14 @@ async function start() {
     await sendSignupWelcome(result.user)
     res.setHeader("Set-Cookie", [sessionCookie(token), impersonationCookie("", true)])
     res.json({ user: result.user })
+  }
+
+  app.post("/api/auth/signup", async (req, res) => {
+    await completePublicSignup(req, res, "member")
+  })
+
+  app.post("/api/auth/signup-business", async (req, res) => {
+    await completePublicSignup(req, res, "business")
   })
 
   app.post("/api/auth/login", async (req, res) => {

@@ -133,15 +133,18 @@ export function formatBytes(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export async function signup(input: {
-  name: string
-  email: string
-  password: string
-  kind?: "business" | "member"
-}): Promise<AuthUser> {
+export async function signup(input: { name: string; email: string; password: string }): Promise<AuthUser> {
   const payload = await request<{ user: AuthUser }>("/api/auth/signup", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify({ name: input.name, email: input.email, password: input.password }),
+  })
+  return payload.user
+}
+
+export async function signupBusiness(input: { name: string; email: string; password: string }): Promise<AuthUser> {
+  const payload = await request<{ user: AuthUser }>("/api/auth/signup-business", {
+    method: "POST",
+    body: JSON.stringify({ name: input.name, email: input.email, password: input.password }),
   })
   return payload.user
 }

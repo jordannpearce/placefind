@@ -21,6 +21,8 @@ const PUBLIC_FILES = [
   "components/ListingFormPage.tsx",
   "components/BusinessUpgradeCard.tsx",
   "components/AuthPage.tsx",
+  "components/JoinPage.tsx",
+  "components/CreateProfilePage.tsx",
   "components/AccountPage.tsx",
   "components/CrawlDashboard.tsx",
   "components/UsageCard.tsx",
@@ -35,6 +37,8 @@ const PUBLIC_MARKETING_FILES = [
   "components/PricingPage.tsx",
   "components/SiteFooter.tsx",
   "components/AuthPage.tsx",
+  "components/JoinPage.tsx",
+  "components/CreateProfilePage.tsx",
   "components/ListingDetailPage.tsx",
   "components/LegalPage.tsx",
   "lib/legal.ts",
@@ -75,6 +79,26 @@ describe("public website copy", () => {
     assert.equal(/has not published a contact email/i.test(page), false)
     assert.equal(/owner can add one when they edit/i.test(page), false)
     assert.equal(/hasQuoteEmail === false/.test(page), false)
+  })
+
+  it("keeps Join and Create a Profile as separate public forms", () => {
+    const join = readFileSync(path.join(root, "components/JoinPage.tsx"), "utf8")
+    const profile = readFileSync(path.join(root, "components/CreateProfilePage.tsx"), "utf8")
+    const auth = readFileSync(path.join(root, "components/AuthPage.tsx"), "utf8")
+    assert.match(join, /Join PlaceFind/)
+    assert.match(join, /Neighbor account/)
+    assert.match(join, /signup\(/)
+    assert.equal(/signupBusiness/.test(join), false)
+    assert.equal(/\$150/.test(join), false)
+    assert.equal(/list your business/i.test(join), false)
+    assert.match(profile, /Create a Profile/)
+    assert.match(profile, /Business owner/)
+    assert.match(profile, /signupBusiness/)
+    assert.match(profile, /LISTING_PRICE_LABEL/)
+    assert.equal(/free neighbor account/i.test(profile), false)
+    assert.equal(/kind:/.test(join), false)
+    assert.equal(/kind:/.test(profile), false)
+    assert.equal(/signup\(/.test(auth), false)
   })
 
   it("does not advertise a used-search or IP limit", () => {

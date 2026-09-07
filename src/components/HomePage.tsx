@@ -1,7 +1,7 @@
 import { ArrowRight, BadgeDollarSign, NotebookPen, Store } from "lucide-react"
 import { useEffect, useState } from "react"
 import { searchDirectory } from "../lib/api.ts"
-import { listBusinessHref } from "../lib/account.ts"
+import { joinHref, listBusinessHref } from "../lib/account.ts"
 import { listingLocation, listingPath } from "../lib/listings.ts"
 import { LISTING_PRICE_LABEL, listingPriceCopy } from "../lib/pricing.ts"
 import { CITY_PHOTOS } from "../lib/sample-listing.ts"
@@ -62,6 +62,15 @@ export function HomePage({ user, onGo }: Props) {
             >
               {user ? "Create a listing" : `List your business · ${LISTING_PRICE_LABEL}`}
             </button>
+            {!user && (
+              <button
+                type="button"
+                onClick={() => onGo(joinHref("member"))}
+                className="inline-flex h-12 items-center rounded-lg border border-line px-5 text-sm text-paper hover:border-brass"
+              >
+                Join to leave reviews
+              </button>
+            )}
           </div>
         </div>
         <figure className="overflow-hidden rounded-2xl border border-line">
@@ -83,11 +92,29 @@ export function HomePage({ user, onGo }: Props) {
             <h3 className="mt-2 font-display text-3xl text-paper">List. Tell the story. Be found.</h3>
             <ol className="mt-5 grid gap-4">
               <li className="rounded-xl border border-line bg-panel px-4 py-3">
-                <p className="text-sm font-semibold text-paper">1. Create an account</p>
+                <p className="text-sm font-semibold text-paper">1. Join or create a profile</p>
                 <p className="mt-1 text-sm leading-6 text-muted">
-                  Businesses join to own a listing. Neighbors create a free account to leave reviews. Anyone can
-                  request a quote — that account is not billed $150.
+                  Neighbors join a free account to leave reviews. Business owners create a profile to publish and
+                  manage listings. Anyone can request a quote — that neighbor account is not billed.
                 </p>
+                {!user && (
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => onGo(joinHref("member"))}
+                      className="text-sm text-brass hover:underline"
+                    >
+                      Join free
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onGo(listBusinessHref(user))}
+                      className="text-sm text-brass hover:underline"
+                    >
+                      Create a Profile
+                    </button>
+                  </div>
+                )}
               </li>
               <li className="rounded-xl border border-line bg-panel px-4 py-3">
                 <p className="text-sm font-semibold text-paper">2. Publish a listing for {LISTING_PRICE_LABEL}</p>
