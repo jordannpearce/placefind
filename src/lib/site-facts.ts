@@ -166,7 +166,5 @@ export function writeProfileArticle(
     : phrase
       ? `Neighbors looking for ${phrase} can use this PlaceFind profile to reach ${name}. Hours, contact details, and reviews sit with the listing the owner published.`
       : `${name} is listed in the PlaceFind directory so neighbors and other businesses can find a clear profile, hours, and contact details in one place.`
-  const close =
-    "This article was written from the listing the owner published and facts found on the business website. Reviews from visitors appear below."
-  return [lead.trim(), middle.trim(), close].filter(Boolean).join("\n\n")
+  return [lead.trim(), middle.trim()].filter(Boolean).join("\n\n")
 }

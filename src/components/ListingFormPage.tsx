@@ -42,6 +42,12 @@ const emptyForm = (): ListingInput => ({
   email: "",
   website: "",
   hours: "",
+  profilePageTitle: "",
+  profileMetaDescription: "",
+  profileHeadHtml: "",
+  profileSchema: "",
+  profileHtml: "",
+  profileContent: "",
 })
 
 function formFromListing(row: DirectoryListing): ListingInput {
@@ -57,6 +63,12 @@ function formFromListing(row: DirectoryListing): ListingInput {
     email: row.email ?? "",
     website: row.website,
     hours: row.hours,
+    profilePageTitle: row.profilePageTitle ?? "",
+    profileMetaDescription: row.profileMetaDescription ?? "",
+    profileHeadHtml: row.profileHeadHtml ?? "",
+    profileSchema: row.profileSchema ?? "",
+    profileHtml: row.profileHtml ?? "",
+    profileContent: row.profileContent ?? "",
   }
 }
 
@@ -128,7 +140,11 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
       setForm(formFromListing(next))
       setPendingMatch(null)
       setPendingNotFound(false)
-      setNotice(listingId ? "Listing saved." : "Listing created. Open Crawl Website to write a public profile article.")
+      setNotice(
+        listingId
+          ? "Listing saved. The public profile uses the article, HTML, and page title you entered here."
+          : "Listing created. Write the public article, custom HTML, and page title here, or use Crawl Website for a first draft.",
+      )
       if (!listingId) onGo(`${listingPath(next)}/edit`)
       return next
     } catch (err) {
@@ -428,6 +444,85 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
                   placeholder="Tue–Sun 7:00 AM–3:00 PM"
                   className={fieldClass}
                 />
+              </label>
+              <div className="mt-4 rounded-xl border border-line bg-ink px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Enhanced profile</p>
+                <p className="mt-2 text-sm leading-6 text-muted">
+                  Write the public article, custom HTML, page title, meta description, extra header tags, and schema
+                  yourself. Crawl Website can draft an article from the shop site, but it will not replace a profile you
+                  have already customized here.
+                </p>
+              </div>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Page title</span>
+                <input
+                  value={form.profilePageTitle ?? ""}
+                  onChange={(event) => setForm({ ...form, profilePageTitle: event.target.value })}
+                  placeholder="Harbor & Oak Bakery · Portland, ME"
+                  maxLength={160}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Meta description</span>
+                <textarea
+                  value={form.profileMetaDescription ?? ""}
+                  onChange={(event) => setForm({ ...form, profileMetaDescription: event.target.value })}
+                  rows={3}
+                  maxLength={320}
+                  placeholder="Morning pastry and naturally leavened bread in Portland, Maine."
+                  className="rounded-lg border border-line bg-ink px-3 py-2 text-paper outline-none focus:border-brass"
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Header tags</span>
+                <textarea
+                  value={form.profileHeadHtml ?? ""}
+                  onChange={(event) => setForm({ ...form, profileHeadHtml: event.target.value })}
+                  rows={4}
+                  placeholder={'<meta name="robots" content="index,follow">\n<link rel="canonical" href="https://yourshop.com">'}
+                  className="rounded-lg border border-line bg-ink px-3 py-2 font-mono text-sm text-paper outline-none focus:border-brass"
+                />
+                <span className="text-xs leading-5 text-muted">
+                  Extra tags for the page head: meta, link, style, and title only. Scripts are removed.
+                </span>
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Schema (JSON-LD)</span>
+                <textarea
+                  value={form.profileSchema ?? ""}
+                  onChange={(event) => setForm({ ...form, profileSchema: event.target.value })}
+                  rows={6}
+                  placeholder='{"@context":"https://schema.org","@type":"Bakery","name":"Harbor & Oak"}'
+                  className="rounded-lg border border-line bg-ink px-3 py-2 font-mono text-sm text-paper outline-none focus:border-brass"
+                />
+                <span className="text-xs leading-5 text-muted">
+                  Leave blank to use the default LocalBusiness schema from this listing. If you paste JSON, it must be a
+                  valid object.
+                </span>
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Profile article</span>
+                <textarea
+                  value={form.profileContent ?? ""}
+                  onChange={(event) => setForm({ ...form, profileContent: event.target.value })}
+                  rows={8}
+                  placeholder="The story visitors should read on this PlaceFind profile."
+                  className="rounded-lg border border-line bg-ink px-3 py-2 text-paper outline-none focus:border-brass"
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Custom HTML</span>
+                <textarea
+                  value={form.profileHtml ?? ""}
+                  onChange={(event) => setForm({ ...form, profileHtml: event.target.value })}
+                  rows={8}
+                  placeholder="<h3>Weekend specials</h3><p>Saturday croissants until we sell out.</p>"
+                  className="rounded-lg border border-line bg-ink px-3 py-2 font-mono text-sm text-paper outline-none focus:border-brass"
+                />
+                <span className="text-xs leading-5 text-muted">
+                  Shown under the article on the public profile. Scripts, forms, and iframes are removed.
+                </span>
               </label>
               <div className="mt-2 flex flex-wrap gap-3">
                 <button

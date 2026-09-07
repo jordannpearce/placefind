@@ -4,6 +4,13 @@ import { formatStreetAddress, parseStreetAddress } from "../src/lib/address.ts"
 import { normalizeKeywords } from "../src/lib/keywords.ts"
 import { listingSlugFromParts, mapsCategory } from "../src/lib/listings.ts"
 import { LISTING_MONTHLY_PRICE } from "../src/lib/pricing.ts"
+import {
+  listingProfileFromInput,
+  profileFieldsChanged,
+  profileHasOwnerCopy,
+  profileSchemaError,
+  stripCrawlArticleFooter,
+} from "../src/lib/profile.ts"
 import { mapsPlaceUrl } from "./match.ts"
 import { toStateAbbr } from "./states.ts"
 import { dataDir, readCollection, writeCollection } from "./store.ts"
@@ -41,6 +48,12 @@ export type DirectoryListing = {
   yearsInBusiness: string
   specialty: string
   profileContent: string
+  profilePageTitle: string
+  profileMetaDescription: string
+  profileHeadHtml: string
+  profileSchema: string
+  profileHtml: string
+  profileCustomized: boolean
   crawlStatus: CrawlStatus
   lastCrawledAt: string
   slug: string
@@ -60,6 +73,12 @@ export type ListingInput = {
   email?: string
   website?: string
   hours?: string
+  profilePageTitle?: string
+  profileMetaDescription?: string
+  profileHeadHtml?: string
+  profileSchema?: string
+  profileHtml?: string
+  profileContent?: string
 }
 
 export type MapsMatchInput = {
@@ -99,7 +118,23 @@ function parseCoord(value: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt" | "slug" | "lat" | "lng">[] = [
+type SeedListing = Omit<
+  DirectoryListing,
+  | "id"
+  | "createdAt"
+  | "updatedAt"
+  | "slug"
+  | "lat"
+  | "lng"
+  | "profilePageTitle"
+  | "profileMetaDescription"
+  | "profileHeadHtml"
+  | "profileSchema"
+  | "profileHtml"
+  | "profileCustomized"
+>
+
+const SEED_LISTINGS: SeedListing[] = [
   {
     ownerUserId: SEED_OWNER_ID,
     name: "Harbor & Oak Bakery",
@@ -124,7 +159,7 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt" | "
     yearsInBusiness: "Since 2014",
     specialty: "naturally leavened bread and morning pastry",
     profileContent:
-      "Harbor & Oak is a bakery in Portland, ME. The shop has been open since 2014. License BAK-4418 is on file.\n\nHarbor & Oak specializes in naturally leavened bread and morning pastry.\n\nThis profile was written from the business website and the listing the owner published on PlaceFind. Reviews from visitors appear below the facts.",
+      "Harbor & Oak is a bakery in Portland, ME. The shop has been open since 2014. License BAK-4418 is on file.\n\nHarbor & Oak specializes in naturally leavened bread and morning pastry.",
     crawlStatus: "ok",
     lastCrawledAt: "2026-08-12T14:00:00.000Z",
   },
@@ -152,7 +187,7 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt" | "
     yearsInBusiness: "12 years in business",
     specialty: "family dentistry and preventive cleanings",
     profileContent:
-      "Red Mesa Dental is a dentist in Santa Fe, NM. 12 years in business. License DDS-2201 is on file.\n\nRed Mesa Dental specializes in family dentistry and preventive cleanings.\n\nThis profile was written from the business website and the listing the owner published on PlaceFind. Reviews from visitors appear below the facts.",
+      "Red Mesa Dental is a dentist in Santa Fe, NM. 12 years in business. License DDS-2201 is on file.\n\nRed Mesa Dental specializes in family dentistry and preventive cleanings.",
     crawlStatus: "ok",
     lastCrawledAt: "2026-08-12T14:00:00.000Z",
   },
@@ -207,7 +242,7 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt" | "
     yearsInBusiness: "Since 2009",
     specialty: "Gulf oysters and grouper sandwiches",
     profileContent:
-      "Citrus & Salt is a seafood restaurant in Tampa, FL. The shop has been open since 2009. License FDBPR-9912 is on file.\n\nCitrus & Salt specializes in Gulf oysters and grouper sandwiches.\n\nThis profile was written from the business website and the listing the owner published on PlaceFind. Reviews from visitors appear below the facts.",
+      "Citrus & Salt is a seafood restaurant in Tampa, FL. The shop has been open since 2009. License FDBPR-9912 is on file.\n\nCitrus & Salt specializes in Gulf oysters and grouper sandwiches.",
     crawlStatus: "ok",
     lastCrawledAt: "2026-08-12T14:00:00.000Z",
   },
@@ -235,7 +270,7 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt" | "
     yearsInBusiness: "Since 1998",
     specialty: "used and independent titles",
     profileContent:
-      "Copper Bell Books is a bookstore in Asheville, NC. The shop has been open since 1998.\n\nCopper Bell Books specializes in used and independent titles.\n\nThis profile was written from the business website and the listing the owner published on PlaceFind. Reviews from visitors appear below the facts.",
+      "Copper Bell Books is a bookstore in Asheville, NC. The shop has been open since 1998.\n\nCopper Bell Books specializes in used and independent titles.",
     crawlStatus: "ok",
     lastCrawledAt: "2026-08-12T14:00:00.000Z",
   },
@@ -263,7 +298,7 @@ const SEED_LISTINGS: Omit<DirectoryListing, "id" | "createdAt" | "updatedAt" | "
     yearsInBusiness: "40 years in business",
     specialty: "keys, paint, and garden hardware",
     profileContent:
-      "Lamppost Hardware is a hardware store in Boise, ID. 40 years in business. License RET-118 is on file.\n\nLamppost Hardware specializes in keys, paint, and garden hardware.\n\nThis profile was written from the business website and the listing the owner published on PlaceFind. Reviews from visitors appear below the facts.",
+      "Lamppost Hardware is a hardware store in Boise, ID. 40 years in business. License RET-118 is on file.\n\nLamppost Hardware specializes in keys, paint, and garden hardware.",
     crawlStatus: "ok",
     lastCrawledAt: "2026-08-12T14:00:00.000Z",
   },
@@ -323,7 +358,13 @@ function asListing(row: Partial<DirectoryListing> | null | undefined): Directory
     licenseInfo: String(row.licenseInfo ?? ""),
     yearsInBusiness: String(row.yearsInBusiness ?? ""),
     specialty: String(row.specialty ?? ""),
-    profileContent: String(row.profileContent ?? ""),
+    profileContent: stripCrawlArticleFooter(String(row.profileContent ?? "")),
+    profilePageTitle: String(row.profilePageTitle ?? ""),
+    profileMetaDescription: String(row.profileMetaDescription ?? ""),
+    profileHeadHtml: String(row.profileHeadHtml ?? ""),
+    profileSchema: String(row.profileSchema ?? ""),
+    profileHtml: String(row.profileHtml ?? ""),
+    profileCustomized: Boolean(row.profileCustomized),
     crawlStatus: crawlStatusOf(row.crawlStatus),
     lastCrawledAt: String(row.lastCrawledAt ?? ""),
     slug: String(row.slug ?? "").trim() || listingSlugFromParts({
@@ -398,7 +439,31 @@ export function validateListing(input: ListingInput): { value?: ListingInput; er
   if (email && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 120)) {
     return { error: "Enter a valid business email." }
   }
-  return { value: { name, street, city, state, zip, category, keywords, phone, email: email.toLowerCase(), website, hours } }
+  const profile = listingProfileFromInput(input)
+  if (profile.profilePageTitle.length > 160) return { error: "Page title must be 160 characters or fewer." }
+  if (profile.profileMetaDescription.length > 320) return { error: "Meta description must be 320 characters or fewer." }
+  if ((input.profileHeadHtml ?? "").length > 8000) return { error: "Header HTML must be 8,000 characters or fewer." }
+  if (profile.profileSchema.length > 16000) return { error: "Schema must be 16,000 characters or fewer." }
+  if ((input.profileHtml ?? "").length > 40000) return { error: "Custom HTML must be 40,000 characters or fewer." }
+  if ((input.profileContent ?? "").length > 40000) return { error: "Profile article must be 40,000 characters or fewer." }
+  const schemaError = profileSchemaError(profile.profileSchema)
+  if (schemaError) return { error: schemaError }
+  return {
+    value: {
+      name,
+      street,
+      city,
+      state,
+      zip,
+      category,
+      keywords,
+      phone,
+      email: email.toLowerCase(),
+      website,
+      hours,
+      ...profile,
+    },
+  }
 }
 
 export function publicListing(listing: DirectoryListing, includeOwner = false) {
@@ -436,6 +501,12 @@ export function publicListing(listing: DirectoryListing, includeOwner = false) {
     yearsInBusiness: listing.yearsInBusiness,
     specialty: listing.specialty,
     profileContent: listing.profileContent,
+    profilePageTitle: listing.profilePageTitle,
+    profileMetaDescription: listing.profileMetaDescription,
+    profileHeadHtml: listing.profileHeadHtml,
+    profileSchema: listing.profileSchema,
+    profileHtml: listing.profileHtml,
+    profileCustomized: listing.profileCustomized,
     crawlStatus: listing.crawlStatus,
     lastCrawledAt: listing.lastCrawledAt || null,
     slug: listing.slug,
@@ -556,7 +627,13 @@ export function createListing(input: ListingInput, ownerUserId: string): Directo
     licenseInfo: "",
     yearsInBusiness: "",
     specialty: "",
-    profileContent: "",
+    profileContent: parsed.value.profileContent ?? "",
+    profilePageTitle: parsed.value.profilePageTitle ?? "",
+    profileMetaDescription: parsed.value.profileMetaDescription ?? "",
+    profileHeadHtml: parsed.value.profileHeadHtml ?? "",
+    profileSchema: parsed.value.profileSchema ?? "",
+    profileHtml: parsed.value.profileHtml ?? "",
+    profileCustomized: profileHasOwnerCopy(listingProfileFromInput(parsed.value)),
     crawlStatus: "idle",
     lastCrawledAt: "",
     slug: "",
@@ -592,6 +669,14 @@ export function updateListing(id: string, input: ListingInput, userId: string, a
     email: parsed.value.email ?? current.email,
     website: parsed.value.website ?? current.website,
     hours: parsed.value.hours ?? current.hours,
+    profilePageTitle: parsed.value.profilePageTitle ?? current.profilePageTitle,
+    profileMetaDescription: parsed.value.profileMetaDescription ?? current.profileMetaDescription,
+    profileHeadHtml: parsed.value.profileHeadHtml ?? current.profileHeadHtml,
+    profileSchema: parsed.value.profileSchema ?? current.profileSchema,
+    profileHtml: parsed.value.profileHtml ?? current.profileHtml,
+    profileContent: parsed.value.profileContent ?? current.profileContent,
+    profileCustomized:
+      current.profileCustomized || profileFieldsChanged(current, listingProfileFromInput(parsed.value)),
     updatedAt: nowIso(),
   }
   const rows = readListings()
@@ -690,9 +775,10 @@ export function applyListingProfile(
   },
 ): DirectoryListing {
   const current = getListing(id)
+  const crawled = input.profileContent != null ? stripCrawlArticleFooter(input.profileContent) : current.profileContent
   const next: DirectoryListing = {
     ...current,
-    profileContent: input.profileContent?.trim() ?? current.profileContent,
+    profileContent: current.profileCustomized ? current.profileContent : crawled,
     crawlStatus: input.crawlStatus ?? current.crawlStatus,
     lastCrawledAt: input.lastCrawledAt ?? current.lastCrawledAt,
     updatedAt: nowIso(),

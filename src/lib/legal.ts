@@ -28,7 +28,7 @@ export const LEGAL_PAGES: LegalPage[] = [
         heading: "What PlaceFind is",
         body: [
           "PlaceFind is a web directory for local businesses. People use it to find shops. Businesses use it to publish a listing, request a website crawl, and collect reviews on a public profile.",
-          "A business listing is $150 per month. Signed-in owners can edit the listing, request Crawl Website from the dashboard, and manage the profile visitors see. Neighbors who only leave reviews or request quotes create a free account. PlaceFind does not charge those accounts $150.",
+          "A business listing is $150 per month. Signed-in owners can edit the listing, write the public profile (article, HTML, page title, and schema), request Crawl Website from the dashboard, and manage the profile visitors see. Neighbors who only leave reviews or request quotes create a free account. PlaceFind does not charge those accounts $150.",
         ],
       },
       {
@@ -157,7 +157,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "Listing data",
         body: [
-          "Business name, city, state, category, keywords, optional contact details, and visitor reviews. Crawl Website stores license and company facts on the crawl request and writes a profile article. It does not overwrite the listing form. Public directory pages show the listing you published plus that article.",
+          "Business name, city, state, category, keywords, optional contact details, visitor reviews, and the public profile you write (article, custom HTML, page title, meta description, header tags, and schema). Crawl Website can store license and company facts on the crawl request and draft an article. It does not overwrite the listing form, and it does not replace a profile you have already customized. Public directory pages show the listing you published plus that profile.",
         ],
       },
       {

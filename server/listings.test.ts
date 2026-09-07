@@ -5,6 +5,7 @@ import path from "node:path"
 import { after, describe, it } from "node:test"
 import { parseStreetAddress } from "../src/lib/address.ts"
 import {
+  applyListingProfile,
   confirmListingMatch,
   createListing,
   deleteListing,
@@ -178,6 +179,56 @@ describe("directory listings", () => {
     assert.equal(created.city, "Austin")
     assert.equal(created.state, "TX")
     assert.equal(created.zip, "78702")
+  })
+
+  it("saves a custom profile and does not let a crawl overwrite it", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-listing-profile-")))
+    const created = createListing(
+      {
+        name: "Harbor Street Cafe",
+        city: "Portland",
+        state: "OR",
+        profilePageTitle: "Harbor Street Cafe · Portland",
+        profileMetaDescription: "Coffee and breakfast on Harbor Street.",
+        profileHeadHtml: '<meta name="robots" content="index,follow"><script>alert(1)</script>',
+        profileSchema: '{"@type":"CafeOrCoffeeShop","name":"Harbor Street Cafe"}',
+        profileHtml: "<h3>Weekend hours</h3><script>alert(1)</script><p>Saturday 8 to 2.</p>",
+        profileContent:
+          "We roast on Harbor Street.\n\nThis article was written from the listing the owner published and facts found on the business website. Reviews from visitors appear below.",
+      },
+      "user-1",
+    )
+    assert.equal(created.profileCustomized, true)
+    assert.equal(created.profilePageTitle, "Harbor Street Cafe · Portland")
+    assert.equal(created.profileContent, "We roast on Harbor Street.")
+    assert.doesNotMatch(created.profileHeadHtml, /script/i)
+    assert.match(created.profileHeadHtml, /robots/)
+    assert.doesNotMatch(created.profileHtml, /script/i)
+    assert.match(created.profileHtml, /Weekend hours/)
+    const published = publicListing(created)
+    assert.equal(published.profilePageTitle, "Harbor Street Cafe · Portland")
+    assert.equal(published.profileHtml.includes("Weekend hours"), true)
+    assert.equal(published.profileCustomized, true)
+
+    const crawled = applyListingProfile(created.id, {
+      profileContent: "Crawl draft that should stay off the public profile.",
+      crawlStatus: "ok",
+      lastCrawledAt: "2026-09-07T14:00:00.000Z",
+    })
+    assert.equal(crawled.profileContent, "We roast on Harbor Street.")
+    assert.equal(crawled.profileCustomized, true)
+    assert.equal(crawled.crawlStatus, "ok")
+
+    const phoneOnly = updateListing(created.id, { name: "Harbor Street Cafe", city: "Portland", state: "OR", phone: "(503) 555-0100" }, "user-1")
+    assert.equal(phoneOnly.phone, "(503) 555-0100")
+    assert.equal(phoneOnly.profileContent, "We roast on Harbor Street.")
+    assert.equal(phoneOnly.profileCustomized, true)
+
+    const blank = createListing({ name: "Plain Oven", city: "Portland", state: "OR" }, "user-1")
+    assert.equal(blank.profileCustomized, false)
+    const drafted = applyListingProfile(blank.id, { profileContent: "Draft from the shop website.", crawlStatus: "ok" })
+    assert.equal(drafted.profileContent, "Draft from the shop website.")
+    assert.equal(drafted.profileCustomized, false)
   })
 
   it("blocks another customer from editing a listing", () => {

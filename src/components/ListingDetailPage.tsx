@@ -4,6 +4,13 @@ import { joinHref, loginHref } from "../lib/account.ts"
 import { createListingReview, loadListing, requestListingQuote } from "../lib/api.ts"
 import { listingLocation, listingPath, listingRedirectPath, mapsStatusDetail } from "../lib/listings.ts"
 import { LISTING_PRICE_LABEL } from "../lib/pricing.ts"
+import {
+  applyListingDocumentHead,
+  listingHasEnhancedProfile,
+  looksLikeHtml,
+  sanitizeOwnerHtml,
+  stripCrawlArticleFooter,
+} from "../lib/profile.ts"
 import { MISSING_QUOTE_EMAIL_MESSAGE } from "../lib/quotes.ts"
 import type { AuthUser, DirectoryListing, ListingReview, ReviewSummary } from "../lib/types.ts"
 
@@ -54,6 +61,11 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
       })
       .finally(() => setLoading(false))
   }, [listingId])
+
+  useEffect(() => {
+    if (!listing) return
+    return applyListingDocumentHead(listing, typeof window !== "undefined" ? window.location.href : undefined)
+  }, [listing])
 
   async function submitReview() {
     setSending(true)
@@ -113,7 +125,9 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
   }
 
   const canEdit = Boolean(user && (user.role === "admin" || listing.ownerUserId === user.id))
-  const enhanced = Boolean(listing.profileContent)
+  const article = stripCrawlArticleFooter(listing.profileContent ?? "")
+  const customHtml = sanitizeOwnerHtml(listing.profileHtml ?? "")
+  const enhanced = listingHasEnhancedProfile({ profileContent: article, profileHtml: customHtml })
 
   return (
     <article className="mx-auto grid w-full max-w-3xl gap-6">
@@ -177,11 +191,21 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
       <section className="rounded-2xl border border-line bg-panel p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Enhanced profile</p>
         {enhanced ? (
-          <div className="mt-4 whitespace-pre-wrap text-sm leading-7 text-paper/90">{listing.profileContent}</div>
+          <div className="mt-4 grid gap-4">
+            {article ? (
+              looksLikeHtml(article) ? (
+                <div className="profile-html" dangerouslySetInnerHTML={{ __html: sanitizeOwnerHtml(article) }} />
+              ) : (
+                <div className="whitespace-pre-wrap text-sm leading-7 text-paper/90">{article}</div>
+              )
+            ) : null}
+            {customHtml ? <div className="profile-html" dangerouslySetInnerHTML={{ __html: customHtml }} /> : null}
+          </div>
         ) : (
           <p className="mt-3 text-sm leading-6 text-muted">
-            This listing is in the directory. After the owner runs Crawl Website, an article about the business lands
-            here. Listing details stay as the owner entered them.
+            This listing is in the directory. The owner can write the public article, custom HTML, and page title from
+            Edit listing. Crawl Website can draft an article from the shop site, but it will not replace a profile the
+            owner has already customized.
           </p>
         )}
       </section>

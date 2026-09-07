@@ -159,8 +159,8 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
           {error && <p className="mt-3 text-sm text-clay">{error}</p>}
           {listings.length === 0 ? (
             <p className="mt-3 text-sm text-muted">
-              No listings yet. A PlaceFind listing is $150 per month. Create one, then open Crawl Website to write a
-              public profile article. The listing form stays as you entered it.
+              No listings yet. A PlaceFind listing is $150 per month. Create one, then write the public article, HTML,
+              and page title on the listing. Crawl Website can draft an article if you want a starting point.
             </p>
           ) : (
             <ul className="mt-4 grid gap-3">

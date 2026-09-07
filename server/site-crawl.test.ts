@@ -50,6 +50,8 @@ describe("website crawl writing", () => {
     assert.match(result.article, /sourdough/)
     assert.match(result.article, /Portland/)
     assert.match(result.article, /BAK-4418/)
+    assert.doesNotMatch(result.article, /Reviews from visitors/)
+    assert.doesNotMatch(result.article, /This article was written from the listing/)
     assert.equal(/lorem ipsum/i.test(result.article), false)
 
     const applied = applyListingProfile(listing.id, {

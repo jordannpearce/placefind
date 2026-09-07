@@ -72,6 +72,12 @@ export function listingFormFromPlace(
     email: fallback.email ?? "",
     website: place.website?.trim() || fallback.website?.trim() || "",
     hours: hoursFromPlace(place) || fallback.hours?.trim() || "",
+    profilePageTitle: fallback.profilePageTitle ?? "",
+    profileMetaDescription: fallback.profileMetaDescription ?? "",
+    profileHeadHtml: fallback.profileHeadHtml ?? "",
+    profileSchema: fallback.profileSchema ?? "",
+    profileHtml: fallback.profileHtml ?? "",
+    profileContent: fallback.profileContent ?? "",
   }
 }
 

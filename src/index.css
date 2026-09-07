@@ -267,3 +267,54 @@ textarea {
   font-weight: 600;
   color: #e0b15b;
 }
+
+.profile-html {
+  color: rgba(243, 234, 216, 0.9);
+  font-size: 0.875rem;
+  line-height: 1.75;
+}
+
+.profile-html > * + * {
+  margin-top: 0.85rem;
+}
+
+.profile-html h1,
+.profile-html h2,
+.profile-html h3,
+.profile-html h4 {
+  color: #f3ead8;
+  font-family: var(--font-display);
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.profile-html h1 {
+  font-size: 1.75rem;
+}
+
+.profile-html h2 {
+  font-size: 1.45rem;
+}
+
+.profile-html h3,
+.profile-html h4 {
+  font-size: 1.2rem;
+}
+
+.profile-html a {
+  color: #e0b15b;
+  text-decoration: underline;
+}
+
+.profile-html ul,
+.profile-html ol {
+  padding-left: 1.25rem;
+}
+
+.profile-html li + li {
+  margin-top: 0.35rem;
+}
+
+.profile-html strong {
+  color: #f3ead8;
+}

@@ -44,7 +44,8 @@ describe("site facts", () => {
     assert.match(article, /Dentist/)
     assert.match(article, /12 years in business/)
     assert.match(article, /family dentistry/)
-    assert.match(article, /Reviews from visitors/)
+    assert.doesNotMatch(article, /Reviews from visitors/)
+    assert.doesNotMatch(article, /This article was written from the listing/)
     assert.equal(/lorem ipsum/i.test(article), false)
   })
 

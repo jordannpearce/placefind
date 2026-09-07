@@ -248,6 +248,12 @@ export type DirectoryListing = {
   yearsInBusiness?: string
   specialty?: string
   profileContent?: string
+  profilePageTitle?: string
+  profileMetaDescription?: string
+  profileHeadHtml?: string
+  profileSchema?: string
+  profileHtml?: string
+  profileCustomized?: boolean
   crawlStatus?: CrawlStatus
   lastCrawledAt?: string | null
   reviewSummary?: ReviewSummary
@@ -298,6 +304,12 @@ export type ListingInput = {
   email?: string
   website?: string
   hours?: string
+  profilePageTitle?: string
+  profileMetaDescription?: string
+  profileHeadHtml?: string
+  profileSchema?: string
+  profileHtml?: string
+  profileContent?: string
 }
 
 export type ImpersonatingInfo = {

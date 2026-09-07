@@ -94,8 +94,8 @@ export function HomePage({ user, onGo }: Props) {
               <li className="rounded-xl border border-line bg-panel px-4 py-3">
                 <p className="text-sm font-semibold text-paper">3. Build an enhanced profile</p>
                 <p className="mt-1 text-sm leading-6 text-muted">
-                  From the dashboard, request Crawl Website. We look for license info and key company facts, then write
-                  an article onto the public profile. The listing form stays as you entered it.
+                  Write the public article, custom HTML, page title, and schema on the listing. Crawl Website can draft
+                  an article from the shop site. A profile you customize is not overwritten.
                 </p>
               </li>
             </ol>
@@ -127,8 +127,8 @@ export function HomePage({ user, onGo }: Props) {
             <NotebookPen className="h-5 w-5 text-brass" />
             <h4 className="mt-3 font-display text-xl text-paper">Reviews and enhanced info</h4>
             <p className="mt-2 text-sm leading-6 text-muted">
-              Neighbors leave reviews and request quotes from a free account. After Crawl Website, the public profile
-              also shows an article written from the listing keywords and facts found on the site.
+              Neighbors leave reviews and request quotes from a free account. The public profile can include the
+              owner’s own article and HTML, plus a crawl draft if they want one.
             </p>
           </article>
         </div>
@@ -217,9 +217,9 @@ export function HomePage({ user, onGo }: Props) {
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">For businesses</p>
             <h3 className="mt-2 font-display text-3xl text-paper">List your shop for {LISTING_PRICE_LABEL}</h3>
             <p className="mt-3 max-w-xl text-sm leading-7 text-muted">
-              Create an account, publish the listing, then open the dashboard and press Crawl Website. We read the site
-              and sitemap, look for license info and company facts, and write an article onto the public profile. The
-              listing details you entered stay put.
+              Create an account, publish the listing, then write the public article, HTML, and page title yourself.
+              Crawl Website can draft an article from the shop site. The listing details you entered stay put, and a
+              customized profile is not replaced.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <button
@@ -241,7 +241,7 @@ export function HomePage({ user, onGo }: Props) {
           <ul className="grid gap-3 text-sm text-paper/85">
             <li className="rounded-xl border border-line bg-panel px-4 py-3">Public directory by name, city, and keyword</li>
             <li className="rounded-xl border border-line bg-panel px-4 py-3">{LISTING_PRICE_LABEL} for an active listing</li>
-            <li className="rounded-xl border border-line bg-panel px-4 py-3">Crawl Website writes a public profile article</li>
+            <li className="rounded-xl border border-line bg-panel px-4 py-3">Owner-written article, HTML, and page title</li>
             <li className="rounded-xl border border-line bg-panel px-4 py-3">Reviews and enhanced profile on every listing</li>
           </ul>
         </div>

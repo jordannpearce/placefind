@@ -101,8 +101,9 @@ export function CrawlDashboard({ user, onGo }: Props) {
         <h2 className="mt-2 font-display text-3xl text-paper">Your business desk</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
           This desk is separate from the public directory. Open Rank tracker or Traffic for a signed-in scan, or crawl
-          the listing website to write a public profile article. Crawl Website does not change the listing form — name,
-          address, phone, website, hours, category, keywords, and Maps details stay as you entered them.
+          the listing website for a first-draft profile article. Write your own article, HTML, page title, and schema
+          from Edit listing. Crawl Website does not change the listing form — name, address, phone, website, hours,
+          category, keywords, and Maps details stay as you entered them. A customized profile is not overwritten.
         </p>
         <p className="mt-2 text-sm text-muted">Signed in as {user.email}.</p>
         <div className="mt-6">
@@ -170,6 +171,9 @@ export function CrawlDashboard({ user, onGo }: Props) {
               <p className="text-sm text-muted">
                 {statusLabel(active?.status || selected.crawlStatus)}{" "}
                 {selected.lastCrawledAt ? `· last run ${new Date(selected.lastCrawledAt).toLocaleDateString()}` : ""}
+                {selected.profileCustomized
+                  ? " · this listing has a customized public profile, so a new crawl will not replace it"
+                  : ""}
               </p>
             )}
           </form>

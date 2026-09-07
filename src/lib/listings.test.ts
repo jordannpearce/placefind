@@ -62,6 +62,8 @@ describe("listing copy", () => {
     assert.equal(filled.hours, "Tue–Sun 7:00 AM–3:00 PM")
     assert.equal(filled.email, "hello@mapleoven.example")
     assert.equal(filled.keywords, "sourdough")
+    assert.equal(filled.profilePageTitle, "")
+    assert.equal(filled.profileContent, "")
 
     const noStreet = listingFormFromPlace(
       { title: "Downtown Cart", address: "Austin, TX 78702", categories: ["Food truck"] },
