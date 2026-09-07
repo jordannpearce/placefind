@@ -1,9 +1,12 @@
-import { MISSING_QUOTE_EMAIL_MESSAGE, validateQuoteLead, type QuoteLead, type QuoteLeadInput } from "../src/lib/quotes.ts"
+import { validateQuoteLead, type QuoteLead, type QuoteLeadInput } from "../src/lib/quotes.ts"
+import { findUserById } from "./auth.ts"
 import { getListing, ListingError, type DirectoryListing } from "./listings.ts"
 import { quoteRequestEmail, sendMail, type OutboundMail } from "./mail.ts"
 
-export function listingQuoteAddress(listing: Pick<DirectoryListing, "email">) {
-  return listing.email.trim()
+export function listingQuoteAddress(listing: Pick<DirectoryListing, "email" | "ownerUserId">) {
+  const published = listing.email.trim()
+  if (published) return published
+  return findUserById(listing.ownerUserId)?.email.trim() ?? ""
 }
 
 export async function submitQuoteLead(
@@ -14,7 +17,6 @@ export async function submitQuoteLead(
   const parsed = validateQuoteLead(input)
   if (parsed.error || !parsed.value) throw new ListingError(400, parsed.error || "Could not send that quote request.")
   const to = listingQuoteAddress(listing)
-  if (!to) throw new ListingError(400, MISSING_QUOTE_EMAIL_MESSAGE)
   const message = quoteRequestEmail({
     businessName: listing.brand || listing.name,
     firstName: parsed.value.firstName,

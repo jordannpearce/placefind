@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { formatQuoteAddress, MISSING_QUOTE_EMAIL_MESSAGE, validateQuoteLead } from "./quotes.ts"
+import { formatQuoteAddress, validateQuoteLead } from "./quotes.ts"
 
 const completeLead = {
   firstName: "Maya",
@@ -76,11 +76,5 @@ describe("quote leads", () => {
     assert.equal(parsed.value?.lastName, "Chen")
     assert.equal(parsed.value?.name, "Maya Chen")
     assert.equal(parsed.value?.service, "Two dozen sandwich loaves for a Friday office lunch.")
-  })
-
-  it("keeps the missing-email copy owner-facing and vendor-free", () => {
-    assert.match(MISSING_QUOTE_EMAIL_MESSAGE, /has not published a contact email/)
-    assert.match(MISSING_QUOTE_EMAIL_MESSAGE, /owner can add one/)
-    assert.equal(/resend|lorem|ipsum/i.test(MISSING_QUOTE_EMAIL_MESSAGE), false)
   })
 })

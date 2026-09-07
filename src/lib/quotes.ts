@@ -84,6 +84,3 @@ export function validateQuoteLead(input: QuoteLeadInput): { value?: QuoteLead; e
   }
   return { value }
 }
-
-export const MISSING_QUOTE_EMAIL_MESSAGE =
-  "This business has not published a contact email yet. The owner can add one when they edit the listing."

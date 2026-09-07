@@ -596,6 +596,11 @@ export async function sendMail(message: MailMessage): Promise<OutboundMail> {
     delivered: false,
     detail: "",
   }
+  if (!message.to.trim()) {
+    record.detail = "Saved to the outbox. The listing has no contact email yet."
+    writeOutbox([record, ...readOutbox()])
+    return record
+  }
   if (!config.resendApiKey) {
     record.detail = "Saved to the outbox. Add a sending API key in admin."
     writeOutbox([record, ...readOutbox()])

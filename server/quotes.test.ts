@@ -13,7 +13,6 @@ import { ListingError } from "./listings.ts"
 import { quoteRequestEmail, readOutbox } from "./mail.ts"
 import { submitQuoteLead } from "./quotes.ts"
 import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
-import { MISSING_QUOTE_EMAIL_MESSAGE } from "../src/lib/quotes.ts"
 
 const completeLead = {
   firstName: "Maya",
@@ -89,18 +88,29 @@ describe("quote request leads", () => {
     assert.equal(readOutbox()[0]?.to, "hello@harborandoak.example")
   })
 
-  it("refuses a quote when the listing has no contact email", async () => {
+  it("emails the listing owner when the listing has no contact email", async () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-quotes-owner-")))
+    const owner = signup({ name: "Pat Owner", email: "pat-owner@example.com", password: "password12" })
+    const listing = createListing({ name: "Copper Bell Books", city: "Asheville", state: "NC" }, owner.user!.id)
+    const result = await submitQuoteLead(listing.id, completeLead)
+    assert.equal(result.mail.to, "pat-owner@example.com")
+    assert.equal(result.mail.delivered, false)
+    assert.match(result.mail.subject, /Copper Bell Books/)
+    assert.match(result.mail.text, /Maya Chen/)
+    assert.equal(readOutbox()[0]?.to, "pat-owner@example.com")
+  })
+
+  it("saves the lead when neither the listing nor the owner has an email", async () => {
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-quotes-missing-")))
     const listing = createListing({ name: "Copper Bell Books", city: "Asheville", state: "NC" }, "owner-1")
-    await assert.rejects(
-      () => submitQuoteLead(listing.id, completeLead),
-      (error: unknown) => {
-        assert.ok(error instanceof ListingError)
-        assert.equal(error.status, 400)
-        assert.equal(error.message, MISSING_QUOTE_EMAIL_MESSAGE)
-        return true
-      },
-    )
+    const result = await submitQuoteLead(listing.id, completeLead)
+    assert.equal(result.mail.to, "")
+    assert.equal(result.mail.delivered, false)
+    assert.match(result.mail.subject, /Copper Bell Books/)
+    assert.match(result.mail.text, /Maya Chen/)
+    assert.match(result.mail.text, /maya@example.com/)
+    assert.equal(/has not published a contact email|owner can add one/i.test(result.mail.text + result.mail.html), false)
+    assert.equal(readOutbox()[0]?.id, result.mail.id)
   })
 
   it("POST /api/listings/:id/quotes accepts an anonymous visitor", async () => {
@@ -157,6 +167,25 @@ describe("quote request leads", () => {
       assert.equal(signedIn.status, 201)
       assert.equal(((await signedIn.json()) as { ok?: boolean }).ok, true)
       assert.equal(readOutbox()[0]?.to, "shop@lampposthardware.example")
+    })
+  })
+
+  it("POST /api/listings/:id/quotes returns 201 when the listing has no contact email", async () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-quotes-http-missing-")))
+    const listing = createListing({ name: "Northside Bike Works", city: "Minneapolis", state: "MN" }, "owner-1")
+
+    await withLeadServer(async (port) => {
+      const response = await fetch(`http://127.0.0.1:${port}/api/listings/${listing.id}/quotes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(completeLead),
+      })
+      const payload = (await response.json()) as { ok?: boolean; error?: string }
+      assert.equal(response.status, 201)
+      assert.equal(payload.ok, true)
+      assert.equal(payload.error, undefined)
+      assert.equal(/has not published a contact email/i.test(JSON.stringify(payload)), false)
+      assert.equal(readOutbox()[0]?.subject.includes("Northside Bike Works"), true)
     })
   })
 })

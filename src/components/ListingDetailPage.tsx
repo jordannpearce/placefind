@@ -12,7 +12,6 @@ import {
   sanitizeOwnerHtml,
   stripCrawlArticleFooter,
 } from "../lib/profile.ts"
-import { MISSING_QUOTE_EMAIL_MESSAGE } from "../lib/quotes.ts"
 import type { AuthUser, DirectoryListing, ListingReview, ReviewSummary } from "../lib/types.ts"
 import { CityStateFields } from "./CityStateFields.tsx"
 import { GoogleBusinessProfileCta } from "./GoogleBusinessProfileCta.tsx"
@@ -349,115 +348,109 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
       <section className="rounded-2xl border border-line bg-panel p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Request a quote</p>
         <h3 className="mt-2 font-display text-2xl text-paper">Ask this shop for a quote</h3>
-        {listing.hasQuoteEmail === false ? (
-          <p className="mt-3 text-sm leading-6 text-muted">{MISSING_QUOTE_EMAIL_MESSAGE}</p>
-        ) : (
-          <>
-            <p className="mt-3 text-sm leading-6 text-muted">
-              Anyone can request a quote. PlaceFind emails the listing contact with your details. The shop writes you
-              back themselves — no account required.
-            </p>
-            {quoteSent && (
-              <p className="mt-4 rounded-xl border border-moss/40 bg-moss/10 px-4 py-3 text-sm text-moss">
-                Sent. The shop can write you at the email you left.
-              </p>
-            )}
-            <form
-              className="mt-5 grid gap-3"
-              onSubmit={(event) => {
-                event.preventDefault()
-                void submitQuote()
-              }}
-            >
-              {quoteError && <p className="text-sm text-clay">{quoteError}</p>}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="grid gap-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">First name</span>
-                  <input
-                    value={quoteFirstName}
-                    onChange={(event) => setQuoteFirstName(event.target.value)}
-                    autoComplete="given-name"
-                    className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-                  />
-                </label>
-                <label className="grid gap-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Last name</span>
-                  <input
-                    value={quoteLastName}
-                    onChange={(event) => setQuoteLastName(event.target.value)}
-                    autoComplete="family-name"
-                    className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-                  />
-                </label>
-              </div>
-              <label className="grid gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Phone</span>
-                <input
-                  value={quotePhone}
-                  onChange={(event) => setQuotePhone(event.target.value)}
-                  autoComplete="tel"
-                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-                />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Email</span>
-                <input
-                  type="email"
-                  value={quoteEmail}
-                  onChange={(event) => setQuoteEmail(event.target.value)}
-                  autoComplete="email"
-                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-                />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Street address</span>
-                <input
-                  value={quoteStreet}
-                  onChange={(event) => setQuoteStreet(event.target.value)}
-                  autoComplete="street-address"
-                  placeholder="18 Harbor Lane"
-                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-                />
-              </label>
-              <CityStateFields
-                city={quoteCity}
-                state={quoteState}
-                onCity={setQuoteCity}
-                onState={setQuoteState}
-                fieldClassName="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-              />
-              <label className="grid gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">ZIP code</span>
-                <input
-                  value={quoteZip}
-                  onChange={(event) => setQuoteZip(event.target.value)}
-                  autoComplete="postal-code"
-                  inputMode="numeric"
-                  placeholder="04101"
-                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-                />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Service needed</span>
-                <textarea
-                  value={quoteService}
-                  onChange={(event) => setQuoteService(event.target.value)}
-                  rows={3}
-                  placeholder="HVAC, pottery class, catering for 20 — a few words is enough"
-                  className="rounded-lg border border-line bg-ink px-3 py-2 text-paper outline-none focus:border-brass"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={quoteSending}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
-              >
-                {quoteSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-                Request a quote
-              </button>
-            </form>
-          </>
+        <p className="mt-3 text-sm leading-6 text-muted">
+          Anyone can request a quote. PlaceFind emails the listing contact with your details. The shop writes you
+          back themselves — no account required.
+        </p>
+        {quoteSent && (
+          <p className="mt-4 rounded-xl border border-moss/40 bg-moss/10 px-4 py-3 text-sm text-moss">
+            Sent. The shop can write you at the email you left.
+          </p>
         )}
+        <form
+          className="mt-5 grid gap-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void submitQuote()
+          }}
+        >
+          {quoteError && <p className="text-sm text-clay">{quoteError}</p>}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="grid gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">First name</span>
+              <input
+                value={quoteFirstName}
+                onChange={(event) => setQuoteFirstName(event.target.value)}
+                autoComplete="given-name"
+                className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+              />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Last name</span>
+              <input
+                value={quoteLastName}
+                onChange={(event) => setQuoteLastName(event.target.value)}
+                autoComplete="family-name"
+                className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+              />
+            </label>
+          </div>
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Phone</span>
+            <input
+              value={quotePhone}
+              onChange={(event) => setQuotePhone(event.target.value)}
+              autoComplete="tel"
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Email</span>
+            <input
+              type="email"
+              value={quoteEmail}
+              onChange={(event) => setQuoteEmail(event.target.value)}
+              autoComplete="email"
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Street address</span>
+            <input
+              value={quoteStreet}
+              onChange={(event) => setQuoteStreet(event.target.value)}
+              autoComplete="street-address"
+              placeholder="18 Harbor Lane"
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            />
+          </label>
+          <CityStateFields
+            city={quoteCity}
+            state={quoteState}
+            onCity={setQuoteCity}
+            onState={setQuoteState}
+            fieldClassName="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+          />
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">ZIP code</span>
+            <input
+              value={quoteZip}
+              onChange={(event) => setQuoteZip(event.target.value)}
+              autoComplete="postal-code"
+              inputMode="numeric"
+              placeholder="04101"
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Service needed</span>
+            <textarea
+              value={quoteService}
+              onChange={(event) => setQuoteService(event.target.value)}
+              rows={3}
+              placeholder="HVAC, pottery class, catering for 20 — a few words is enough"
+              className="rounded-lg border border-line bg-ink px-3 py-2 text-paper outline-none focus:border-brass"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={quoteSending}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
+          >
+            {quoteSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+            Request a quote
+          </button>
+        </form>
       </section>
     </article>
   )

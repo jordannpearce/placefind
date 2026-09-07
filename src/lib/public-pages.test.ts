@@ -67,6 +67,16 @@ describe("public website copy", () => {
     }
   })
 
+  it("always offers the quote form and never mentions a missing listing email", () => {
+    const page = readFileSync(path.join(root, "components/ListingDetailPage.tsx"), "utf8")
+    assert.match(page, /Request a quote/)
+    assert.match(page, /Anyone can request a quote/)
+    assert.match(page, /Sent\. The shop can write you at the email you left\./)
+    assert.equal(/has not published a contact email/i.test(page), false)
+    assert.equal(/owner can add one when they edit/i.test(page), false)
+    assert.equal(/hasQuoteEmail === false/.test(page), false)
+  })
+
   it("does not advertise a used-search or IP limit", () => {
     const home = readFileSync(path.join(root, "components/HomePage.tsx"), "utf8")
     assert.equal(/already in use|you('ve| have) used|ip limit|logged your ip/i.test(home), false)
