@@ -2,7 +2,7 @@ import { ExternalLink, LoaderCircle, Mail, MapPin, Phone, Star } from "lucide-re
 import { useEffect, useState } from "react"
 import { joinHref, loginHref } from "../lib/account.ts"
 import { createListingReview, loadListing, requestListingQuote } from "../lib/api.ts"
-import { listingLocation, listingPath, listingRedirectPath, mapsStatusDetail } from "../lib/listings.ts"
+import { listingLocation, listingPath, listingRedirectPath, mapsStatusDetail, mapsStatusIsNotFound } from "../lib/listings.ts"
 import {
   applyListingDocumentHead,
   listingBusinessName,
@@ -15,6 +15,7 @@ import {
 import { MISSING_QUOTE_EMAIL_MESSAGE } from "../lib/quotes.ts"
 import type { AuthUser, DirectoryListing, ListingReview, ReviewSummary } from "../lib/types.ts"
 import { CityStateFields } from "./CityStateFields.tsx"
+import { GoogleBusinessProfileCta } from "./GoogleBusinessProfileCta.tsx"
 
 type Props = {
   listingId: string
@@ -172,9 +173,10 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
             Open in Maps
           </a>
         )}
-        {listing.mapsStatus !== "pending" && (
+        {listing.mapsStatus !== "pending" && !mapsStatusIsNotFound(listing.mapsStatus) && (
           <p className="mt-2 text-xs leading-5 text-muted">{mapsStatusDetail(listing)}</p>
         )}
+        {mapsStatusIsNotFound(listing.mapsStatus) && <GoogleBusinessProfileCta intro={mapsStatusDetail(listing)} />}
         <p className="mt-3 text-sm text-brass">
           {summary.average != null
             ? `${summary.average.toFixed(1)} from ${summary.count} review${summary.count === 1 ? "" : "s"}`

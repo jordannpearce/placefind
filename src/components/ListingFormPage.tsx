@@ -16,13 +16,16 @@ import {
   listingPath,
   listingRedirectPath,
   mapsCategory,
+  mapsNotFoundCtaCopy,
   mapsSearchCandidates,
+  mapsStatusIsNotFound,
   mapsStatusLabel,
   type ListingMapsMatch,
 } from "../lib/listings.ts"
 import { emptyKeys } from "../lib/storage.ts"
 import type { AuthUser, BusinessListing, DirectoryListing, ListingInput } from "../lib/types.ts"
 import { CityStateFields } from "./CityStateFields.tsx"
+import { GoogleBusinessProfileCta } from "./GoogleBusinessProfileCta.tsx"
 
 type Props = {
   listingId?: string | null
@@ -284,6 +287,9 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
         {error && <p className="mt-4 rounded-xl border border-clay/40 bg-clay/10 px-4 py-3 text-sm text-clay">{error}</p>}
         {notice && <p className="mt-4 rounded-xl border border-moss/40 bg-moss/10 px-4 py-3 text-sm text-moss">{notice}</p>}
         {listing && <p className="mt-4 text-sm text-brass">{mapsStatusLabel(listing.mapsStatus)}</p>}
+        {((pendingNotFound && !pendingMatch) || (mapsStatusIsNotFound(listing?.mapsStatus) && !pendingMatch)) && (
+          <GoogleBusinessProfileCta intro={mapsNotFoundCtaCopy()} />
+        )}
         <form
           className="mt-6 grid gap-3"
           onSubmit={(event) => {

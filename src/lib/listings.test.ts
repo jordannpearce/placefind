@@ -1,6 +1,9 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+  GOOGLE_BUSINESS_PROFILE_LINK_LABEL,
+  GOOGLE_BUSINESS_PROFILE_SIGNIN_NOTE,
+  GOOGLE_BUSINESS_PROFILE_URL,
   listingFormFromPlace,
   listingLocation,
   listingMapsMatchFromPlace,
@@ -8,8 +11,10 @@ import {
   listingRedirectPath,
   listingSlugFromParts,
   mapsCategory,
+  mapsNotFoundCtaCopy,
   mapsSearchCandidates,
   mapsStatusDetail,
+  mapsStatusIsNotFound,
   mapsStatusLabel,
 } from "./listings.ts"
 
@@ -19,6 +24,10 @@ describe("listing copy", () => {
     assert.equal(mapsStatusLabel("not_found"), "Not found on Google Maps")
     assert.equal(mapsStatusLabel("pending"), "Maps check pending")
     assert.match(mapsStatusDetail({ mapsStatus: "pending", mapsTitle: "", mapsAddress: "" }), /not been cross-checked/)
+    assert.match(
+      mapsStatusDetail({ mapsStatus: "not_found", mapsTitle: "", mapsAddress: "" }),
+      /not on Google Maps yet/,
+    )
     assert.equal(listingLocation({ city: "Tampa", state: "FL" }), "Tampa, FL")
     assert.equal(
       listingLocation({ street: "907 N Franklin St", city: "Tampa", state: "FL", zip: "33602" }),
@@ -30,6 +39,19 @@ describe("listing copy", () => {
     )
     const text = [mapsStatusLabel("found"), mapsStatusDetail({ mapsStatus: "found", mapsTitle: "Harbor & Oak", mapsAddress: "18 Exchange St" })].join(" ")
     assert.equal(/download|windows|desktop|license key|setup\.exe/i.test(text), false)
+  })
+
+  it("points shops that are not on Maps to a free Google Business Profile", () => {
+    assert.equal(GOOGLE_BUSINESS_PROFILE_URL, "https://business.google.com")
+    assert.equal(mapsStatusIsNotFound("not_found"), true)
+    assert.equal(mapsStatusIsNotFound("found"), false)
+    assert.equal(mapsStatusIsNotFound("pending"), false)
+    assert.equal(mapsStatusIsNotFound(undefined), false)
+    const copy = [mapsNotFoundCtaCopy(), GOOGLE_BUSINESS_PROFILE_LINK_LABEL, GOOGLE_BUSINESS_PROFILE_SIGNIN_NOTE].join(" ")
+    assert.match(copy, /free Google Business Profile/)
+    assert.match(copy, /Gmail/)
+    assert.match(copy, /Google Workspace/)
+    assert.equal(/scrappey|dataforseo|\$150|directory listing/i.test(copy), false)
   })
 
   it("uses the Maps category or the first categories item", () => {

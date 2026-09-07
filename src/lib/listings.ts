@@ -15,6 +15,22 @@ export type ListingMapsMatch = {
   lng?: number | null
 }
 
+export const GOOGLE_BUSINESS_PROFILE_URL = "https://business.google.com"
+
+export const GOOGLE_BUSINESS_PROFILE_LINK_LABEL = "Create a free Google Business Profile"
+
+/** Shared sentence on the public listing and the create/edit form. */
+export const GOOGLE_BUSINESS_PROFILE_SIGNIN_NOTE =
+  "Be signed in with Gmail or a Google Workspace email before you start."
+
+export function mapsStatusIsNotFound(status: MapsStatus | null | undefined): boolean {
+  return status === "not_found"
+}
+
+export function mapsNotFoundCtaCopy(): string {
+  return "This shop is not on Google Maps yet. Create a free Google Business Profile so neighbors can find it."
+}
+
 export function mapsStatusLabel(status: MapsStatus): string {
   if (status === "found") return "Found on Google Maps"
   if (status === "not_found") return "Not found on Google Maps"
@@ -28,7 +44,7 @@ export function mapsStatusDetail(listing: Pick<DirectoryListing, "mapsStatus" | 
       : `Matched ${listing.mapsTitle || "this business"} on Google Maps.`
   }
   if (listing.mapsStatus === "not_found") {
-    return "PlaceFind searched Google Maps for this name, city, and state and did not find a matching place."
+    return "This shop is not on Google Maps yet. PlaceFind searched for this name, city, and state and did not find a matching place."
   }
   return "This listing has not been cross-checked on Google Maps yet."
 }
