@@ -118,6 +118,14 @@ describe("public website copy", () => {
     assert.match(dashboard, /OwnerDeskTools/)
   })
 
+  it("loads the Google measurement tag once, immediately after the site head", () => {
+    const html = readFileSync(path.resolve(root, "..", "index.html"), "utf8")
+    assert.match(html, /<head>\s*<!-- Google tag \(gtag\.js\) -->/)
+    assert.equal((html.match(/googletagmanager\.com\/gtag\/js\?id=G-K9S9SHZMSF/g) ?? []).length, 1)
+    assert.equal((html.match(/gtag\('config', 'G-K9S9SHZMSF'\)/g) ?? []).length, 1)
+    assert.equal((html.match(/googletagmanager\.com\/gtag\/js/g) ?? []).length, 1)
+  })
+
   it("does not mention download, Windows, or license keys on the public site", () => {
     const banned = /download for windows|windows desktop|windows app|setup\.exe|license key|keygen|activation code/i
     for (const rel of PUBLIC_FILES) {

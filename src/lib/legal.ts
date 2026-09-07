@@ -10,7 +10,7 @@ export type LegalPage = {
   sections: { heading: string; body: string[] }[]
 }
 
-export const LEGAL_UPDATED = "September 6, 2026"
+export const LEGAL_UPDATED = "September 7, 2026"
 
 const SHARED_CONTACT =
   "If you have a question about this page, sign in and write us from the email on your account."
@@ -169,7 +169,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "Sessions and cookies",
         body: [
-          "A session cookie keeps you signed in while you move between pages. Clearing cookies signs you out. The public site does not use advertising cookies.",
+          "A session cookie keeps you signed in while you move between pages. Clearing cookies signs you out. Every page also loads a Google measurement tag (G-K9S9SHZMSF) so the operator can see how the directory is used. PlaceFind does not sell ads on the directory.",
         ],
       },
       {
