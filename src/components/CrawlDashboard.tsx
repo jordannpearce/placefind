@@ -121,10 +121,10 @@ export function CrawlDashboard({ user, onGo }: Props) {
             <p className="text-sm text-muted">You need a listing before you can request a crawl.</p>
             <button
               type="button"
-              onClick={() => onGo("/listings/new")}
+              onClick={() => onGo(user.listingId ? `/listings/${user.listingSlug || user.listingId}/edit` : "/listings/new")}
               className="mt-4 h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
             >
-              Create a listing
+              {user.listingId && user.role !== "admin" ? "Edit listing" : "Create a listing"}
             </button>
           </div>
         ) : (

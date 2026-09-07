@@ -93,12 +93,14 @@ import {
   deleteListing,
   getListing,
   listingIsApprovedForDirectory,
+  listingLimitDenied,
   ListingError,
   listPublicListings,
   listingsForUser,
   publicListing,
   updateListing,
   verifyListingOnMaps,
+  withOwnedListing,
 } from "./listings.ts"
 import { registerListingLeadRoutes } from "./listing-leads.ts"
 import { listingReviewSummary, reviewsForListing } from "./reviews.ts"
@@ -156,7 +158,8 @@ async function start() {
   app.use(express.json({ limit: "1mb" }))
 
   function actor(req: express.Request) {
-    return userFromCookie(req.headers.cookie)
+    const user = userFromCookie(req.headers.cookie)
+    return user ? withOwnedListing(user) : null
   }
 
   function manage(req: express.Request, res: express.Response) {
@@ -336,7 +339,12 @@ async function start() {
         res.status(403).json({ error: denied })
         return
       }
-      const listing = createListing(req.body ?? {}, user.id)
+      const limited = listingLimitDenied(user)
+      if (limited) {
+        res.status(400).json({ error: limited })
+        return
+      }
+      const listing = createListing(req.body ?? {}, user.id, { allowMultiple: user.role === "admin" })
       res.status(201).json({ listing: publicListing(listing, true) })
     } catch (error) {
       if (error instanceof ListingError) {
@@ -798,7 +806,7 @@ async function start() {
     const token = createSession(result.user.id)
     await sendSignupWelcome(result.user)
     res.setHeader("Set-Cookie", [sessionCookie(token), impersonationCookie("", true)])
-    res.json({ user: result.user })
+    res.json({ user: withOwnedListing(result.user) })
   }
 
   app.post("/api/auth/signup", async (req, res) => {
@@ -817,7 +825,7 @@ async function start() {
       return
     }
     res.setHeader("Set-Cookie", [sessionCookie(createSession(result.user.id)), impersonationCookie("", true)])
-    res.json({ user: result.user })
+    res.json({ user: withOwnedListing(result.user) })
   })
 
   app.post("/api/auth/forgot", async (req, res) => {
@@ -847,7 +855,7 @@ async function start() {
       return
     }
     res.setHeader("Set-Cookie", [sessionCookie(createSession(result.user.id)), impersonationCookie("", true)])
-    res.json({ user: result.user })
+    res.json({ user: withOwnedListing(result.user) })
   })
 
   app.post("/api/auth/logout", (req, res) => {
@@ -864,7 +872,7 @@ async function start() {
       return
     }
     res.setHeader("Set-Cookie", impersonationCookie("", true))
-    res.json({ user: result.user, impersonating: null })
+    res.json({ user: withOwnedListing(result.user), impersonating: null })
   })
 
   app.get("/api/auth/me", (req, res) => {
@@ -921,7 +929,7 @@ async function start() {
       res.status(400).json({ error: result.error || "Could not update the account." })
       return
     }
-    res.json({ user: result.user })
+    res.json({ user: withOwnedListing(result.user) })
   })
 
   app.post("/api/ai/prompts", (req, res) => {
@@ -1151,7 +1159,7 @@ async function start() {
       return
     }
     res.setHeader("Set-Cookie", impersonationCookie(result.token))
-    res.json({ user: result.user, impersonating: result.impersonating })
+    res.json({ user: withOwnedListing(result.user), impersonating: result.impersonating })
   })
 
   app.post("/api/admin/licenses", (_req, res) => {

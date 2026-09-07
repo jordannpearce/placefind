@@ -28,6 +28,7 @@ import {
   isCreateProfilePath,
   joinHref,
   joinIntentFromSearch,
+  listBusinessHref,
   loginHref,
   safeAuthNext,
 } from "./lib/account.ts"
@@ -146,7 +147,7 @@ export default function App() {
           impersonating: runtime.impersonating ?? null,
         })
         if (dest !== currentPath()) {
-          const url = dest === "/listings" && currentPath() === "/create-profile" ? "/listings/new" : dest
+          const url = dest === "/listings" && currentPath() === "/create-profile" ? listBusinessHref(runtime.user) : dest
           window.history.replaceState({}, "", url)
           setPath(dest)
           syncListingRoute()
@@ -170,7 +171,7 @@ export default function App() {
     const dest = allowedPath(requested, access)
     const urlPath =
       dest === "/listings" && requested === "/create-profile"
-        ? "/listings/new"
+        ? listBusinessHref(user)
         : dest === "/listings" && raw.startsWith("/listings")
           ? raw
           : dest
@@ -365,10 +366,10 @@ export default function App() {
         {showDashboard && user && <CrawlDashboard user={user} onGo={go} />}
         {blockedOwnerRoute && user && <ToolAccessNotice user={user} />}
         {path === "/listings" && listingCreate && user && canPublishListing(user) && (
-          <ListingFormPage user={user} onGo={go} />
+          <ListingFormPage user={user} onGo={go} onUser={setUser} />
         )}
         {path === "/listings" && listingId && listingEdit && user && canPublishListing(user) && (
-          <ListingFormPage listingId={listingId} user={user} onGo={go} />
+          <ListingFormPage listingId={listingId} user={user} onGo={go} onUser={setUser} />
         )}
         {path === "/listings" && listingId && !listingEdit && (
           <ListingDetailPage listingId={listingId} user={user} onGo={go} />

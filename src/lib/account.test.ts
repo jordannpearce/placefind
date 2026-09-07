@@ -18,8 +18,10 @@ import {
   isCreateProfilePath,
   joinHref,
   joinIntentFromSearch,
+  listBusinessCtaLabel,
   listBusinessHref,
   loginHref,
+  ACCOUNT_HAS_LISTING_MESSAGE,
   MEMBER_LISTING_MESSAGE,
   parseAccountKind,
   safeAuthNext,
@@ -102,5 +104,11 @@ describe("account kinds", () => {
     assert.equal(listBusinessHref(business), "/listings/new")
     assert.equal(listBusinessHref(member), "/account")
     assert.equal(listBusinessHref({ ...business, status: "pending" }), "/account")
+    const listed = { ...business, listingId: "abc123", listingSlug: "harbor-street-cafe" }
+    assert.equal(listBusinessHref(listed), "/listings/harbor-street-cafe/edit")
+    assert.equal(listBusinessCtaLabel(listed, "List your business"), "Edit your listing")
+    assert.equal(listBusinessCtaLabel(business, "List your business"), "Create a listing")
+    assert.equal(listBusinessHref({ ...admin, listingId: "abc123", listingSlug: "harbor-street-cafe" }), "/listings/new")
+    assert.equal(ACCOUNT_HAS_LISTING_MESSAGE, "This account already has a listing.")
   })
 })

@@ -1,7 +1,7 @@
 import { ArrowRight, BadgeDollarSign, NotebookPen, Store } from "lucide-react"
 import { useEffect, useState } from "react"
 import { searchDirectory } from "../lib/api.ts"
-import { joinHref, listBusinessHref, showCreateListingCta } from "../lib/account.ts"
+import { joinHref, listBusinessCtaLabel, listBusinessHref, showCreateListingCta } from "../lib/account.ts"
 import { listingLocation, listingPath } from "../lib/listings.ts"
 import { LISTING_PRICE_LABEL, listingPriceCopy } from "../lib/pricing.ts"
 import { CITY_PHOTOS } from "../lib/sample-listing.ts"
@@ -62,7 +62,7 @@ export function HomePage({ user, onGo }: Props) {
                 onClick={() => onGo(listBusinessHref(user))}
                 className="inline-flex h-12 items-center rounded-lg border border-line px-5 text-sm text-paper hover:border-brass"
               >
-                {user ? "Create a listing" : `List your business · ${LISTING_PRICE_LABEL}`}
+                {listBusinessCtaLabel(user, `List your business · ${LISTING_PRICE_LABEL}`)}
               </button>
             )}
             {!user && (
@@ -197,7 +197,7 @@ export function HomePage({ user, onGo }: Props) {
                   onClick={() => onGo(listBusinessHref(user))}
                   className="inline-flex h-11 items-center rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
                 >
-                  {user ? "Create a listing" : "List your business"}
+                  {listBusinessCtaLabel(user, "List your business")}
                 </button>
               )}
               <button
@@ -265,7 +265,7 @@ export function HomePage({ user, onGo }: Props) {
                   onClick={() => onGo(listBusinessHref(user))}
                   className="inline-flex h-11 items-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
                 >
-                  {user ? "Create a listing" : "Start a listing"}
+                  {listBusinessCtaLabel(user, "Start a listing")}
                 </button>
               )}
               <button

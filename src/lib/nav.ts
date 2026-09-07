@@ -1,4 +1,4 @@
-import { canUseOwnerTools, isApprovedAccount, isCreateProfilePath } from "./account.ts"
+import { canUseOwnerTools, editListingHref, isApprovedAccount, isCreateProfilePath, ownedListingOf } from "./account.ts"
 import { isLegalPath } from "./legal.ts"
 import type { AuthUser } from "./types.ts"
 
@@ -172,8 +172,13 @@ export function navLinks(access: NavAccess): NavLink[] {
   if (!user) links.push({ href: "/#how-it-works", label: "How it works" })
   if (user) {
     if (canUseOwnerTools(user)) {
+      const owned = ownedListingOf(user)
+      const listingLink =
+        owned && user?.role !== "admin"
+          ? { href: editListingHref(owned), label: "Edit listing" }
+          : { href: "/listings/new", label: "Create listing" }
       links.push(
-        { href: "/listings/new", label: "Create listing" },
+        listingLink,
         { href: "/dashboard", label: "Dashboard" },
         { href: "/track", label: "Rank tracker" },
         { href: "/track#traffic", label: "Traffic" },

@@ -1,6 +1,6 @@
 import { LoaderCircle, MapPinned, Search } from "lucide-react"
 import { useEffect, useState } from "react"
-import { joinHref, listBusinessHref, showCreateListingCta } from "../lib/account.ts"
+import { joinHref, listBusinessCtaLabel, listBusinessHref, showCreateListingCta } from "../lib/account.ts"
 import { searchDirectory } from "../lib/api.ts"
 import { listingLocation, listingPath } from "../lib/listings.ts"
 import type { AuthUser, DirectoryListing } from "../lib/types.ts"
@@ -100,7 +100,7 @@ export function DirectoryPage({ user, onGo }: Props) {
                 onClick={() => onGo(listBusinessHref(user))}
                 className="text-left text-sm text-brass hover:underline"
               >
-                {user ? "Create your listing" : "Create a Profile · $150 per month"}
+                {listBusinessCtaLabel(user, "Create a Profile · $150 per month", "Create your listing")}
               </button>
             )}
             {!user && (
@@ -145,7 +145,7 @@ export function DirectoryPage({ user, onGo }: Props) {
                         onClick={() => onGo(listBusinessHref(user))}
                         className="text-sm text-brass hover:underline"
                       >
-                        {user ? "Create a listing" : "Create a Profile"}
+                        {listBusinessCtaLabel(user, "Create a Profile")}
                       </button>
                     )}
                     {!user && (
