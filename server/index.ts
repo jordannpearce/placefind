@@ -1124,11 +1124,9 @@ async function start() {
       res.status(missing ? 404 : 400).json({ error: result.error || "Could not approve the user." })
       return
     }
-    try {
-      await sendAccountApproved(result.user)
-    } catch {
+    void sendAccountApproved(result.user).catch(() => {
       // Approval still stands if mail is not configured.
-    }
+    })
     res.json({ user: result.user, users: readUsers().map(publicUser) })
   })
 
