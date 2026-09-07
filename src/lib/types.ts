@@ -174,6 +174,9 @@ export type MailStatus = {
   fromEmail: string
   fromName: string
   keyHint: string
+  lastError?: string
+  testOnlyFrom?: boolean
+  savedToDatabase?: boolean
 }
 
 export type MailCampaignType = "welcome" | "activation" | "marketing" | "info" | "updates"

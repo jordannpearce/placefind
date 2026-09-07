@@ -33,6 +33,7 @@ import { testDataForSeo } from "./dataforseo.ts"
 import { hostedKeyStatus, hydrateHostedKeys, readHostedKeys, writeHostedKeys } from "./hosted-keys.ts"
 import { getInstallerStatus, installerPath, startInstallerBuild, startSetupRepack } from "./installer.ts"
 import {
+  hydrateMailConfig,
   mailPresets,
   mailStatus,
   passwordResetEmail,
@@ -41,8 +42,8 @@ import {
   selectMailRecipients,
   sendBroadcast,
   sendMail,
+  sendSignupWelcome,
   testResendConnection,
-  welcomeEmail,
   writeMailConfig,
 } from "./mail.ts"
 import { readProduct, writeProduct } from "./product.ts"
@@ -136,6 +137,7 @@ async function start() {
   }
   await initGeoPoints()
   await hydrateHostedKeys()
+  await hydrateMailConfig()
   recoverStaleTrafficJobs()
   const app = express()
   app.set("trust proxy", 1)
@@ -761,14 +763,7 @@ async function start() {
       return
     }
     const token = createSession(result.user.id)
-    const product = readProduct()
-    const welcome = welcomeEmail({
-      name: result.user.name,
-      product: product.name,
-      price: product.price,
-      kind: result.user.accountKind,
-    })
-    await sendMail({ ...welcome, to: result.user.email })
+    await sendSignupWelcome(result.user)
     res.setHeader("Set-Cookie", [sessionCookie(token), impersonationCookie("", true)])
     res.json({ user: result.user })
   })
@@ -1107,10 +1102,10 @@ async function start() {
     res.status(410).json({ error: "PlaceFind does not issue product licenses." })
   })
 
-  app.post("/api/admin/mail", (req, res) => {
+  app.post("/api/admin/mail", async (req, res) => {
     if (!manage(req, res)) return
     const body = (req.body ?? {}) as { resendApiKey?: string; fromEmail?: string; fromName?: string }
-    writeMailConfig(body)
+    await writeMailConfig(body)
     res.json({ mail: mailStatus() })
   })
 

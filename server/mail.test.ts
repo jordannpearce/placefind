@@ -1,16 +1,25 @@
 import assert from "node:assert/strict"
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
+import { signup } from "./auth.ts"
 import {
   licenseEmail,
   mailPresets,
+  mailStatus,
+  openSealedMail,
   passwordResetEmail,
   personalizeMail,
+  readMailConfig,
+  readOutbox,
+  resetMailConfigForTests,
+  sealMailConfig,
   selectMailRecipients,
   sendBroadcast,
+  sendSignupWelcome,
   welcomeEmail,
+  writeMailConfig,
 } from "./mail.ts"
 import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
 
@@ -155,5 +164,199 @@ describe("sendBroadcast", () => {
     assert.equal(result.sent[0]?.to, "ada@example.com")
     assert.equal(result.sent[0]?.subject, "Hello Ada")
     assert.equal(result.sent[1]?.subject, "Hello Casey")
+  })
+})
+
+describe("admin mail config for signup", () => {
+  const previous = {
+    dataDir: process.env.PLACEFIND_DATA_DIR,
+    apiKey: process.env.RESEND_API_KEY,
+    fromEmail: process.env.RESEND_FROM_EMAIL,
+    fromName: process.env.RESEND_FROM_NAME,
+  }
+
+  after(() => {
+    resetMailConfigForTests()
+    if (previous.dataDir == null) delete process.env.PLACEFIND_DATA_DIR
+    else process.env.PLACEFIND_DATA_DIR = previous.dataDir
+    if (previous.apiKey == null) delete process.env.RESEND_API_KEY
+    else process.env.RESEND_API_KEY = previous.apiKey
+    if (previous.fromEmail == null) delete process.env.RESEND_FROM_EMAIL
+    else process.env.RESEND_FROM_EMAIL = previous.fromEmail
+    if (previous.fromName == null) delete process.env.RESEND_FROM_NAME
+    else process.env.RESEND_FROM_NAME = previous.fromName
+    reloadStoreFromDisk()
+  })
+
+  function isolate() {
+    resetMailConfigForTests()
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-mail-admin-")))
+    delete process.env.RESEND_API_KEY
+    delete process.env.RESEND_FROM_EMAIL
+    delete process.env.RESEND_FROM_NAME
+  }
+
+  it("prefers the admin-stored sending key and from-address over env", async () => {
+    isolate()
+    await writeMailConfig({
+      resendApiKey: "re_admin_stored_key",
+      fromEmail: "hello@placefind.to",
+      fromName: "PlaceFind Admin",
+    })
+    process.env.RESEND_API_KEY = "re_env_should_not_win"
+    process.env.RESEND_FROM_EMAIL = "env@example.com"
+    process.env.RESEND_FROM_NAME = "Env Sender"
+    const config = readMailConfig()
+    assert.equal(config.resendApiKey, "re_admin_stored_key")
+    assert.equal(config.fromEmail, "hello@placefind.to")
+    assert.equal(config.fromName, "PlaceFind Admin")
+
+    const calls: { url: string; auth: string; from: string }[] = []
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { from?: string }
+      calls.push({
+        url: String(input),
+        auth: String((init?.headers as Record<string, string> | undefined)?.Authorization ?? ""),
+        from: body.from ?? "",
+      })
+      return new Response(JSON.stringify({ id: "msg_admin_1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }) as typeof fetch
+    try {
+      signup({ name: "Ada Admin", email: "ada-admin@example.com", password: "password12" })
+      const created = signup({
+        name: "Casey Neighbor",
+        email: "casey-neighbor@example.com",
+        password: "password12",
+        kind: "member",
+      })
+      assert.equal(created.user?.email, "casey-neighbor@example.com")
+      assert.equal(created.user?.accountKind, "member")
+      const sent = await sendSignupWelcome(created.user!)
+      assert.equal(sent.delivered, true)
+      assert.equal(sent.detail, "msg_admin_1")
+      assert.equal(calls.length, 1)
+      assert.equal(calls[0]?.auth, "Bearer re_admin_stored_key")
+      assert.equal(calls[0]?.from, "PlaceFind Admin <hello@placefind.to>")
+      assert.match(sent.text, /account is free/)
+      assert.equal(sent.detail.includes("re_admin_stored_key"), false)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("sends a business welcome with the same admin-stored config", async () => {
+    isolate()
+    await writeMailConfig({
+      resendApiKey: "re_admin_stored_key",
+      fromEmail: "hello@placefind.to",
+      fromName: "PlaceFind",
+    })
+    process.env.RESEND_API_KEY = "re_env_should_not_win"
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = init?.headers as Record<string, string> | undefined
+      assert.equal(headers?.Authorization, "Bearer re_admin_stored_key")
+      return new Response(JSON.stringify({ id: "msg_biz_1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }) as typeof fetch
+    try {
+      signup({ name: "Ada Admin", email: "ada-admin@example.com", password: "password12" })
+      const created = signup({
+        name: "Pat Owner",
+        email: "pat-owner@example.com",
+        password: "password12",
+        kind: "business",
+      })
+      assert.equal(created.user?.accountKind, "business")
+      const sent = await sendSignupWelcome(created.user!)
+      assert.equal(sent.delivered, true)
+      assert.match(sent.text, /\$150 per month/)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("holds signup mail with a clear error when no sending key is saved", async () => {
+    isolate()
+    const created = signup({
+      name: "Jordan",
+      email: "jordan-hold@example.com",
+      password: "password12",
+    })
+    const sent = await sendSignupWelcome(created.user!)
+    assert.equal(sent.delivered, false)
+    assert.match(sent.detail, /sending API key in admin/i)
+    assert.equal(readOutbox()[0]?.detail, sent.detail)
+    assert.equal(mailStatus().configured, false)
+    assert.match(mailStatus().lastError ?? "", /sending API key in admin/i)
+  })
+
+  it("holds signup mail when the from address is missing", async () => {
+    isolate()
+    await writeMailConfig({ resendApiKey: "re_admin_stored_key" })
+    const created = signup({
+      name: "Riley",
+      email: "riley-from@example.com",
+      password: "password12",
+    })
+    const sent = await sendSignupWelcome(created.user!)
+    assert.equal(sent.delivered, false)
+    assert.match(sent.detail, /verified from email/i)
+    assert.equal(sent.detail.includes("re_admin_stored_key"), false)
+  })
+
+  it("persists the provider error without leaking the API key", async () => {
+    isolate()
+    await writeMailConfig({
+      resendApiKey: "re_admin_stored_key",
+      fromEmail: "hello@placefind.to",
+      fromName: "PlaceFind",
+    })
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ message: "The placefind.to domain is not verified. Key re_admin_stored_key" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })) as typeof fetch
+    try {
+      const created = signup({
+        name: "Sam",
+        email: "sam-error@example.com",
+        password: "password12",
+      })
+      const sent = await sendSignupWelcome(created.user!)
+      assert.equal(sent.delivered, false)
+      assert.match(sent.detail, /domain is not verified/i)
+      assert.equal(sent.detail.includes("re_admin_stored_key"), false)
+      assert.match(mailStatus().lastError ?? "", /domain is not verified/i)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("writes admin mail settings into the data-dir file, not only env", async () => {
+    isolate()
+    const dir = process.env.PLACEFIND_DATA_DIR
+    assert.ok(dir)
+    await writeMailConfig({
+      resendApiKey: "re_admin_stored_key",
+      fromEmail: "hello@placefind.to",
+      fromName: "PlaceFind",
+    })
+    const raw = JSON.parse(readFileSync(path.join(dir, "mail.json"), "utf8")) as {
+      resendApiKey: string
+      fromEmail: string
+    }
+    assert.equal(raw.resendApiKey, "re_admin_stored_key")
+    assert.equal(raw.fromEmail, "hello@placefind.to")
+    const sealed = sealMailConfig(raw as { resendApiKey: string; fromEmail: string; fromName: string })
+    assert.equal(sealed.includes("re_admin_stored_key"), false)
+    assert.equal(openSealedMail(sealed)?.resendApiKey, "re_admin_stored_key")
   })
 })

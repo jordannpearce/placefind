@@ -120,11 +120,14 @@ export function AdminEmail({ users, outbox, mail, presets, onOutbox, onError, on
         unless you include them. Use {"{{first}}"}, {"{{name}}"}, and {"{{email}}"} to personalize.
       </p>
       {mail && (
-        <p className={`mt-3 text-sm ${mail.configured ? "text-moss" : "text-muted"}`}>
-          {mail.configured
-            ? `Ready to send · ${mail.fromName} <${mail.fromEmail}> · ${mail.keyHint}`
-            : `Messages will stay in the outbox until a sending key is saved. From: ${mail.fromName} <${mail.fromEmail}>`}
-        </p>
+        <div className="mt-3 grid gap-1">
+          <p className={`text-sm ${mail.configured ? "text-moss" : "text-muted"}`}>
+            {mail.configured
+              ? `Ready to send · ${mail.fromName} <${mail.fromEmail}> · ${mail.keyHint}`
+              : `Messages will stay in the outbox until a sending key is saved. From: ${mail.fromName} <${mail.fromEmail || "not set"}>`}
+          </p>
+          {mail.lastError && <p className="text-sm text-clay">Last send: {mail.lastError}</p>}
+        </div>
       )}
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[16rem_1fr]">

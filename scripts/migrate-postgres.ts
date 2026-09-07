@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import pg from "pg"
 
-const EXPECTED_TABLES = ["users", "sessions", "orders", "issued_licenses", "mail_outbox", "campaigns", "scan_runs", "password_resets", "hosted_keys", "geo_points", "geo_imports", "search_ip", "listings", "crawls", "reviews", "usage"] as const
+const EXPECTED_TABLES = ["users", "sessions", "orders", "issued_licenses", "mail_outbox", "campaigns", "scan_runs", "password_resets", "hosted_keys", "mail_config", "geo_points", "geo_imports", "search_ip", "listings", "crawls", "reviews", "usage"] as const
 const EXPECTED_USER_COLUMNS = ["id", "name", "email", "password_hash", "role", "status", "account_kind", "created_at"] as const
 
 function postgresUrl() {

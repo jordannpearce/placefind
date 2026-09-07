@@ -86,13 +86,24 @@ export function AdminPage({
       <section className="rounded-2xl border border-line bg-panel p-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Transactional email</p>
         <p className="mt-2 text-sm leading-6 text-muted">
-          Save mail settings so welcome and password-reset messages can leave this server. Until then, messages stay
-          in the outbox on this computer.
+          Save the sending key and a from email here. Signup welcome mail uses these admin settings, not only server
+          environment variables. The from address must be on a domain you have verified — for PlaceFind that is
+          typically an address on placefind.to. Until a key is saved, messages stay in the outbox.
         </p>
         {mail?.configured && (
           <p className="mt-2 text-sm text-moss">
             Connected · {mail.keyHint} · {mail.fromEmail}
+            {mail.savedToDatabase ? " · saved for restarts" : ""}
           </p>
+        )}
+        {mail?.testOnlyFrom && (
+          <p className="mt-2 text-sm text-clay">
+            The current from address is a test-only inbox. Customer welcome mail will not deliver until you save a
+            verified address on placefind.to.
+          </p>
+        )}
+        {mail?.lastError && (
+          <p className="mt-2 text-sm text-clay">Last send: {mail.lastError}</p>
         )}
         <label className="mt-4 grid gap-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Mail key</span>
@@ -100,7 +111,7 @@ export function AdminPage({
             type="password"
             value={mailKey}
             onChange={(event) => setMailKey(event.target.value)}
-            placeholder={mail?.keyHint || "Paste the outbound mail key"}
+            placeholder={mail?.keyHint || "Paste the outbound sending key"}
             className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
           />
         </label>
@@ -117,6 +128,7 @@ export function AdminPage({
           <input
             value={fromEmail}
             onChange={(event) => setFromEmail(event.target.value)}
+            placeholder="hello@placefind.to"
             className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
           />
         </label>

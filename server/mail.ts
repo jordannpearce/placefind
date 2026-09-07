@@ -1,8 +1,10 @@
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { formatQuoteAddress } from "../src/lib/quotes.ts"
 import { maskSecret } from "./keygen.ts"
-import { readCollection, writeCollection } from "./store.ts"
+import { readProduct } from "./product.ts"
+import { dataDir, readCollection, writeCollection } from "./store.ts"
 
 export type MailConfig = {
   resendApiKey: string
@@ -48,8 +50,24 @@ export type SelectMailRecipientsInput = {
   includeSuspended?: boolean
 }
 
-const DATA_DIR = path.resolve(process.cwd(), ".data")
-const CONFIG_FILE = path.join(DATA_DIR, "mail.json")
+const MAIL_CONFIG_ROW = "default"
+const MAIL_SEAL_SECRET = "placefind-mail-v1"
+const TEST_ONLY_FROM = "onboarding@resend.dev"
+
+let lastDatabaseWriteOk = false
+
+function emptyMailConfig(): MailConfig {
+  return { resendApiKey: "", fromEmail: "", fromName: "" }
+}
+
+function configFile() {
+  return path.join(dataDir(), "mail.json")
+}
+
+function postgresUrl() {
+  const url = process.env.DATABASE_URL?.trim() ?? ""
+  return /^postgres(ql)?:\/\//i.test(url) ? url : ""
+}
 
 function readJson<T>(file: string, fallback: T): T {
   try {
@@ -60,34 +78,175 @@ function readJson<T>(file: string, fallback: T): T {
   }
 }
 
+function mailMaterial() {
+  return scryptSync(MAIL_SEAL_SECRET, "placefind-mail-salt", 32)
+}
+
+export function sealMailConfig(config: MailConfig): string {
+  const iv = randomBytes(12)
+  const cipher = createCipheriv("aes-256-gcm", mailMaterial(), iv)
+  const encoded = Buffer.concat([cipher.update(JSON.stringify(config), "utf8"), cipher.final()])
+  return JSON.stringify({
+    v: 1,
+    iv: iv.toString("base64"),
+    tag: cipher.getAuthTag().toString("base64"),
+    data: encoded.toString("base64"),
+  })
+}
+
+export function openSealedMail(raw: string): Partial<MailConfig> | null {
+  try {
+    const parsed = JSON.parse(raw) as {
+      v?: number
+      iv?: string
+      tag?: string
+      data?: string
+      resendApiKey?: string
+      fromEmail?: string
+      fromName?: string
+    }
+    if (parsed.v === 1 && parsed.iv && parsed.tag && parsed.data) {
+      const decipher = createDecipheriv("aes-256-gcm", mailMaterial(), Buffer.from(parsed.iv, "base64"))
+      decipher.setAuthTag(Buffer.from(parsed.tag, "base64"))
+      const plain = Buffer.concat([
+        decipher.update(Buffer.from(parsed.data, "base64")),
+        decipher.final(),
+      ]).toString("utf8")
+      return JSON.parse(plain) as MailConfig
+    }
+    if (parsed.resendApiKey || parsed.fromEmail || parsed.fromName) {
+      return parsed
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+export function isTestOnlyFromAddress(email: string) {
+  return email.trim().toLowerCase() === TEST_ONLY_FROM
+}
+
+function redactMailSecrets(value: string) {
+  return value
+    .replace(/re_[A-Za-z0-9]+/g, "re_…")
+    .replace(/Bearer\s+\S+/gi, "Bearer …")
+}
+
+export function readStoredMailConfig(): MailConfig {
+  const stored = readJson<MailConfig>(configFile(), emptyMailConfig())
+  return {
+    resendApiKey: stored.resendApiKey?.trim() || "",
+    fromEmail: stored.fromEmail?.trim() || "",
+    fromName: stored.fromName?.trim() || "",
+  }
+}
+
 export function readMailConfig(): MailConfig {
-  const stored = readJson<MailConfig>(CONFIG_FILE, { resendApiKey: "", fromEmail: "", fromName: "" })
+  const stored = readStoredMailConfig()
   return {
     resendApiKey: stored.resendApiKey || process.env.RESEND_API_KEY?.trim() || "",
-    fromEmail: stored.fromEmail || process.env.RESEND_FROM_EMAIL?.trim() || "onboarding@resend.dev",
+    fromEmail: stored.fromEmail || process.env.RESEND_FROM_EMAIL?.trim() || "",
     fromName: stored.fromName || process.env.RESEND_FROM_NAME?.trim() || "PlaceFind",
   }
 }
 
-export function writeMailConfig(input: Partial<MailConfig>): MailConfig {
-  const current = readMailConfig()
-  const next: MailConfig = {
-    resendApiKey: input.resendApiKey?.trim() || current.resendApiKey,
-    fromEmail: input.fromEmail?.trim() || current.fromEmail,
-    fromName: input.fromName?.trim() || current.fromName,
+async function withPostgres<T>(fn: (client: import("pg").PoolClient) => Promise<T>): Promise<T | null> {
+  const url = postgresUrl()
+  if (!url) return null
+  const pg = await import("pg")
+  const pool = new pg.Pool({
+    connectionString: url,
+    ssl: process.env.DATABASE_SSL === "0" ? undefined : { rejectUnauthorized: false },
+  })
+  const client = await pool.connect()
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS mail_config (
+        id TEXT PRIMARY KEY,
+        sealed TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      )
+    `)
+    return await fn(client)
+  } finally {
+    client.release()
+    await pool.end()
   }
-  mkdirSync(DATA_DIR, { recursive: true })
-  writeFileSync(CONFIG_FILE, JSON.stringify(next, null, 2))
+}
+
+export async function hydrateMailConfig(): Promise<boolean> {
+  try {
+    const sealed = await withPostgres(async (client) => {
+      const result = await client.query<{ sealed: string }>("SELECT sealed FROM mail_config WHERE id = $1", [
+        MAIL_CONFIG_ROW,
+      ])
+      return result.rows[0]?.sealed ?? ""
+    })
+    if (!sealed) return false
+    const opened = openSealedMail(sealed)
+    if (!opened) return false
+    const existing = readStoredMailConfig()
+    if (existing.resendApiKey) {
+      lastDatabaseWriteOk = true
+      return true
+    }
+    const next: MailConfig = {
+      resendApiKey: opened.resendApiKey?.trim() || "",
+      fromEmail: opened.fromEmail?.trim() || "",
+      fromName: opened.fromName?.trim() || "",
+    }
+    mkdirSync(dataDir(), { recursive: true })
+    writeFileSync(configFile(), JSON.stringify(next, null, 2))
+    lastDatabaseWriteOk = Boolean(next.resendApiKey)
+    return Boolean(next.resendApiKey)
+  } catch {
+    console.error("PlaceFind could not read saved mail settings from Postgres.")
+    return false
+  }
+}
+
+export async function writeMailConfig(input: Partial<MailConfig>): Promise<MailConfig> {
+  const stored = readStoredMailConfig()
+  const next: MailConfig = {
+    resendApiKey: input.resendApiKey?.trim() || stored.resendApiKey,
+    fromEmail: input.fromEmail?.trim() || stored.fromEmail,
+    fromName: input.fromName?.trim() || stored.fromName,
+  }
+  mkdirSync(dataDir(), { recursive: true })
+  writeFileSync(configFile(), JSON.stringify(next, null, 2))
+  lastDatabaseWriteOk = false
+  try {
+    const wrote = await withPostgres(async (client) => {
+      await client.query(
+        `INSERT INTO mail_config (id, sealed, updated_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (id) DO UPDATE SET sealed = EXCLUDED.sealed, updated_at = NOW()`,
+        [MAIL_CONFIG_ROW, sealMailConfig(next)],
+      )
+      return true
+    })
+    lastDatabaseWriteOk = Boolean(wrote)
+  } catch {
+    console.error("PlaceFind could not persist mail settings to Postgres.")
+  }
   return next
+}
+
+export function resetMailConfigForTests() {
+  lastDatabaseWriteOk = false
 }
 
 export function mailStatus() {
   const config = readMailConfig()
+  const latest = readOutbox()[0]
   return {
     configured: Boolean(config.resendApiKey),
     fromEmail: config.fromEmail,
     fromName: config.fromName,
     keyHint: maskSecret(config.resendApiKey),
+    lastError: latest && !latest.delivered ? latest.detail : "",
+    testOnlyFrom: isTestOnlyFromAddress(config.fromEmail),
+    savedToDatabase: lastDatabaseWriteOk,
   }
 }
 
@@ -348,6 +507,46 @@ function escapeHtml(value: string) {
     .replaceAll('"', "&quot;")
 }
 
+function describeFromAddressProblem(fromEmail: string) {
+  if (!fromEmail) {
+    return "Set a verified from email in admin. The sending service only delivers from a domain you have verified."
+  }
+  if (isTestOnlyFromAddress(fromEmail)) {
+    return "The test-only from address can only send to the account owner. Use a verified address on placefind.to for customer welcome mail."
+  }
+  return ""
+}
+
+function describeSendFailure(message: string, fromEmail: string) {
+  const clean = redactMailSecrets(message).trim() || "The sending service rejected the message."
+  const hint = describeFromAddressProblem(fromEmail)
+  if (hint && /domain|from|verified|not allowed|invalid/i.test(clean)) {
+    return `${clean} ${hint}`
+  }
+  if (hint && isTestOnlyFromAddress(fromEmail)) return `${clean} ${hint}`
+  return clean
+}
+
+async function readProviderPayload(response: Response): Promise<{ id?: string; message?: string; name?: string; error?: string }> {
+  const raw = await response.text()
+  try {
+    return JSON.parse(raw) as { id?: string; message?: string; name?: string; error?: string }
+  } catch {
+    return { message: raw.slice(0, 300) }
+  }
+}
+
+export async function sendSignupWelcome(user: { name: string; email: string; accountKind?: string }): Promise<OutboundMail> {
+  const product = readProduct()
+  const welcome = welcomeEmail({
+    name: user.name,
+    product: product.name,
+    price: product.price,
+    kind: user.accountKind,
+  })
+  return sendMail({ ...welcome, to: user.email })
+}
+
 export async function sendMail(message: MailMessage): Promise<OutboundMail> {
   const config = readMailConfig()
   const record: OutboundMail = {
@@ -358,7 +557,12 @@ export async function sendMail(message: MailMessage): Promise<OutboundMail> {
     detail: "",
   }
   if (!config.resendApiKey) {
-    record.detail = "Saved to the outbox. Add a Resend API key to send email."
+    record.detail = "Saved to the outbox. Add a sending API key in admin."
+    writeOutbox([record, ...readOutbox()])
+    return record
+  }
+  if (!config.fromEmail) {
+    record.detail = `Saved to the outbox. ${describeFromAddressProblem("")}`
     writeOutbox([record, ...readOutbox()])
     return record
   }
@@ -377,15 +581,18 @@ export async function sendMail(message: MailMessage): Promise<OutboundMail> {
         text: message.text,
       }),
     })
-    const payload = (await response.json()) as { id?: string; message?: string; name?: string }
+    const payload = await readProviderPayload(response)
     if (!response.ok) {
-      record.detail = payload.message || payload.name || "Resend rejected the message."
+      record.detail = describeSendFailure(
+        payload.message || payload.error || payload.name || "The sending service rejected the message.",
+        config.fromEmail,
+      )
     } else {
       record.delivered = true
       record.detail = payload.id || "Sent."
     }
   } catch {
-    record.detail = "Could not reach Resend."
+    record.detail = "Could not reach the sending service."
   }
   writeOutbox([record, ...readOutbox()])
   return record
@@ -396,15 +603,17 @@ export async function testResendConnection(input?: Partial<MailConfig>) {
     ...readMailConfig(),
     ...Object.fromEntries(Object.entries(input ?? {}).filter(([, value]) => value?.trim())),
   } as MailConfig
-  if (!config.resendApiKey) return { ok: false, message: "Add a Resend API key." }
+  if (!config.resendApiKey) return { ok: false, message: "Add a sending API key in admin." }
   try {
     const response = await fetch("https://api.resend.com/domains", {
       headers: { Authorization: `Bearer ${config.resendApiKey}` },
     })
-    if (response.status === 401) return { ok: false, message: "Resend rejected this API key." }
-    if (!response.ok) return { ok: false, message: "Resend did not accept this key." }
-    return { ok: true, message: `Resend is ready. From address: ${config.fromName} <${config.fromEmail}>.` }
+    if (response.status === 401) return { ok: false, message: "The sending service rejected this API key." }
+    if (!response.ok) return { ok: false, message: "The sending service did not accept this key." }
+    const fromProblem = describeFromAddressProblem(config.fromEmail)
+    if (fromProblem) return { ok: false, message: `The key works. ${fromProblem}` }
+    return { ok: true, message: `Ready to send. From address: ${config.fromName} <${config.fromEmail}>.` }
   } catch {
-    return { ok: false, message: "Could not reach Resend." }
+    return { ok: false, message: "Could not reach the sending service." }
   }
 }

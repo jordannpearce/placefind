@@ -1,7 +1,9 @@
--- PlaceFind app data. License-admin tokens and mail API keys stay in gitignored
--- files. Maps credentials are also sealed into hosted_keys when DATABASE_URL is
--- set so Railway can read them after a restart. Prefer Railway variables
--- DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD, and SCRAPPEY_API_KEY as the durable source.
+-- PlaceFind app data. License-admin tokens stay in gitignored files. Maps
+-- credentials are sealed into hosted_keys and mail settings into mail_config
+-- when DATABASE_URL is set so Railway can read them after a restart. Prefer
+-- Railway variables DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD, and SCRAPPEY_API_KEY
+-- as the durable Maps source. Admin-saved mail settings are the source for
+-- welcome mail; RESEND_* env vars are a fallback only.
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -68,6 +70,12 @@ CREATE TABLE IF NOT EXISTS password_resets (
 );
 
 CREATE TABLE IF NOT EXISTS hosted_keys (
+  id TEXT PRIMARY KEY,
+  sealed TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS mail_config (
   id TEXT PRIMARY KEY,
   sealed TEXT NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
