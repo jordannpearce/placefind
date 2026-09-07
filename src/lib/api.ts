@@ -242,7 +242,17 @@ export async function createListingReview(
 
 export async function requestListingQuote(
   id: string,
-  input: { name: string; email: string; phone?: string; need: string },
+  input: {
+    firstName: string
+    lastName: string
+    email: string
+    phone: string
+    street: string
+    city: string
+    state: string
+    zip: string
+    service: string
+  },
 ): Promise<{ ok: boolean }> {
   return request(`/api/listings/${encodeURIComponent(id)}/quotes`, { method: "POST", body: JSON.stringify(input) })
 }

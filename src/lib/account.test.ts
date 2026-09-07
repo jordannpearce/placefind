@@ -38,7 +38,8 @@ describe("account kinds", () => {
     assert.equal(canPublishListing(admin), true)
     assert.equal(canUseOwnerTools(member), false)
     assert.match(MEMBER_LISTING_MESSAGE, /\$150 per month/)
-    assert.match(MEMBER_LISTING_MESSAGE, /reviews and quotes/)
+    assert.match(MEMBER_LISTING_MESSAGE, /reviews/)
+    assert.match(MEMBER_LISTING_MESSAGE, /Anyone can request a quote/)
   })
 
   it("reads free-neighbor join intent and blocks unsafe next paths", () => {

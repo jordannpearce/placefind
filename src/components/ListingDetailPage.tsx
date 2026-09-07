@@ -14,11 +14,17 @@ import {
 } from "../lib/profile.ts"
 import { MISSING_QUOTE_EMAIL_MESSAGE } from "../lib/quotes.ts"
 import type { AuthUser, DirectoryListing, ListingReview, ReviewSummary } from "../lib/types.ts"
+import { CityStateFields } from "./CityStateFields.tsx"
 
 type Props = {
   listingId: string
   user: AuthUser | null
   onGo: (path: string) => void
+}
+
+function splitDisplayName(name: string): { firstName: string; lastName: string } {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  return { firstName: parts[0] ?? "", lastName: parts.slice(1).join(" ") }
 }
 
 function stars(value: number) {
@@ -35,10 +41,16 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
   const [text, setText] = useState("")
   const [sending, setSending] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
-  const [quoteName, setQuoteName] = useState(user?.name ?? "")
+  const prefill = splitDisplayName(user?.name ?? "")
+  const [quoteFirstName, setQuoteFirstName] = useState(prefill.firstName)
+  const [quoteLastName, setQuoteLastName] = useState(prefill.lastName)
   const [quoteEmail, setQuoteEmail] = useState(user?.email ?? "")
   const [quotePhone, setQuotePhone] = useState("")
-  const [quoteNeed, setQuoteNeed] = useState("")
+  const [quoteStreet, setQuoteStreet] = useState("")
+  const [quoteCity, setQuoteCity] = useState("")
+  const [quoteState, setQuoteState] = useState("")
+  const [quoteZip, setQuoteZip] = useState("")
+  const [quoteService, setQuoteService] = useState("")
   const [quoteSending, setQuoteSending] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [quoteSent, setQuoteSent] = useState(false)
@@ -89,13 +101,18 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
     setQuoteSent(false)
     try {
       await requestListingQuote(listingId, {
-        name: quoteName,
+        firstName: quoteFirstName,
+        lastName: quoteLastName,
         email: quoteEmail,
         phone: quotePhone,
-        need: quoteNeed,
+        street: quoteStreet,
+        city: quoteCity,
+        state: quoteState,
+        zip: quoteZip,
+        service: quoteService,
       })
       setQuoteSent(true)
-      setQuoteNeed("")
+      setQuoteService("")
     } catch (err) {
       setQuoteError(err instanceof Error ? err.message : "Could not send that quote request.")
     } finally {
@@ -305,8 +322,7 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
           <div className="mt-6 rounded-xl border border-line bg-ink px-4 py-4">
             <p className="text-sm leading-6 text-paper">Reviews come from PlaceFind accounts so shops can trust the desk.</p>
             <p className="mt-2 text-sm leading-6 text-muted">
-              Sign in or create a free neighbor account to leave a review. PlaceFind does not charge $150 for reviews or
-              quotes.
+              Sign in or create a free neighbor account to leave a review. PlaceFind does not charge $150 for reviews.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button
@@ -336,36 +352,14 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
         ) : (
           <>
             <p className="mt-3 text-sm leading-6 text-muted">
-              Tell them what you need. PlaceFind sends your note to the contact email on this listing. The shop writes you back themselves. Quote requests use a free account — not a $150 listing.
+              Anyone can request a quote. PlaceFind emails the listing contact with your details. The shop writes you
+              back themselves — no account required.
             </p>
             {quoteSent && (
               <p className="mt-4 rounded-xl border border-moss/40 bg-moss/10 px-4 py-3 text-sm text-moss">
                 Sent. The shop can write you at the email you left.
               </p>
             )}
-            {!user ? (
-              <div className="mt-5 rounded-xl border border-line bg-ink px-4 py-4">
-                <p className="text-sm leading-6 text-muted">
-                  Sign in or create a free neighbor account to request a quote. PlaceFind does not bill that account.
-                </p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => onGo(loginHref(listingPath(listing)))}
-                    className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
-                  >
-                    Sign in
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onGo(joinHref("member", listingPath(listing)))}
-                    className="h-11 rounded-lg border border-line px-4 text-sm text-paper hover:border-brass"
-                  >
-                    Join free
-                  </button>
-                </div>
-              </div>
-            ) : (
             <form
               className="mt-5 grid gap-3"
               onSubmit={(event) => {
@@ -374,12 +368,32 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
               }}
             >
               {quoteError && <p className="text-sm text-clay">{quoteError}</p>}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="grid gap-1.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">First name</span>
+                  <input
+                    value={quoteFirstName}
+                    onChange={(event) => setQuoteFirstName(event.target.value)}
+                    autoComplete="given-name"
+                    className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+                  />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Last name</span>
+                  <input
+                    value={quoteLastName}
+                    onChange={(event) => setQuoteLastName(event.target.value)}
+                    autoComplete="family-name"
+                    className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+                  />
+                </label>
+              </div>
               <label className="grid gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Your name</span>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Phone</span>
                 <input
-                  value={quoteName}
-                  onChange={(event) => setQuoteName(event.target.value)}
-                  autoComplete="name"
+                  value={quotePhone}
+                  onChange={(event) => setQuotePhone(event.target.value)}
+                  autoComplete="tel"
                   className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
                 />
               </label>
@@ -394,21 +408,40 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
                 />
               </label>
               <label className="grid gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Phone (optional)</span>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Street address</span>
                 <input
-                  value={quotePhone}
-                  onChange={(event) => setQuotePhone(event.target.value)}
-                  autoComplete="tel"
+                  value={quoteStreet}
+                  onChange={(event) => setQuoteStreet(event.target.value)}
+                  autoComplete="street-address"
+                  placeholder="18 Harbor Lane"
+                  className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+                />
+              </label>
+              <CityStateFields
+                city={quoteCity}
+                state={quoteState}
+                onCity={setQuoteCity}
+                onState={setQuoteState}
+                fieldClassName="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+              />
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">ZIP code</span>
+                <input
+                  value={quoteZip}
+                  onChange={(event) => setQuoteZip(event.target.value)}
+                  autoComplete="postal-code"
+                  inputMode="numeric"
+                  placeholder="04101"
                   className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
                 />
               </label>
               <label className="grid gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">What do you need?</span>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Service needed</span>
                 <textarea
-                  value={quoteNeed}
-                  onChange={(event) => setQuoteNeed(event.target.value)}
-                  rows={4}
-                  placeholder="Two dozen sandwich loaves for a Friday office lunch, ready before 10 a.m."
+                  value={quoteService}
+                  onChange={(event) => setQuoteService(event.target.value)}
+                  rows={3}
+                  placeholder="HVAC, pottery class, catering for 20 — a few words is enough"
                   className="rounded-lg border border-line bg-ink px-3 py-2 text-paper outline-none focus:border-brass"
                 />
               </label>
@@ -421,7 +454,6 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
                 Request a quote
               </button>
             </form>
-            )}
           </>
         )}
       </section>

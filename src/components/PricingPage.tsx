@@ -94,7 +94,7 @@ export function PricingPage({ user, onGo }: Props) {
           <div>
             <dt className="text-sm font-semibold text-paper">Do I pay to browse?</dt>
             <dd className="mt-2 text-sm leading-6 text-muted">
-              No. The directory and public profiles are free to read. Reviews and quotes use a free neighbor account.
+              No. The directory and public profiles are free to read. Reviews use a free neighbor account. Anyone can request a quote.
             </dd>
           </div>
           <div>

@@ -4,7 +4,7 @@ export type AccountKind = "business" | "member"
 export type JoinIntent = "business" | "member"
 
 export const MEMBER_LISTING_MESSAGE =
-  "This account is for reviews and quotes. Listing a business is $150 per month on a business account."
+  "This account is for reviews. Anyone can request a quote. Listing a business is $150 per month on a business account."
 
 export function parseAccountKind(value: unknown): AccountKind | null {
   if (value === "business" || value === "member") return value

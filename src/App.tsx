@@ -351,7 +351,7 @@ export default function App() {
                     : needsListingLogin
                       ? "Create a business account to publish a PlaceFind listing for $150 per month and build a public profile."
                       : path === "/join" && joinIntentFromSearch(window.location.search) === "member"
-                        ? "Leave reviews and request quotes. This account is free. PlaceFind does not charge $150 for reviews or quotes."
+                        ? "Leave reviews from a free neighbor account. Anyone can request a quote. PlaceFind does not charge $150 for reviews."
                         : path === "/join"
                           ? "Create an account to publish a PlaceFind listing for $150 per month and build a public profile."
                           : undefined

@@ -17,10 +17,16 @@ export async function submitQuoteLead(
   if (!to) throw new ListingError(400, MISSING_QUOTE_EMAIL_MESSAGE)
   const message = quoteRequestEmail({
     businessName: listing.brand || listing.name,
+    firstName: parsed.value.firstName,
+    lastName: parsed.value.lastName,
     name: parsed.value.name,
     email: parsed.value.email,
     phone: parsed.value.phone,
-    need: parsed.value.need,
+    street: parsed.value.street,
+    city: parsed.value.city,
+    state: parsed.value.state,
+    zip: parsed.value.zip,
+    service: parsed.value.service,
   })
   const mail = await sendMail({ ...message, to })
   return { lead: parsed.value, mail }

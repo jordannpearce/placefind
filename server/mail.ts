@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import { formatQuoteAddress } from "../src/lib/quotes.ts"
 import { maskSecret } from "./keygen.ts"
 import { readCollection, writeCollection } from "./store.ts"
 
@@ -289,23 +290,35 @@ export function passwordResetEmail(input: { name: string; resetUrl: string }): M
 
 export function quoteRequestEmail(input: {
   businessName: string
+  firstName: string
+  lastName: string
   name: string
   email: string
-  phone?: string
-  need: string
+  phone: string
+  street: string
+  city: string
+  state: string
+  zip: string
+  service: string
 }): MailMessage {
   const business = input.businessName.trim() || "this business"
-  const phone = input.phone?.trim() || "Not provided"
+  const address = formatQuoteAddress(input)
   const text = `${business} received a quote request from PlaceFind.
 
 ${input.name} is asking ${business} for a quote.
 
-Name: ${input.name}
+First name: ${input.firstName}
+Last name: ${input.lastName}
+Phone: ${input.phone}
 Email: ${input.email}
-Phone: ${phone}
+Street address: ${input.street}
+City: ${input.city}
+State: ${input.state}
+ZIP: ${input.zip}
+Address: ${address}
 
-What they need:
-${input.need}
+Service needed:
+${input.service}
 
 Reply to ${input.name} at ${input.email}. PlaceFind does not take a cut of the work.
 `

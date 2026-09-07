@@ -1,4 +1,5 @@
 import type express from "express"
+import type { QuoteLeadInput } from "../src/lib/quotes.ts"
 import { ListingError } from "./listings.ts"
 import { createReview, listingReviewSummary, reviewsForListing } from "./reviews.ts"
 import { submitQuoteLead } from "./quotes.ts"
@@ -29,16 +30,9 @@ export function registerListingLeadRoutes(
   })
 
   app.post("/api/listings/:id/quotes", async (req, res) => {
-    const user = requireUser(req, res)
-    if (!user) return
     try {
-      const body = (req.body ?? {}) as { name?: string; email?: string; phone?: string; need?: string }
-      await submitQuoteLead(String(req.params.id ?? ""), {
-        name: body.name || user.name,
-        email: body.email,
-        phone: body.phone,
-        need: body.need,
-      })
+      const body = (req.body ?? {}) as QuoteLeadInput
+      await submitQuoteLead(String(req.params.id ?? ""), body)
       res.status(201).json({ ok: true })
     } catch (error) {
       if (error instanceof ListingError) {

@@ -85,8 +85,8 @@ export function HomePage({ user, onGo }: Props) {
               <li className="rounded-xl border border-line bg-panel px-4 py-3">
                 <p className="text-sm font-semibold text-paper">1. Create an account</p>
                 <p className="mt-1 text-sm leading-6 text-muted">
-                  Businesses join to own a listing. Neighbors create a free account to leave reviews and request quotes
-                  — that account is not billed $150.
+                  Businesses join to own a listing. Neighbors create a free account to leave reviews. Anyone can
+                  request a quote — that account is not billed $150.
                 </p>
               </li>
               <li className="rounded-xl border border-line bg-panel px-4 py-3">
@@ -132,8 +132,8 @@ export function HomePage({ user, onGo }: Props) {
             <NotebookPen className="h-5 w-5 text-brass" />
             <h4 className="mt-3 font-display text-xl text-paper">Reviews and enhanced info</h4>
             <p className="mt-2 text-sm leading-6 text-muted">
-              Neighbors leave reviews and request quotes from a free account. The public profile can include the
-              owner’s own article and HTML, plus a crawl draft if they want one.
+              Neighbors leave reviews from a free account. Anyone can request a quote. The public profile can include
+              the owner’s own article and HTML, plus a crawl draft if they want one.
             </p>
           </article>
         </div>

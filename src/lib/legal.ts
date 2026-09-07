@@ -28,13 +28,13 @@ export const LEGAL_PAGES: LegalPage[] = [
         heading: "What PlaceFind is",
         body: [
           "PlaceFind is a web directory for local businesses. People use it to find shops. Businesses use it to publish a listing, request a website crawl, and collect reviews on a public profile.",
-          "A business listing is $150 per month. Signed-in owners can edit the listing, write the public profile (article, HTML, page title, and schema), request Crawl Website from the dashboard, and manage the profile visitors see. Neighbors who only leave reviews or request quotes create a free account. PlaceFind does not charge those accounts $150.",
+          "A business listing is $150 per month. Signed-in owners can edit the listing, write the public profile (article, HTML, page title, and schema), request Crawl Website from the dashboard, and manage the profile visitors see. Neighbors who only leave reviews create a free account. Anyone can request a quote. PlaceFind does not charge those accounts $150.",
         ],
       },
       {
         heading: "Your account",
         body: [
-          "A business account lets you add and manage PlaceFind listings and use signed-in owner tools. A neighbor account is free and is only for reviews and quote requests. You may not share your password or use the service to impersonate another business.",
+          "A business account lets you add and manage PlaceFind listings and use signed-in owner tools. A neighbor account is free and is for reviews. Anyone can request a quote without an account. You may not share your password or use the service to impersonate another business.",
           "We may refuse or close an account if we reasonably believe it was obtained by fraud, used to overload the service, or used to post a listing that is not yours.",
         ],
       },
@@ -197,7 +197,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "The public directory is free to browse",
         body: [
-          "Visitors can browse listings and read profiles without paying. Reviews and quote requests use a free neighbor account. PlaceFind does not charge $150 for those accounts.",
+          "Visitors can browse listings and read profiles without paying. Reviews use a free neighbor account. Anyone can request a quote. PlaceFind does not charge $150 for those accounts.",
         ],
       },
       {

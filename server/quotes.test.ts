@@ -15,6 +15,18 @@ import { submitQuoteLead } from "./quotes.ts"
 import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
 import { MISSING_QUOTE_EMAIL_MESSAGE } from "../src/lib/quotes.ts"
 
+const completeLead = {
+  firstName: "Maya",
+  lastName: "Chen",
+  email: "maya@example.com",
+  phone: "(207) 555-0100",
+  street: "18 Harbor Lane",
+  city: "Portland",
+  state: "ME",
+  zip: "04101",
+  service: "Two dozen sandwich loaves for a Friday office lunch.",
+}
+
 async function withLeadServer(run: (port: number) => Promise<void>) {
   const app = express()
   app.use(express.json())
@@ -61,21 +73,17 @@ describe("quote request leads", () => {
       (error: unknown) => {
         assert.ok(error instanceof ListingError)
         assert.equal(error.status, 400)
-        assert.match(error.message, /what you need/)
+        assert.match(error.message, /first name|last name|phone|street|city|state|ZIP|service/i)
         return true
       },
     )
 
-    const result = await submitQuoteLead(listing.id, {
-      name: "Maya Chen",
-      email: "maya@example.com",
-      phone: "(207) 555-0100",
-      need: "Two dozen sandwich loaves for a Friday office lunch.",
-    })
+    const result = await submitQuoteLead(listing.id, completeLead)
     assert.equal(result.mail.to, "hello@harborandoak.example")
     assert.equal(result.mail.delivered, false)
     assert.match(result.mail.subject, /Harbor & Oak Bakery/)
     assert.match(result.mail.text, /Maya Chen/)
+    assert.match(result.mail.text, /18 Harbor Lane/)
     assert.match(result.mail.text, /Two dozen sandwich loaves/)
     assert.equal(/resend/i.test(result.mail.text + result.mail.html), false)
     assert.equal(readOutbox()[0]?.to, "hello@harborandoak.example")
@@ -85,12 +93,7 @@ describe("quote request leads", () => {
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-quotes-missing-")))
     const listing = createListing({ name: "Copper Bell Books", city: "Asheville", state: "NC" }, "owner-1")
     await assert.rejects(
-      () =>
-        submitQuoteLead(listing.id, {
-          name: "Maya Chen",
-          email: "maya@example.com",
-          need: "Looking for a first-edition signed poetry collection.",
-        }),
+      () => submitQuoteLead(listing.id, completeLead),
       (error: unknown) => {
         assert.ok(error instanceof ListingError)
         assert.equal(error.status, 400)
@@ -100,7 +103,7 @@ describe("quote request leads", () => {
     )
   })
 
-  it("POST /api/listings/:id/quotes requires a free signed-in account", async () => {
+  it("POST /api/listings/:id/quotes accepts an anonymous visitor", async () => {
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-quotes-http-")))
     signup({ name: "Ada", email: "ada@example.com", password: "password12" })
     const created = signup({
@@ -124,13 +127,10 @@ describe("quote request leads", () => {
       const anonymous = await fetch(`http://127.0.0.1:${port}/api/listings/${listing.id}/quotes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Maya Chen",
-          email: "maya@example.com",
-          need: "Need a spare house key cut this afternoon.",
-        }),
+        body: JSON.stringify(completeLead),
       })
-      assert.equal(anonymous.status, 401)
+      assert.equal(anonymous.status, 201)
+      assert.equal(((await anonymous.json()) as { ok?: boolean }).ok, true)
 
       const bad = await fetch(`http://127.0.0.1:${port}/api/listings/${listing.id}/quotes`, {
         method: "POST",
@@ -139,17 +139,23 @@ describe("quote request leads", () => {
       })
       assert.equal(bad.status, 400)
 
-      const ok = await fetch(`http://127.0.0.1:${port}/api/listings/${listing.id}/quotes`, {
+      const signedIn = await fetch(`http://127.0.0.1:${port}/api/listings/${listing.id}/quotes`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: `pf_session=${token}` },
         body: JSON.stringify({
-          name: "Maya Chen",
+          firstName: "Maya",
+          lastName: "Chen",
           email: "maya@example.com",
-          need: "Need a spare house key cut this afternoon.",
+          phone: "2085550100",
+          street: "400 Main St",
+          city: "Boise",
+          state: "ID",
+          zip: "83702",
+          service: "Need a spare house key cut this afternoon.",
         }),
       })
-      assert.equal(ok.status, 201)
-      assert.equal(((await ok.json()) as { ok?: boolean }).ok, true)
+      assert.equal(signedIn.status, 201)
+      assert.equal(((await signedIn.json()) as { ok?: boolean }).ok, true)
       assert.equal(readOutbox()[0]?.to, "shop@lampposthardware.example")
     })
   })
@@ -159,13 +165,24 @@ describe("quoteRequestEmail", () => {
   it("names the shop and the visitor without vendor talk", () => {
     const message = quoteRequestEmail({
       businessName: "Harbor & Oak",
+      firstName: "Maya",
+      lastName: "Chen",
       name: "Maya Chen",
       email: "maya@example.com",
       phone: "(207) 555-0100",
-      need: "Two dozen sandwich loaves for Friday.",
+      street: "18 Harbor Lane",
+      city: "Portland",
+      state: "ME",
+      zip: "04101",
+      service: "Two dozen sandwich loaves for Friday.",
     })
     assert.equal(message.subject, "Quote request for Harbor & Oak")
     assert.match(message.text, /maya@example.com/)
+    assert.match(message.text, /First name: Maya/)
+    assert.match(message.text, /Last name: Chen/)
+    assert.match(message.text, /18 Harbor Lane/)
+    assert.match(message.text, /Portland/)
+    assert.match(message.text, /Service needed/)
     assert.match(message.text, /Two dozen sandwich loaves/)
     assert.equal(/resend|lorem|ipsum/i.test(message.subject + message.text + message.html), false)
   })

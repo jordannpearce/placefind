@@ -43,10 +43,10 @@ export function AuthPage({ mode = "login", title, intro, joinIntent = "business"
         {view === "join"
           ? intro ||
             (joinIntent === "member"
-              ? "Create a free PlaceFind account to leave reviews and request quotes. This account is not billed. Listing a business is $150 per month on a separate business account."
+              ? "Create a free PlaceFind account to leave reviews. Anyone can request a quote. This account is not billed. Listing a business is $150 per month on a separate business account."
               : "Create a PlaceFind account to list your business for $150 per month.")
           : view === "login"
-            ? intro || "Sign in to manage a listing, leave a review, or request a quote."
+            ? intro || "Sign in to manage a listing or leave a review. Anyone can request a quote."
             : "Enter the email on your PlaceFind account. If it is on file, we will send a one-time reset link."}
       </p>
       {view === "join" && (
