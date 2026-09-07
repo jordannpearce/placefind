@@ -8,6 +8,7 @@ import {
   licenseEmail,
   mailPresets,
   mailStatus,
+  normalizeMailInput,
   openSealedMail,
   passwordResetEmail,
   personalizeMail,
@@ -358,5 +359,49 @@ describe("admin mail config for signup", () => {
     const sealed = sealMailConfig(raw as { resendApiKey: string; fromEmail: string; fromName: string })
     assert.equal(sealed.includes("re_admin_stored_key"), false)
     assert.equal(openSealedMail(sealed)?.resendApiKey, "re_admin_stored_key")
+  })
+
+  it("reloads the saved sending key and from-address after a process restart", async () => {
+    isolate()
+    await writeMailConfig({
+      resendApiKey: "re_test_fake_key_1234",
+      fromEmail: "hello@placefind.test",
+      fromName: "PlaceFind HQ",
+    })
+    const saved = mailStatus()
+    assert.equal(saved.configured, true)
+    assert.equal(saved.fromEmail, "hello@placefind.test")
+    assert.equal(saved.fromName, "PlaceFind HQ")
+    assert.match(saved.keyHint, /1234$/)
+    assert.equal(saved.keyHint.includes("re_test_fake_key_1234"), false)
+
+    resetMailConfigForTests()
+    const reloaded = mailStatus()
+    assert.equal(reloaded.configured, true)
+    assert.equal(reloaded.fromEmail, "hello@placefind.test")
+    assert.equal(reloaded.fromName, "PlaceFind HQ")
+    assert.match(reloaded.keyHint, /1234$/)
+    assert.equal(readMailConfig().resendApiKey, "re_test_fake_key_1234")
+  })
+
+  it("accepts alternate field names and keeps the key when only from-address is updated", async () => {
+    isolate()
+    const parsed = normalizeMailInput({
+      apiKey: "re_alias_5555",
+      from_email: "alias@placefind.test",
+      from_name: "Alias Sender",
+    })
+    await writeMailConfig(parsed)
+    resetMailConfigForTests()
+    assert.equal(readMailConfig().resendApiKey, "re_alias_5555")
+    assert.equal(mailStatus().fromEmail, "alias@placefind.test")
+
+    await writeMailConfig({ fromEmail: "new@placefind.test", fromName: "New Sender" })
+    resetMailConfigForTests()
+    const kept = readMailConfig()
+    assert.equal(kept.resendApiKey, "re_alias_5555")
+    assert.equal(kept.fromEmail, "new@placefind.test")
+    assert.equal(kept.fromName, "New Sender")
+    assert.equal(mailStatus().configured, true)
   })
 })

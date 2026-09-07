@@ -97,6 +97,11 @@ CREATE TABLE IF NOT EXISTS hosted_keys (
   sealed TEXT NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
+CREATE TABLE IF NOT EXISTS mail_config (
+  id TEXT PRIMARY KEY,
+  sealed TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
 CREATE TABLE IF NOT EXISTS geo_points (
   id TEXT PRIMARY KEY,
   city TEXT NOT NULL,

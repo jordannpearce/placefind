@@ -36,6 +36,7 @@ import {
   hydrateMailConfig,
   mailPresets,
   mailStatus,
+  normalizeMailInput,
   passwordResetEmail,
   readOutbox,
   resolveCampaignCopy,
@@ -1102,16 +1103,26 @@ async function start() {
     res.status(410).json({ error: "PlaceFind does not issue product licenses." })
   })
 
+  app.get("/api/admin/mail", (req, res) => {
+    if (!manage(req, res)) return
+    res.json({ mail: mailStatus() })
+  })
+
   app.post("/api/admin/mail", async (req, res) => {
     if (!manage(req, res)) return
-    const body = (req.body ?? {}) as { resendApiKey?: string; fromEmail?: string; fromName?: string }
-    await writeMailConfig(body)
-    res.json({ mail: mailStatus() })
+    try {
+      await writeMailConfig(normalizeMailInput((req.body ?? {}) as Record<string, unknown>))
+      res.json({ mail: mailStatus() })
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Could not save mail settings.",
+      })
+    }
   })
 
   app.post("/api/admin/mail/test", async (req, res) => {
     if (!manage(req, res)) return
-    const body = (req.body ?? {}) as { resendApiKey?: string; fromEmail?: string; fromName?: string }
+    const body = normalizeMailInput((req.body ?? {}) as Record<string, unknown>)
     res.json(await testResendConnection(body))
   })
 

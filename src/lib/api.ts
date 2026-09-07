@@ -400,7 +400,14 @@ export async function stopImpersonation(): Promise<AuthUser> {
 }
 
 export async function saveMail(input: { resendApiKey?: string; fromEmail?: string; fromName?: string }): Promise<MailStatus> {
-  const payload = await request<{ mail: MailStatus }>("/api/admin/mail", { method: "POST", body: JSON.stringify(input) })
+  const payload = await request<{ mail?: MailStatus }>("/api/admin/mail", { method: "POST", body: JSON.stringify(input) })
+  if (!payload.mail) throw new Error("Could not save mail settings.")
+  return payload.mail
+}
+
+export async function loadMail(): Promise<MailStatus> {
+  const payload = await request<{ mail?: MailStatus }>("/api/admin/mail")
+  if (!payload.mail) throw new Error("Could not load mail settings.")
   return payload.mail
 }
 

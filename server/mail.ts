@@ -55,9 +55,36 @@ const MAIL_SEAL_SECRET = "placefind-mail-v1"
 const TEST_ONLY_FROM = "onboarding@resend.dev"
 
 let lastDatabaseWriteOk = false
+let cachedMail: MailConfig | null = null
 
 function emptyMailConfig(): MailConfig {
   return { resendApiKey: "", fromEmail: "", fromName: "" }
+}
+
+function rememberMail(config: Partial<MailConfig>): MailConfig {
+  cachedMail = {
+    resendApiKey: config.resendApiKey?.trim() || "",
+    fromEmail: config.fromEmail?.trim() || "",
+    fromName: config.fromName?.trim() || "",
+  }
+  return { ...cachedMail }
+}
+
+function pickMailField(raw: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = raw[key]
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+  return undefined
+}
+
+export function normalizeMailInput(input?: Record<string, unknown> | null): Partial<MailConfig> {
+  const raw = input ?? {}
+  return {
+    resendApiKey: pickMailField(raw, ["resendApiKey", "apiKey", "mailKey", "RESEND_API_KEY"]),
+    fromEmail: pickMailField(raw, ["fromEmail", "from_email", "RESEND_FROM_EMAIL"]),
+    fromName: pickMailField(raw, ["fromName", "from_name", "RESEND_FROM_NAME"]),
+  }
 }
 
 function configFile() {
@@ -134,12 +161,9 @@ function redactMailSecrets(value: string) {
 }
 
 export function readStoredMailConfig(): MailConfig {
+  if (cachedMail) return { ...cachedMail }
   const stored = readJson<MailConfig>(configFile(), emptyMailConfig())
-  return {
-    resendApiKey: stored.resendApiKey?.trim() || "",
-    fromEmail: stored.fromEmail?.trim() || "",
-    fromName: stored.fromName?.trim() || "",
-  }
+  return rememberMail(stored)
 }
 
 export function readMailConfig(): MailConfig {
@@ -183,38 +207,50 @@ export async function hydrateMailConfig(): Promise<boolean> {
       ])
       return result.rows[0]?.sealed ?? ""
     })
-    if (!sealed) return false
+    if (!sealed) return Boolean(readStoredMailConfig().resendApiKey)
     const opened = openSealedMail(sealed)
-    if (!opened) return false
+    if (!opened) return Boolean(readStoredMailConfig().resendApiKey)
     const existing = readStoredMailConfig()
     if (existing.resendApiKey) {
       lastDatabaseWriteOk = true
+      rememberMail(existing)
       return true
     }
-    const next: MailConfig = {
-      resendApiKey: opened.resendApiKey?.trim() || "",
-      fromEmail: opened.fromEmail?.trim() || "",
-      fromName: opened.fromName?.trim() || "",
+    const next = rememberMail({
+      resendApiKey: opened.resendApiKey,
+      fromEmail: opened.fromEmail || existing.fromEmail,
+      fromName: opened.fromName || existing.fromName,
+    })
+    try {
+      mkdirSync(dataDir(), { recursive: true })
+      writeFileSync(configFile(), JSON.stringify(next, null, 2))
+    } catch {
+      console.error("PlaceFind could not write hydrated mail.json.")
     }
-    mkdirSync(dataDir(), { recursive: true })
-    writeFileSync(configFile(), JSON.stringify(next, null, 2))
-    lastDatabaseWriteOk = Boolean(next.resendApiKey)
+    lastDatabaseWriteOk = Boolean(next.resendApiKey || next.fromEmail)
     return Boolean(next.resendApiKey)
   } catch {
     console.error("PlaceFind could not read saved mail settings from Postgres.")
-    return false
+    return Boolean(readStoredMailConfig().resendApiKey)
   }
 }
 
-export async function writeMailConfig(input: Partial<MailConfig>): Promise<MailConfig> {
+export async function writeMailConfig(input?: Partial<MailConfig> | Record<string, unknown> | null): Promise<MailConfig> {
+  const parsed = normalizeMailInput(input)
   const stored = readStoredMailConfig()
-  const next: MailConfig = {
-    resendApiKey: input.resendApiKey?.trim() || stored.resendApiKey,
-    fromEmail: input.fromEmail?.trim() || stored.fromEmail,
-    fromName: input.fromName?.trim() || stored.fromName,
+  const next = rememberMail({
+    resendApiKey: parsed.resendApiKey || stored.resendApiKey,
+    fromEmail: parsed.fromEmail || stored.fromEmail,
+    fromName: parsed.fromName || stored.fromName,
+  })
+  let fileOk = false
+  try {
+    mkdirSync(dataDir(), { recursive: true })
+    writeFileSync(configFile(), JSON.stringify(next, null, 2))
+    fileOk = true
+  } catch {
+    console.error("PlaceFind could not write mail.json.")
   }
-  mkdirSync(dataDir(), { recursive: true })
-  writeFileSync(configFile(), JSON.stringify(next, null, 2))
   lastDatabaseWriteOk = false
   try {
     const wrote = await withPostgres(async (client) => {
@@ -229,10 +265,14 @@ export async function writeMailConfig(input: Partial<MailConfig>): Promise<MailC
   } catch {
     console.error("PlaceFind could not persist mail settings to Postgres.")
   }
+  if (!fileOk && !lastDatabaseWriteOk) {
+    throw new Error("Could not save mail settings.")
+  }
   return next
 }
 
 export function resetMailConfigForTests() {
+  cachedMail = null
   lastDatabaseWriteOk = false
 }
 

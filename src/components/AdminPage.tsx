@@ -26,6 +26,7 @@ export function AdminPage({
   const [fromEmail, setFromEmail] = useState("")
   const [fromName, setFromName] = useState("")
   const [mailKey, setMailKey] = useState("")
+  const [savingMail, setSavingMail] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -86,13 +87,14 @@ export function AdminPage({
       <section className="rounded-2xl border border-line bg-panel p-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Transactional email</p>
         <p className="mt-2 text-sm leading-6 text-muted">
-          Save the sending key and a from email here. Signup welcome mail uses these admin settings, not only server
-          environment variables. The from address must be on a domain you have verified — for PlaceFind that is
+          Save the sending key, from name, and from email here. Signup welcome mail uses these admin settings, not only
+          server environment variables. Values stay on this server and, when a database is connected, in Postgres so a
+          Railway restart keeps them. The from address must be on a domain you have verified — for PlaceFind that is
           typically an address on placefind.to. Until a key is saved, messages stay in the outbox.
         </p>
         {mail?.configured && (
           <p className="mt-2 text-sm text-moss">
-            Connected · {mail.keyHint} · {mail.fromEmail}
+            Connected · {mail.keyHint} · {`${mail.fromName} <${mail.fromEmail}>`}
             {mail.savedToDatabase ? " · saved for restarts" : ""}
           </p>
         )}
@@ -105,67 +107,88 @@ export function AdminPage({
         {mail?.lastError && (
           <p className="mt-2 text-sm text-clay">Last send: {mail.lastError}</p>
         )}
-        <label className="mt-4 grid gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Mail key</span>
-          <input
-            type="password"
-            value={mailKey}
-            onChange={(event) => setMailKey(event.target.value)}
-            placeholder={mail?.keyHint || "Paste the outbound sending key"}
-            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-          />
-        </label>
-        <label className="mt-3 grid gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">From name</span>
-          <input
-            value={fromName}
-            onChange={(event) => setFromName(event.target.value)}
-            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-          />
-        </label>
-        <label className="mt-3 grid gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">From email</span>
-          <input
-            value={fromEmail}
-            onChange={(event) => setFromEmail(event.target.value)}
-            placeholder="hello@placefind.to"
-            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
-          />
-        </label>
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={async () => {
-              setError(null)
-              try {
-                const result = await testMail({ resendApiKey: mailKey, fromEmail, fromName })
-                setMessage(result.message)
-                if (!result.ok) setError(result.message)
-              } catch (err) {
-                setError(err instanceof Error ? err.message : "Could not test mail.")
+        <form
+          className="mt-4 grid gap-3"
+          autoComplete="off"
+          onSubmit={async (event) => {
+            event.preventDefault()
+            setError(null)
+            setSavingMail(true)
+            try {
+              const saved = await saveMail({ resendApiKey: mailKey, fromEmail, fromName })
+              if (mailKey.trim() && !saved.configured) {
+                throw new Error("The sending key did not persist.")
               }
-            }}
-            className="h-11 rounded-lg border border-brass text-sm font-semibold text-brass hover:bg-brass/10"
-          >
-            Test mail
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              setError(null)
-              try {
-                setMail(await saveMail({ resendApiKey: mailKey, fromEmail, fromName }))
-                setMailKey("")
-                setMessage("Mail settings saved.")
-              } catch (err) {
-                setError(err instanceof Error ? err.message : "Could not save mail settings.")
-              }
-            }}
-            className="h-11 rounded-lg bg-brass text-sm font-semibold text-ink hover:bg-[#ecc77a]"
-          >
-            Save mail
-          </button>
-        </div>
+              setMailKey("")
+              await refresh()
+              setMessage("Mail settings saved.")
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Could not save mail settings.")
+            } finally {
+              setSavingMail(false)
+            }
+          }}
+        >
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Mail key</span>
+            <input
+              name="resendApiKey"
+              type="password"
+              value={mailKey}
+              onChange={(event) => setMailKey(event.target.value)}
+              placeholder={mail?.keyHint || "Paste the outbound sending key"}
+              autoComplete="new-password"
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">From name</span>
+            <input
+              name="fromName"
+              value={fromName}
+              onChange={(event) => setFromName(event.target.value)}
+              autoComplete="off"
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">From email</span>
+            <input
+              name="fromEmail"
+              type="email"
+              value={fromEmail}
+              onChange={(event) => setFromEmail(event.target.value)}
+              placeholder="hello@placefind.to"
+              autoComplete="off"
+              className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={async () => {
+                setError(null)
+                try {
+                  const result = await testMail({ resendApiKey: mailKey, fromEmail, fromName })
+                  setMessage(result.message)
+                  if (!result.ok) setError(result.message)
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Could not test mail.")
+                }
+              }}
+              className="h-11 rounded-lg border border-brass text-sm font-semibold text-brass hover:bg-brass/10"
+            >
+              Test mail
+            </button>
+            <button
+              type="submit"
+              disabled={savingMail}
+              className="h-11 rounded-lg bg-brass text-sm font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
+            >
+              {savingMail ? "Saving…" : "Save mail"}
+            </button>
+          </div>
+        </form>
       </section>
     </div>
   )
