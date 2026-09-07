@@ -1,9 +1,11 @@
 import { LoaderCircle, Star } from "lucide-react"
 import { useEffect, useState } from "react"
+import { editListingHref } from "../lib/account.ts"
 import {
   confirmListingMatch,
   createListing,
   deleteListing,
+  loadAccount,
   loadListing,
   searchBusiness,
   updateListing,
@@ -31,6 +33,7 @@ type Props = {
   listingId?: string | null
   user: AuthUser
   onGo: (path: string) => void
+  onUser?: (user: AuthUser) => void
 }
 
 const emptyForm = (): ListingInput => ({
@@ -96,7 +99,7 @@ function addressChanged(form: ListingInput, listing: DirectoryListing): boolean 
   )
 }
 
-export function ListingFormPage({ listingId, user, onGo }: Props) {
+export function ListingFormPage({ listingId, user, onGo, onUser }: Props) {
   const editing = Boolean(listingId)
   const [form, setForm] = useState<ListingInput>(emptyForm)
   const [listing, setListing] = useState<DirectoryListing | null>(null)
@@ -110,6 +113,23 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (listingId || user.role === "admin") return
+    const owned = user.listingId ? { id: user.listingId, slug: user.listingSlug } : null
+    if (owned) {
+      onGo(editListingHref(owned))
+      return
+    }
+    void loadAccount()
+      .then((account) => {
+        const existing = account.listings?.[0]
+        if (!existing) return
+        onUser?.({ ...user, listingId: existing.id, listingSlug: existing.slug ?? null })
+        onGo(editListingHref(existing))
+      })
+      .catch(() => undefined)
+  }, [listingId, onGo, onUser, user.id, user.listingId, user.listingSlug, user.role])
 
   useEffect(() => {
     if (!listingId) return
@@ -151,6 +171,7 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
     setError(null)
     try {
       const next = await attachMapsMatch(listingId ? await updateListing(listingId, form) : await createListing(form))
+      if (!listingId) onUser?.({ ...user, listingId: next.id, listingSlug: next.slug ?? null })
       setListing(next)
       setForm(formFromListing(next))
       setPendingMatch(null)

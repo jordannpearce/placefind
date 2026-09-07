@@ -168,6 +168,8 @@ describe("public website copy", () => {
     assert.match(account, /\/track/)
     assert.match(nav, /\/track/)
     assert.match(dashboard, /OwnerDeskTools/)
+    assert.match(account, /Edit listing/)
+    assert.match(nav, /Edit listing/)
   })
 
   it("loads the Google measurement tag once, immediately after the site head", () => {

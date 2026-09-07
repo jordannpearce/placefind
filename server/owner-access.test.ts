@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url"
 import { after, describe, it } from "node:test"
 import express from "express"
 import {
+  ACCOUNT_HAS_LISTING_MESSAGE,
   ACCOUNT_PENDING_MESSAGE,
   listingCreateDenied,
   MEMBER_LISTING_MESSAGE,
@@ -17,7 +18,7 @@ import {
 } from "../src/lib/account.ts"
 import { approveUser, createSession, signup, userFromCookie } from "./auth.ts"
 import { createCampaign, readCampaigns } from "./campaigns.ts"
-import { createListing, publicListing } from "./listings.ts"
+import { createListing, listingLimitDenied, publicListing } from "./listings.ts"
 import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
 
 function attachOwnerRoutes(app: express.Express) {
@@ -55,7 +56,12 @@ function attachOwnerRoutes(app: express.Express) {
       res.status(403).json({ error: denied })
       return
     }
-    const listing = createListing(req.body ?? {}, user.id)
+    const limited = listingLimitDenied(user)
+    if (limited) {
+      res.status(400).json({ error: limited })
+      return
+    }
+    const listing = createListing(req.body ?? {}, user.id, { allowMultiple: user.role === "admin" })
     res.status(201).json({ listing: publicListing(listing, true) })
   })
 
@@ -136,7 +142,7 @@ describe("owner tool API access", () => {
 
   it("returns 403 for neighbors and pending businesses on listing create, Track, and Traffic", async () => {
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-owner-access-")))
-    signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const admin = signup({ name: "Ada", email: "ada@example.com", password: "password12" })
     const pending = signup({ name: "Pat Owner", email: "pat-pending@example.com", password: "password12" })
     const neighbor = signup({
       name: "Maya Chen",
@@ -191,6 +197,27 @@ describe("owner tool API access", () => {
         body: listingBody,
       })
       assert.equal(created.status, 201)
+
+      const second = await fetch(`http://127.0.0.1:${port}/api/listings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...cookieHeader(approved.user!.id) },
+        body: JSON.stringify({ name: "Second Oven", city: "Portland", state: "OR" }),
+      })
+      assert.equal(second.status, 400)
+      assert.equal(((await second.json()) as { error?: string }).error, ACCOUNT_HAS_LISTING_MESSAGE)
+
+      const adminFirst = await fetch(`http://127.0.0.1:${port}/api/listings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...cookieHeader(admin.user!.id) },
+        body: JSON.stringify({ name: "Ada Support Shop", city: "Portland", state: "OR" }),
+      })
+      assert.equal(adminFirst.status, 201)
+      const adminSecond = await fetch(`http://127.0.0.1:${port}/api/listings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...cookieHeader(admin.user!.id) },
+        body: JSON.stringify({ name: "Ada Extra Shop", city: "Austin", state: "TX" }),
+      })
+      assert.equal(adminSecond.status, 201)
 
       const campaign = await fetch(`http://127.0.0.1:${port}/api/campaigns`, {
         method: "POST",

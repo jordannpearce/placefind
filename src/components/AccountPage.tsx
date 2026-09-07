@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { accountKindOf, canPublishListing, isApprovedAccount } from "../lib/account.ts"
+import { accountKindOf, canPublishListing, editListingHref, isApprovedAccount } from "../lib/account.ts"
 import { becomeBusinessAccount, deleteListing, loadAccount, logout } from "../lib/api.ts"
 import { listingLocation, listingPath, mapsStatusLabel } from "../lib/listings.ts"
 import { LISTING_PRICE_LABEL } from "../lib/pricing.ts"
@@ -66,13 +66,24 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
           )}
           {approved && owner ? (
             <>
-              <button
-                type="button"
-                onClick={() => onGo("/listings/new")}
-                className={`h-11 rounded-lg px-4 font-semibold ${user.role === "admin" ? "border border-line text-paper hover:border-brass" : "bg-brass text-ink hover:bg-[#ecc77a]"}`}
-              >
-                Create a listing
-              </button>
+              {(listings.length === 0 || user.role === "admin") && (
+                <button
+                  type="button"
+                  onClick={() => onGo("/listings/new")}
+                  className={`h-11 rounded-lg px-4 font-semibold ${user.role === "admin" ? "border border-line text-paper hover:border-brass" : "bg-brass text-ink hover:bg-[#ecc77a]"}`}
+                >
+                  Create a listing
+                </button>
+              )}
+              {listings[0] && user.role !== "admin" && (
+                <button
+                  type="button"
+                  onClick={() => onGo(editListingHref(listings[0]))}
+                  className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
+                >
+                  Edit listing
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onGo("/dashboard")}
@@ -204,7 +215,17 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
                       onClick={() => {
                         if (!window.confirm(`Remove ${listing.name} from the PlaceFind directory? This cannot be undone.`)) return
                         void deleteListing(listing.id)
-                          .then(() => setListings((rows) => rows.filter((row) => row.id !== listing.id)))
+                          .then(() => {
+                            setListings((rows) => {
+                              const next = rows.filter((row) => row.id !== listing.id)
+                              onUser?.({
+                                ...user,
+                                listingId: next[0]?.id ?? null,
+                                listingSlug: next[0]?.slug ?? null,
+                              })
+                              return next
+                            })
+                          })
                           .catch((err) => setError(err instanceof Error ? err.message : "Could not delete that listing."))
                       }}
                       className="text-xs text-clay hover:underline"

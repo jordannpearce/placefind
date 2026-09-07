@@ -25,6 +25,7 @@ export function AppNav({ path, desktop, store, admin, user, onGo }: Props) {
           dest === path ||
           (link.href.startsWith("/#") && path === "/") ||
           (dest === "/listings/new" && pathname.startsWith("/listings")) ||
+          (dest.startsWith("/listings/") && dest.endsWith("/edit") && pathname.startsWith("/listings")) ||
           (dest === "/create-profile" && (pathname.startsWith("/create-profile") || pathname.startsWith("/join/business"))) ||
           (dest === "/dashboard" && pathname.startsWith("/dashboard")) ||
           (dest === "/track" && pathname.startsWith("/track"))

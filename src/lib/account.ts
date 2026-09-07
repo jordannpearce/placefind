@@ -16,6 +16,8 @@ export const ACCOUNT_PENDING_MESSAGE =
 export const ACCOUNT_PENDING_REVIEW_MESSAGE =
   "This account is waiting for PlaceFind admin approval. You can browse the directory, but you cannot leave a review until an admin approves it."
 
+export const ACCOUNT_HAS_LISTING_MESSAGE = "This account already has a listing."
+
 export function parseAccountKind(value: unknown): AccountKind | null {
   if (value === "business" || value === "member") return value
   return null
@@ -90,10 +92,36 @@ export function ownerToolDenied(
   return MEMBER_OWNER_TOOLS_MESSAGE
 }
 
-export function showCreateListingCta(
-  user: Pick<AuthUser, "role" | "accountKind" | "status"> | null | undefined,
-): boolean {
+export type OwnedListingRef = {
+  id: string
+  slug?: string | null
+}
+
+export type ListingAccount = Pick<AuthUser, "role" | "accountKind" | "status" | "listingId" | "listingSlug">
+
+export function ownedListingOf(user: ListingAccount | null | undefined): OwnedListingRef | null {
+  const id = user?.listingId?.trim()
+  if (!id) return null
+  return { id, slug: user.listingSlug?.trim() || undefined }
+}
+
+export function editListingHref(owned: OwnedListingRef): string {
+  const slug = owned.slug?.trim()
+  return `/listings/${encodeURIComponent(slug || owned.id)}/edit`
+}
+
+export function showCreateListingCta(user: ListingAccount | null | undefined): boolean {
   return !user || canPublishListing(user)
+}
+
+export function listBusinessCtaLabel(
+  user: ListingAccount | null | undefined,
+  guestLabel: string,
+  createLabel = "Create a listing",
+): string {
+  if (!user) return guestLabel
+  if (user.role !== "admin" && ownedListingOf(user)) return "Edit your listing"
+  return createLabel
 }
 
 export const JOIN_PATH = "/join"
@@ -146,10 +174,10 @@ export function loginHref(next?: string | null): string {
   return dest ? `/login?${new URLSearchParams({ next: dest }).toString()}` : "/login"
 }
 
-export function listBusinessHref(
-  user: Pick<AuthUser, "role" | "accountKind" | "status"> | null | undefined,
-): string {
+export function listBusinessHref(user: ListingAccount | null | undefined): string {
   if (!user) return CREATE_PROFILE_PATH
-  if (canPublishListing(user)) return "/listings/new"
-  return "/account"
+  if (!canPublishListing(user)) return "/account"
+  const owned = ownedListingOf(user)
+  if (owned && user.role !== "admin") return editListingHref(owned)
+  return "/listings/new"
 }

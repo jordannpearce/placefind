@@ -102,6 +102,12 @@ describe("allowedPath", () => {
     assert.equal(labels.includes("Traffic"), true)
     assert.equal(labels.includes("Create listing"), true)
     assert.equal(navLinks(staff).map((link) => link.label).includes("Rank tracker"), true)
+    const listed: AuthUser = { ...owner, listingId: "abc123", listingSlug: "harbor-street-cafe" }
+    const listedAccess = { desktop: false, store: true, admin: false, user: listed } satisfies NavAccess
+    const listedLinks = navLinks(listedAccess)
+    assert.equal(listedLinks.some((link) => link.label === "Create listing"), false)
+    assert.equal(listedLinks.find((link) => link.label === "Edit listing")?.href, "/listings/harbor-street-cafe/edit")
+    assert.equal(navLinks(staff).some((link) => link.label === "Create listing"), true)
   })
 })
 

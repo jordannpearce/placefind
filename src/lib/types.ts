@@ -141,6 +141,8 @@ export type AuthUser = {
   accountKind?: AccountKind
   status: "active" | "suspended" | "pending"
   createdAt: string
+  listingId?: string | null
+  listingSlug?: string | null
 }
 
 export type UsageMeter = {
@@ -498,6 +500,7 @@ export type TrafficSchedule = ScanSchedule & {
 export type Campaign = {
   id: string
   userId?: string
+  listingId?: string
   name: string
   businessName: string
   city: string
@@ -562,6 +565,7 @@ export type TrafficJob = {
 
 export type CampaignInput = {
   name?: string
+  listingId?: string
   businessName?: string
   city?: string
   state?: string

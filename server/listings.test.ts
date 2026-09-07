@@ -3,6 +3,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
+import { ACCOUNT_HAS_LISTING_MESSAGE } from "../src/lib/account.ts"
 import { parseStreetAddress } from "../src/lib/address.ts"
 import { approveUser, signup } from "./auth.ts"
 import {
@@ -11,7 +12,9 @@ import {
   createListing,
   deleteListing,
   getListing,
+  ListingError,
   listingIsApprovedForDirectory,
+  listingLimitDenied,
   listPublicListings,
   listingsForUser,
   publicListing,
@@ -126,8 +129,8 @@ describe("directory listings", () => {
     assert.ok(confirmed.mapsAddress)
 
     const missing = await verifyListingOnMaps(
-      createListing({ name: "No Such Shoppe", city: "Austin", state: "TX" }, "user-1").id,
-      "user-1",
+      createListing({ name: "No Such Shoppe", city: "Austin", state: "TX" }, "user-2").id,
+      "user-2",
       false,
       async () => ({
         query: { name: "No Such Shoppe", city: "Austin", state: "TX" },
@@ -142,8 +145,8 @@ describe("directory listings", () => {
 
     assert.match(confirmed.slug, /pizza/)
 
-    const bakery = createListing({ name: "Maple Oven", city: "Portland", state: "ME" }, "user-1")
-    const fromCategories = confirmListingMatch(bakery.id, "user-1", false, {
+    const bakery = createListing({ name: "Maple Oven", city: "Portland", state: "ME" }, "user-3")
+    const fromCategories = confirmListingMatch(bakery.id, "user-3", false, {
       placeId: "sample-maple-oven",
       title: "Maple Oven",
       address: "10 Congress St, Portland, ME 04101",
@@ -243,7 +246,7 @@ describe("directory listings", () => {
     assert.equal(headingOnly.name, "Harbor Street Cafe")
     assert.equal(headingOnly.profileH1, "A different H1")
 
-    const blank = createListing({ name: "Plain Oven", city: "Portland", state: "OR" }, "user-1")
+    const blank = createListing({ name: "Plain Oven", city: "Portland", state: "OR" }, "user-2")
     assert.equal(blank.profileCustomized, false)
     const drafted = applyListingProfile(blank.id, { profileContent: "Draft from the shop website.", crawlStatus: "ok" })
     assert.equal(drafted.profileContent, "Draft from the shop website.")
@@ -262,6 +265,34 @@ describe("directory listings", () => {
     approveUser(owner.user!.id)
     assert.equal(listingIsApprovedForDirectory(created), true)
     assert.equal(listPublicListings().some((row) => row.id === created.id), true)
+  })
+
+  it("lets a business create one listing and blocks a second", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-listing-one-")))
+    const first = createListing({ name: "Harbor Street Cafe", city: "Portland", state: "OR" }, "owner-1")
+    assert.equal(first.ownerUserId, "owner-1")
+    assert.equal(listingsForUser("owner-1").length, 1)
+    assert.throws(
+      () => createListing({ name: "Second Oven", city: "Portland", state: "OR" }, "owner-1"),
+      (error: unknown) => {
+        assert.ok(error instanceof ListingError)
+        assert.equal(error.status, 400)
+        assert.equal(error.message, ACCOUNT_HAS_LISTING_MESSAGE)
+        return true
+      },
+    )
+    assert.equal(listingsForUser("owner-1").length, 1)
+    const extra = createListing({ name: "Admin Extra Shop", city: "Portland", state: "OR" }, "admin-1", {
+      allowMultiple: true,
+    })
+    assert.equal(extra.ownerUserId, "admin-1")
+    const secondAdmin = createListing({ name: "Admin Support Shop", city: "Austin", state: "TX" }, "admin-1", {
+      allowMultiple: true,
+    })
+    assert.equal(listingsForUser("admin-1").length, 2)
+    assert.equal(secondAdmin.name, "Admin Support Shop")
+    assert.equal(listingLimitDenied({ id: "owner-1", role: "customer" }), ACCOUNT_HAS_LISTING_MESSAGE)
+    assert.equal(listingLimitDenied({ id: "admin-1", role: "admin" }), null)
   })
 
   it("blocks another customer from editing a listing", () => {

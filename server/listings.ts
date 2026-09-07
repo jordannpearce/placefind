@@ -11,8 +11,8 @@ import {
   profileSchemaError,
   stripCrawlArticleFooter,
 } from "../src/lib/profile.ts"
-import { isApprovedAccount } from "../src/lib/account.ts"
-import { findUserById, publicUser } from "./auth.ts"
+import { ACCOUNT_HAS_LISTING_MESSAGE, isApprovedAccount } from "../src/lib/account.ts"
+import { findUserById, publicUser, type PublicUser } from "./auth.ts"
 import { mapsPlaceUrl } from "./match.ts"
 import { toStateAbbr } from "./states.ts"
 import { dataDir, readCollection, writeCollection } from "./store.ts"
@@ -636,6 +636,23 @@ export function listingsForUser(userId: string): DirectoryListing[] {
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
+export function listingOwnedByUser(userId: string): DirectoryListing | null {
+  return listingsForUser(userId)[0] ?? null
+}
+
+export function withOwnedListing<T extends { id: string }>(
+  user: T,
+): T & { listingId: string | null; listingSlug: string | null } {
+  const owned = listingOwnedByUser(user.id)
+  return { ...user, listingId: owned?.id ?? null, listingSlug: owned?.slug ?? null }
+}
+
+export function listingLimitDenied(user: Pick<PublicUser, "id" | "role">): string | null {
+  if (user.role === "admin") return null
+  if (listingOwnedByUser(user.id)) return ACCOUNT_HAS_LISTING_MESSAGE
+  return null
+}
+
 export function deleteListingsOwnedBy(ownerUserId: string): string[] {
   const listings = readListings()
   const removed = listings.filter((row) => row.ownerUserId === ownerUserId)
@@ -644,7 +661,14 @@ export function deleteListingsOwnedBy(ownerUserId: string): string[] {
   return removed.map((row) => row.id)
 }
 
-export function createListing(input: ListingInput, ownerUserId: string): DirectoryListing {
+export function createListing(
+  input: ListingInput,
+  ownerUserId: string,
+  options: { allowMultiple?: boolean } = {},
+): DirectoryListing {
+  if (!options.allowMultiple && listingOwnedByUser(ownerUserId)) {
+    throw new ListingError(400, ACCOUNT_HAS_LISTING_MESSAGE)
+  }
   const parsed = validateListing(input)
   if (parsed.error || !parsed.value) throw new ListingError(400, parsed.error || "Could not save the listing.")
   const at = nowIso()
