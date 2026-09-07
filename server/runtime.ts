@@ -1,4 +1,4 @@
-export const DEFAULT_PUBLIC_SITE_URL = "https://placefind-production.up.railway.app"
+export const DEFAULT_PUBLIC_SITE_URL = "https://placefind.to"
 
 export function publicSiteUrl() {
   const raw = process.env.PLACEFIND_PUBLIC_URL?.trim()

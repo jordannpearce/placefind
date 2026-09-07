@@ -78,6 +78,12 @@ export function listingFormFromPlace(
     profileSchema: fallback.profileSchema ?? "",
     profileHtml: fallback.profileHtml ?? "",
     profileContent: fallback.profileContent ?? "",
+    profileH1: fallback.profileH1 ?? "",
+    profileH2: fallback.profileH2 ?? "",
+    profileH3: fallback.profileH3 ?? "",
+    profileH4: fallback.profileH4 ?? "",
+    profileH5: fallback.profileH5 ?? "",
+    profileH6: fallback.profileH6 ?? "",
   }
 }
 

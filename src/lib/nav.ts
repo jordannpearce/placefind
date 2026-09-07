@@ -80,6 +80,10 @@ export function isListingEditPath(pathname = typeof window === "undefined" ? "/"
   return /^\/listings\/[^/]+\/edit\/?$/.test(pathname)
 }
 
+export function isListingPublicPath(pathname = typeof window === "undefined" ? "/" : window.location.pathname): boolean {
+  return /^\/listings\/(?!new\/?$)[^/]+\/?$/.test(pathname)
+}
+
 export function currentPath(): AppPath {
   const path = window.location.pathname
   if (path.startsWith("/track") || path.startsWith("/campaigns")) return "/track"

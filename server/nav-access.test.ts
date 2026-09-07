@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { allowedPath, listingIdFromPath, navLinks, type NavAccess } from "../src/lib/nav.ts"
+import { allowedPath, isListingPublicPath, listingIdFromPath, navLinks, type NavAccess } from "../src/lib/nav.ts"
 import type { AuthUser } from "../src/lib/types.ts"
 
 const user: AuthUser = {
@@ -61,6 +61,9 @@ describe("listing path parsing", () => {
     assert.equal(listingIdFromPath("/listings/seed-1/edit"), "seed-1")
     assert.equal(listingIdFromPath("/listings/new"), null)
     assert.equal(listingIdFromPath("/directory"), null)
+    assert.equal(isListingPublicPath("/listings/harbor-oak-bakery"), true)
+    assert.equal(isListingPublicPath("/listings/harbor-oak-bakery/edit"), false)
+    assert.equal(isListingPublicPath("/listings/new"), false)
   })
 })
 

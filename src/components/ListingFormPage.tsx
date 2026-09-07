@@ -48,6 +48,12 @@ const emptyForm = (): ListingInput => ({
   profileSchema: "",
   profileHtml: "",
   profileContent: "",
+  profileH1: "",
+  profileH2: "",
+  profileH3: "",
+  profileH4: "",
+  profileH5: "",
+  profileH6: "",
 })
 
 function formFromListing(row: DirectoryListing): ListingInput {
@@ -69,6 +75,12 @@ function formFromListing(row: DirectoryListing): ListingInput {
     profileSchema: row.profileSchema ?? "",
     profileHtml: row.profileHtml ?? "",
     profileContent: row.profileContent ?? "",
+    profileH1: row.profileH1 ?? "",
+    profileH2: row.profileH2 ?? "",
+    profileH3: row.profileH3 ?? "",
+    profileH4: row.profileH4 ?? "",
+    profileH5: row.profileH5 ?? "",
+    profileH6: row.profileH6 ?? "",
   }
 }
 
@@ -448,9 +460,9 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
               <div className="mt-4 rounded-xl border border-line bg-ink px-4 py-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Enhanced profile</p>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  Write the public article, custom HTML, page title, meta description, extra header tags, and schema
-                  yourself. Crawl Website can draft an article from the shop site, but it will not replace a profile you
-                  have already customized here.
+                  Write the public article, headings, custom HTML, page title, meta description, extra header tags, and
+                  schema yourself. Crawl Website can draft an article from the shop site, but it will not replace a
+                  profile you have already customized here.
                 </p>
               </div>
               <label className="grid gap-1.5">
@@ -463,6 +475,30 @@ export function ListingFormPage({ listingId, user, onGo }: Props) {
                   className={fieldClass}
                 />
               </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {([1, 2, 3, 4, 5, 6] as const).map((level) => (
+                  <label key={level} className="grid gap-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">H{level}</span>
+                    <input
+                      value={form[`profileH${level}`] ?? ""}
+                      onChange={(event) => setForm({ ...form, [`profileH${level}`]: event.target.value })}
+                      maxLength={200}
+                      placeholder={
+                        level === 1
+                          ? "Main heading on the public profile"
+                          : level === 2
+                            ? "Tagline or second heading"
+                            : `H${level} heading`
+                      }
+                      className={fieldClass}
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs leading-5 text-muted">
+                H1 replaces the big heading visitors see. H2–H6 appear in the enhanced profile. You can also put
+                heading tags in custom HTML, or start an article line with # through ######.
+              </p>
               <label className="grid gap-1.5">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Meta description</span>
                 <textarea

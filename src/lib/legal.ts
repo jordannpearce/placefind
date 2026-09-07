@@ -157,7 +157,7 @@ export const LEGAL_PAGES: LegalPage[] = [
       {
         heading: "Listing data",
         body: [
-          "Business name, city, state, category, keywords, optional contact details, visitor reviews, and the public profile you write (article, custom HTML, page title, meta description, header tags, and schema). Crawl Website can store license and company facts on the crawl request and draft an article. It does not overwrite the listing form, and it does not replace a profile you have already customized. Public directory pages show the listing you published plus that profile.",
+          "Business name, city, state, category, keywords, optional contact details, visitor reviews, and the public profile you write (article, H1–H6 headings, custom HTML, page title, meta description, header tags, and schema). Crawl Website can store license and company facts on the crawl request and draft an article. It does not overwrite the listing form, and it does not replace a profile you have already customized. Public directory pages show the listing you published plus that profile.",
         ],
       },
       {

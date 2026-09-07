@@ -278,27 +278,43 @@ textarea {
   margin-top: 0.85rem;
 }
 
+.profile-heading,
 .profile-html h1,
 .profile-html h2,
 .profile-html h3,
-.profile-html h4 {
+.profile-html h4,
+.profile-html h5,
+.profile-html h6 {
   color: #f3ead8;
   font-family: var(--font-display);
   font-weight: 500;
   line-height: 1.25;
 }
 
-.profile-html h1 {
+.profile-html h1,
+.profile-heading.h1,
+h1.profile-heading {
   font-size: 1.75rem;
 }
 
-.profile-html h2 {
+.profile-html h2,
+h2.profile-heading {
   font-size: 1.45rem;
 }
 
 .profile-html h3,
-.profile-html h4 {
+.profile-html h4,
+h3.profile-heading,
+h4.profile-heading {
   font-size: 1.2rem;
+}
+
+.profile-html h5,
+.profile-html h6,
+h5.profile-heading,
+h6.profile-heading {
+  font-size: 1.05rem;
+  color: #e8dcc4;
 }
 
 .profile-html a {

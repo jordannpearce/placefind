@@ -7,7 +7,9 @@ import { LISTING_PRICE_LABEL } from "../lib/pricing.ts"
 import {
   applyListingDocumentHead,
   listingHasEnhancedProfile,
-  looksLikeHtml,
+  listingHeroHeading,
+  listingProfileHeadings,
+  renderProfileArticle,
   sanitizeOwnerHtml,
   stripCrawlArticleFooter,
 } from "../lib/profile.ts"
@@ -126,8 +128,11 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
 
   const canEdit = Boolean(user && (user.role === "admin" || listing.ownerUserId === user.id))
   const article = stripCrawlArticleFooter(listing.profileContent ?? "")
+  const articleHtml = renderProfileArticle(article)
   const customHtml = sanitizeOwnerHtml(listing.profileHtml ?? "")
-  const enhanced = listingHasEnhancedProfile({ profileContent: article, profileHtml: customHtml })
+  const extraHeadings = listingProfileHeadings(listing).filter((row) => row.level > 1)
+  const enhanced = listingHasEnhancedProfile(listing)
+  const heroHeading = listingHeroHeading(listing)
 
   return (
     <article className="mx-auto grid w-full max-w-3xl gap-6">
@@ -135,7 +140,7 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">
           {listing.category || "PlaceFind listing"}
         </p>
-        <h2 className="mt-2 font-display text-4xl text-paper">{listing.brand || listing.name}</h2>
+        <h1 className="mt-2 font-display text-4xl text-paper">{heroHeading}</h1>
         <p className="mt-2 flex items-start gap-2 text-sm text-muted">
           <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
           {listingLocation(listing)}
@@ -192,20 +197,22 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Enhanced profile</p>
         {enhanced ? (
           <div className="mt-4 grid gap-4">
-            {article ? (
-              looksLikeHtml(article) ? (
-                <div className="profile-html" dangerouslySetInnerHTML={{ __html: sanitizeOwnerHtml(article) }} />
-              ) : (
-                <div className="whitespace-pre-wrap text-sm leading-7 text-paper/90">{article}</div>
+            {extraHeadings.map((row) => {
+              const Tag = `h${row.level}` as "h2" | "h3" | "h4" | "h5" | "h6"
+              return (
+                <Tag key={`h${row.level}`} className="profile-heading">
+                  {row.text}
+                </Tag>
               )
-            ) : null}
+            })}
+            {articleHtml ? <div className="profile-html" dangerouslySetInnerHTML={{ __html: articleHtml }} /> : null}
             {customHtml ? <div className="profile-html" dangerouslySetInnerHTML={{ __html: customHtml }} /> : null}
           </div>
         ) : (
           <p className="mt-3 text-sm leading-6 text-muted">
-            This listing is in the directory. The owner can write the public article, custom HTML, and page title from
-            Edit listing. Crawl Website can draft an article from the shop site, but it will not replace a profile the
-            owner has already customized.
+            This listing is in the directory. The owner can write headings, the public article, custom HTML, and page
+            title from Edit listing. Crawl Website can draft an article from the shop site, but it will not replace a
+            profile the owner has already customized.
           </p>
         )}
       </section>

@@ -4,7 +4,10 @@ import {
   CRAWL_ARTICLE_FOOTER,
   listingDocumentTitle,
   listingHasEnhancedProfile,
+  listingHeroHeading,
   listingProfileFromInput,
+  listingProfileHeadings,
+  renderProfileArticle,
   parseOwnerSchema,
   profileFieldsChanged,
   profileHasOwnerCopy,
@@ -78,6 +81,22 @@ describe("listing profile helpers", () => {
     assert.equal(listingHasEnhancedProfile({ profileContent: "Hello", profileHtml: "" }), true)
     assert.equal(listingHasEnhancedProfile({ profileContent: "", profileHtml: "<p>Hi</p>" }), true)
     assert.equal(listingHasEnhancedProfile({ profileContent: "  ", profileHtml: "" }), false)
+    assert.equal(listingHeroHeading(listing({ profileH1: "Morning bread in Portland" })), "Morning bread in Portland")
+    assert.equal(listingHeroHeading(listing()), "Harbor & Oak Bakery")
+    assert.deepEqual(listingProfileHeadings({ profileH2: "Pastry counter", profileH4: "Hours" }), [
+      { level: 2, text: "Pastry counter" },
+      { level: 4, text: "Hours" },
+    ])
+    assert.equal(listingHasEnhancedProfile({ profileContent: "", profileHtml: "", profileH3: "Classes" }), true)
+  })
+
+  it("turns article markdown headings into H1–H6 tags", () => {
+    const html = renderProfileArticle("# Wheel throwing\n\n## Weekend classes\n\nOpen Saturday.\n\n###### Tiny note")
+    assert.match(html, /<h1>Wheel throwing<\/h1>/)
+    assert.match(html, /<h2>Weekend classes<\/h2>/)
+    assert.match(html, /<p>Open Saturday\.<\/p>/)
+    assert.match(html, /<h6>Tiny note<\/h6>/)
+    assert.equal(renderProfileArticle("<h3>Custom</h3><script>alert(1)</script>"), "<h3>Custom</h3>")
   })
 
   it("marks a profile as owner copy only when fields are filled or changed", () => {

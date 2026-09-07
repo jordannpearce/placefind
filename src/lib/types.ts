@@ -253,6 +253,12 @@ export type DirectoryListing = {
   profileHeadHtml?: string
   profileSchema?: string
   profileHtml?: string
+  profileH1?: string
+  profileH2?: string
+  profileH3?: string
+  profileH4?: string
+  profileH5?: string
+  profileH6?: string
   profileCustomized?: boolean
   crawlStatus?: CrawlStatus
   lastCrawledAt?: string | null
@@ -310,6 +316,12 @@ export type ListingInput = {
   profileSchema?: string
   profileHtml?: string
   profileContent?: string
+  profileH1?: string
+  profileH2?: string
+  profileH3?: string
+  profileH4?: string
+  profileH5?: string
+  profileH6?: string
 }
 
 export type ImpersonatingInfo = {

@@ -257,7 +257,11 @@ export default function App() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">
               {desktop ? "Maps lookup" : "Business directory"}
             </p>
-            <h1 className="font-display text-3xl text-paper sm:text-4xl">PlaceFind</h1>
+            {listingId && !listingEdit && !listingCreate ? (
+              <p className="font-display text-3xl text-paper sm:text-4xl">PlaceFind</p>
+            ) : (
+              <h1 className="font-display text-3xl text-paper sm:text-4xl">PlaceFind</h1>
+            )}
           </button>
           <div className="flex flex-wrap items-center gap-2">
             {runtimeReady && !needsDesktopLogin && (

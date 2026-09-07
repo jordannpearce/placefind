@@ -94,13 +94,76 @@ export function listingDocumentTitle(listing: DirectoryListing): string {
   return place ? `${name} · ${place}` : `${name} · PlaceFind`
 }
 
-export function listingHasEnhancedProfile(
-  listing: Pick<DirectoryListing, "profileContent" | "profileHtml">,
-): boolean {
-  return Boolean(listing.profileContent?.trim() || listing.profileHtml?.trim())
+export const PROFILE_HEADING_LEVELS = [1, 2, 3, 4, 5, 6] as const
+export type ProfileHeadingLevel = (typeof PROFILE_HEADING_LEVELS)[number]
+export type ProfileHeadingFields = {
+  [K in ProfileHeadingLevel as `profileH${K}`]: string
 }
 
-export type ListingProfileFields = {
+export function emptyHeadingFields(): ProfileHeadingFields {
+  return {
+    profileH1: "",
+    profileH2: "",
+    profileH3: "",
+    profileH4: "",
+    profileH5: "",
+    profileH6: "",
+  }
+}
+
+export function listingProfileHeadings(
+  listing: Partial<ProfileHeadingFields> | null | undefined,
+): { level: ProfileHeadingLevel; text: string }[] {
+  return PROFILE_HEADING_LEVELS.flatMap((level) => {
+    const text = String(listing?.[`profileH${level}`] ?? "").trim()
+    return text ? [{ level, text }] : []
+  })
+}
+
+export function listingHeroHeading(
+  listing: Pick<DirectoryListing, "name"> & { brand?: string; profileH1?: string },
+): string {
+  return listing.profileH1?.trim() || listing.brand?.trim() || listing.name
+}
+
+export function escapeOwnerText(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
+export function renderProfileArticle(text: string): string {
+  const trimmed = stripCrawlArticleFooter(text)
+  if (!trimmed) return ""
+  if (looksLikeHtml(trimmed)) return sanitizeOwnerHtml(trimmed)
+  return sanitizeOwnerHtml(
+    trimmed
+      .split(/\n{2,}/)
+      .map((block) => {
+        const heading = block.match(/^(#{1,6})\s+(.+)$/)
+        if (heading) {
+          const level = heading[1]!.length
+          return `<h${level}>${escapeOwnerText(heading[2]!.trim())}</h${level}>`
+        }
+        return `<p>${escapeOwnerText(block).replace(/\n/g, "<br>")}</p>`
+      })
+      .join("\n"),
+  )
+}
+
+export function listingHasEnhancedProfile(
+  listing: Pick<DirectoryListing, "profileContent" | "profileHtml"> & Partial<ProfileHeadingFields>,
+): boolean {
+  return Boolean(
+    listing.profileContent?.trim() ||
+      listing.profileHtml?.trim() ||
+      listingProfileHeadings(listing).some((row) => row.level > 1),
+  )
+}
+
+export type ListingProfileFields = ProfileHeadingFields & {
   profilePageTitle: string
   profileMetaDescription: string
   profileHeadHtml: string
@@ -111,6 +174,7 @@ export type ListingProfileFields = {
 
 export function emptyProfileFields(): ListingProfileFields {
   return {
+    ...emptyHeadingFields(),
     profilePageTitle: "",
     profileMetaDescription: "",
     profileHeadHtml: "",
@@ -120,8 +184,20 @@ export function emptyProfileFields(): ListingProfileFields {
   }
 }
 
+function headingFieldsFromInput(input: Partial<ProfileHeadingFields> | null | undefined): ProfileHeadingFields {
+  const next = emptyHeadingFields()
+  for (const level of PROFILE_HEADING_LEVELS) {
+    next[`profileH${level}`] = String(input?.[`profileH${level}`] ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 200)
+  }
+  return next
+}
+
 export function listingProfileFromInput(input: Partial<ListingProfileFields> | null | undefined): ListingProfileFields {
   return {
+    ...headingFieldsFromInput(input),
     profilePageTitle: String(input?.profilePageTitle ?? "").trim(),
     profileMetaDescription: String(input?.profileMetaDescription ?? "").trim(),
     profileHeadHtml: sanitizeOwnerHeadHtml(input?.profileHeadHtml ?? ""),
@@ -138,7 +214,8 @@ export function profileHasOwnerCopy(profile: ListingProfileFields): boolean {
       profile.profileHeadHtml ||
       profile.profileSchema ||
       profile.profileHtml ||
-      profile.profileContent,
+      profile.profileContent ||
+      listingProfileHeadings(profile).length,
   )
 }
 
@@ -152,7 +229,8 @@ export function profileFieldsChanged(
     String(current.profileHeadHtml ?? "") !== next.profileHeadHtml ||
     String(current.profileSchema ?? "") !== next.profileSchema ||
     String(current.profileHtml ?? "") !== next.profileHtml ||
-    stripCrawlArticleFooter(String(current.profileContent ?? "")) !== next.profileContent
+    stripCrawlArticleFooter(String(current.profileContent ?? "")) !== next.profileContent ||
+    PROFILE_HEADING_LEVELS.some((level) => String(current[`profileH${level}`] ?? "") !== next[`profileH${level}`])
   )
 }
 

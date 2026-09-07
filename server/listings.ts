@@ -53,6 +53,12 @@ export type DirectoryListing = {
   profileHeadHtml: string
   profileSchema: string
   profileHtml: string
+  profileH1: string
+  profileH2: string
+  profileH3: string
+  profileH4: string
+  profileH5: string
+  profileH6: string
   profileCustomized: boolean
   crawlStatus: CrawlStatus
   lastCrawledAt: string
@@ -79,6 +85,12 @@ export type ListingInput = {
   profileSchema?: string
   profileHtml?: string
   profileContent?: string
+  profileH1?: string
+  profileH2?: string
+  profileH3?: string
+  profileH4?: string
+  profileH5?: string
+  profileH6?: string
 }
 
 export type MapsMatchInput = {
@@ -131,6 +143,12 @@ type SeedListing = Omit<
   | "profileHeadHtml"
   | "profileSchema"
   | "profileHtml"
+  | "profileH1"
+  | "profileH2"
+  | "profileH3"
+  | "profileH4"
+  | "profileH5"
+  | "profileH6"
   | "profileCustomized"
 >
 
@@ -364,6 +382,12 @@ function asListing(row: Partial<DirectoryListing> | null | undefined): Directory
     profileHeadHtml: String(row.profileHeadHtml ?? ""),
     profileSchema: String(row.profileSchema ?? ""),
     profileHtml: String(row.profileHtml ?? ""),
+    profileH1: String(row.profileH1 ?? ""),
+    profileH2: String(row.profileH2 ?? ""),
+    profileH3: String(row.profileH3 ?? ""),
+    profileH4: String(row.profileH4 ?? ""),
+    profileH5: String(row.profileH5 ?? ""),
+    profileH6: String(row.profileH6 ?? ""),
     profileCustomized: Boolean(row.profileCustomized),
     crawlStatus: crawlStatusOf(row.crawlStatus),
     lastCrawledAt: String(row.lastCrawledAt ?? ""),
@@ -446,6 +470,10 @@ export function validateListing(input: ListingInput): { value?: ListingInput; er
   if (profile.profileSchema.length > 16000) return { error: "Schema must be 16,000 characters or fewer." }
   if ((input.profileHtml ?? "").length > 40000) return { error: "Custom HTML must be 40,000 characters or fewer." }
   if ((input.profileContent ?? "").length > 40000) return { error: "Profile article must be 40,000 characters or fewer." }
+  for (const level of [1, 2, 3, 4, 5, 6] as const) {
+    const value = String(input[`profileH${level}`] ?? "")
+    if (value.length > 200) return { error: `H${level} must be 200 characters or fewer.` }
+  }
   const schemaError = profileSchemaError(profile.profileSchema)
   if (schemaError) return { error: schemaError }
   return {
@@ -506,6 +534,12 @@ export function publicListing(listing: DirectoryListing, includeOwner = false) {
     profileHeadHtml: listing.profileHeadHtml,
     profileSchema: listing.profileSchema,
     profileHtml: listing.profileHtml,
+    profileH1: listing.profileH1,
+    profileH2: listing.profileH2,
+    profileH3: listing.profileH3,
+    profileH4: listing.profileH4,
+    profileH5: listing.profileH5,
+    profileH6: listing.profileH6,
     profileCustomized: listing.profileCustomized,
     crawlStatus: listing.crawlStatus,
     lastCrawledAt: listing.lastCrawledAt || null,
@@ -633,6 +667,12 @@ export function createListing(input: ListingInput, ownerUserId: string): Directo
     profileHeadHtml: parsed.value.profileHeadHtml ?? "",
     profileSchema: parsed.value.profileSchema ?? "",
     profileHtml: parsed.value.profileHtml ?? "",
+    profileH1: parsed.value.profileH1 ?? "",
+    profileH2: parsed.value.profileH2 ?? "",
+    profileH3: parsed.value.profileH3 ?? "",
+    profileH4: parsed.value.profileH4 ?? "",
+    profileH5: parsed.value.profileH5 ?? "",
+    profileH6: parsed.value.profileH6 ?? "",
     profileCustomized: profileHasOwnerCopy(listingProfileFromInput(parsed.value)),
     crawlStatus: "idle",
     lastCrawledAt: "",
@@ -675,6 +715,12 @@ export function updateListing(id: string, input: ListingInput, userId: string, a
     profileSchema: parsed.value.profileSchema ?? current.profileSchema,
     profileHtml: parsed.value.profileHtml ?? current.profileHtml,
     profileContent: parsed.value.profileContent ?? current.profileContent,
+    profileH1: parsed.value.profileH1 ?? current.profileH1,
+    profileH2: parsed.value.profileH2 ?? current.profileH2,
+    profileH3: parsed.value.profileH3 ?? current.profileH3,
+    profileH4: parsed.value.profileH4 ?? current.profileH4,
+    profileH5: parsed.value.profileH5 ?? current.profileH5,
+    profileH6: parsed.value.profileH6 ?? current.profileH6,
     profileCustomized:
       current.profileCustomized || profileFieldsChanged(current, listingProfileFromInput(parsed.value)),
     updatedAt: nowIso(),

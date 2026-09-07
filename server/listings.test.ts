@@ -188,6 +188,9 @@ describe("directory listings", () => {
         name: "Harbor Street Cafe",
         city: "Portland",
         state: "OR",
+        profileH1: "Harbor Street Cafe",
+        profileH2: "Coffee on the waterfront",
+        profileH3: "Weekend hours",
         profilePageTitle: "Harbor Street Cafe · Portland",
         profileMetaDescription: "Coffee and breakfast on Harbor Street.",
         profileHeadHtml: '<meta name="robots" content="index,follow"><script>alert(1)</script>',
@@ -199,6 +202,9 @@ describe("directory listings", () => {
       "user-1",
     )
     assert.equal(created.profileCustomized, true)
+    assert.equal(created.profileH1, "Harbor Street Cafe")
+    assert.equal(created.profileH2, "Coffee on the waterfront")
+    assert.equal(created.profileH3, "Weekend hours")
     assert.equal(created.profilePageTitle, "Harbor Street Cafe · Portland")
     assert.equal(created.profileContent, "We roast on Harbor Street.")
     assert.doesNotMatch(created.profileHeadHtml, /script/i)

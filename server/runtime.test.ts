@@ -61,7 +61,7 @@ describe("public site URL", () => {
     else process.env.PLACEFIND_PUBLIC_URL = previous
   })
 
-  it("defaults to the Railway website and builds a reset link", () => {
+  it("defaults to placefind.to and builds a reset link", () => {
     delete process.env.PLACEFIND_PUBLIC_URL
     assert.equal(publicSiteUrl(), DEFAULT_PUBLIC_SITE_URL)
     assert.equal(
