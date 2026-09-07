@@ -4,6 +4,9 @@ import type { DirectoryListing } from "./types.ts"
 export const CRAWL_ARTICLE_FOOTER =
   "This article was written from the listing the owner published and facts found on the business website. Reviews from visitors appear below."
 
+export const DEFAULT_SITE_DESCRIPTION =
+  "PlaceFind is a web directory for local businesses. List a shop for $150 per month."
+
 const CRAWL_FOOTER_PATTERNS = [
   /(?:\n\n)?This article was written from the listing the owner published and facts found on the business website\.\s*Reviews from visitors appear below\.?/gi,
   /(?:\n\n)?This profile was written from the business website and the listing the owner published on PlaceFind\.\s*Reviews from visitors appear below the facts\.?/gi,
@@ -78,7 +81,7 @@ export function defaultListingSchema(listing: DirectoryListing, pageUrl?: string
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
     name: listing.brand || listing.name,
-    description: listing.profileMetaDescription || undefined,
+    description: listingDocumentDescription(listing),
     telephone: listing.phone || undefined,
     url: listing.website || pageUrl || undefined,
     address,
@@ -126,12 +129,70 @@ export function listingBusinessName(
   return listing.brand?.trim() || listing.name
 }
 
+export function listingDocumentDescription(
+  listing: Pick<DirectoryListing, "name" | "city" | "state"> & {
+    brand?: string
+    profileMetaDescription?: string
+  },
+): string {
+  const custom = listing.profileMetaDescription?.trim()
+  if (custom) return custom
+  const name = listingBusinessName(listing)
+  const place = [listing.city?.trim(), listing.state?.trim()].filter(Boolean).join(", ")
+  return place ? `${name} in ${place}.` : `${name} on PlaceFind.`
+}
+
 export function escapeOwnerText(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function upsertHtmlMeta(html: string, attr: "name" | "property", key: string, content: string, id: string): string {
+  const escaped = escapeOwnerText(content)
+  const pattern = new RegExp(`<meta\\b[^>]*?\\b${attr}\\s*=\\s*["']${escapeRegExp(key)}["'][^>]*>`, "is")
+  const tag = `<meta id="${id}" ${attr}="${key}" content="${escaped}">`
+  if (pattern.test(html)) return html.replace(pattern, tag)
+  return html.replace(/<\/head>/i, `    ${tag}\n  </head>`)
+}
+
+export function applyListingHtmlHead(html: string, listing: DirectoryListing, pageUrl?: string): string {
+  const title = listingDocumentTitle(listing)
+  const description = listingDocumentDescription(listing)
+  let next = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeOwnerText(title)}</title>`)
+  next = upsertHtmlMeta(next, "name", "description", description, "placefind-description")
+  next = upsertHtmlMeta(next, "property", "og:description", description, "placefind-og-description")
+  next = upsertHtmlMeta(next, "property", "og:title", title, "placefind-og-title")
+  if (pageUrl) next = upsertHtmlMeta(next, "property", "og:url", pageUrl, "placefind-og-url")
+  return next
+}
+
+function upsertDocumentMeta(id: string, attr: "name" | "property", key: string, content: string): () => void {
+  const existing =
+    document.getElementById(id) ?? document.head.querySelector(`meta[${attr}="${key}"]`)
+  if (existing) {
+    const previous = existing.getAttribute("content")
+    const previousId = existing.getAttribute("id")
+    existing.setAttribute("content", content)
+    if (!previousId) existing.setAttribute("id", id)
+    return () => {
+      if (previous == null) existing.removeAttribute("content")
+      else existing.setAttribute("content", previous)
+      if (!previousId) existing.removeAttribute("id")
+    }
+  }
+  const meta = document.createElement("meta")
+  meta.setAttribute("id", id)
+  meta.setAttribute(attr, key)
+  meta.setAttribute("content", content)
+  document.head.appendChild(meta)
+  return () => meta.remove()
 }
 
 export function renderProfileArticle(text: string): string {
@@ -251,7 +312,8 @@ export function profileSchemaError(value: string): string | undefined {
 export function applyListingDocumentHead(listing: DirectoryListing, pageUrl?: string): () => void {
   if (typeof document === "undefined") return () => undefined
   const previousTitle = document.title
-  document.title = listingDocumentTitle(listing)
+  const title = listingDocumentTitle(listing)
+  document.title = title
 
   const added: HTMLElement[] = []
   function add(node: HTMLElement) {
@@ -259,13 +321,16 @@ export function applyListingDocumentHead(listing: DirectoryListing, pageUrl?: st
     added.push(node)
   }
 
-  const description = listing.profileMetaDescription?.trim()
-  if (description) {
-    const meta = document.createElement("meta")
-    meta.setAttribute("name", "description")
-    meta.setAttribute("content", description)
-    add(meta)
-  }
+  const description = listingDocumentDescription(listing)
+  const restores = [
+    () => {
+      document.title = previousTitle
+    },
+    upsertDocumentMeta("placefind-description", "name", "description", description),
+    upsertDocumentMeta("placefind-og-description", "property", "og:description", description),
+    upsertDocumentMeta("placefind-og-title", "property", "og:title", title),
+  ]
+  if (pageUrl) restores.push(upsertDocumentMeta("placefind-og-url", "property", "og:url", pageUrl))
 
   const schema = parseOwnerSchema(listing.profileSchema ?? "") || defaultListingSchema(listing, pageUrl)
   if (schema) {
@@ -285,7 +350,7 @@ export function applyListingDocumentHead(listing: DirectoryListing, pageUrl?: st
   }
 
   return () => {
-    document.title = previousTitle
+    for (const restore of restores.reverse()) restore()
     for (const node of added) node.remove()
   }
 }

@@ -1,7 +1,14 @@
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { describe, it } from "node:test"
+import { fileURLToPath } from "node:url"
 import {
+  applyListingDocumentHead,
+  applyListingHtmlHead,
   CRAWL_ARTICLE_FOOTER,
+  DEFAULT_SITE_DESCRIPTION,
+  listingDocumentDescription,
   listingDocumentTitle,
   listingHasEnhancedProfile,
   listingBusinessName,
@@ -17,6 +24,8 @@ import {
   stripCrawlArticleFooter,
 } from "./profile.ts"
 import type { DirectoryListing } from "./types.ts"
+
+const indexHtml = readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../index.html"), "utf8")
 
 const listing = (overrides: Partial<DirectoryListing> = {}): DirectoryListing => ({
   id: "listing-1",
@@ -89,6 +98,132 @@ describe("listing profile helpers", () => {
       { level: 4, text: "Hours" },
     ])
     assert.equal(listingHasEnhancedProfile({ profileContent: "", profileHtml: "", profileH3: "Classes" }), true)
+  })
+
+  it("prefers owner meta description and falls back to name and city", () => {
+    assert.equal(
+      listingDocumentDescription(listing({ profileMetaDescription: "Wheel-thrown mugs and weekend classes on South Congress." })),
+      "Wheel-thrown mugs and weekend classes on South Congress.",
+    )
+    assert.equal(listingDocumentDescription(listing()), "Harbor & Oak Bakery in Portland, ME.")
+    assert.equal(listingDocumentDescription(listing({ city: "", state: "" })), "Harbor & Oak Bakery on PlaceFind.")
+    assert.equal(listingDocumentDescription(listing()).includes("$150"), false)
+    assert.match(indexHtml, new RegExp(DEFAULT_SITE_DESCRIPTION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+  })
+
+  it("rewrites the SPA shell so listing meta replaces the $150 marketing line", () => {
+    const custom = listing({
+      profilePageTitle: "Cedar & Clay Studio · Austin pottery",
+      profileMetaDescription: "Wheel-thrown mugs and weekend classes on South Congress.",
+    })
+    const next = applyListingHtmlHead(indexHtml, custom, "https://placefind.example/listings/cedar-clay-studio-pottery-studio")
+    assert.match(next, /<title>Cedar &amp; Clay Studio · Austin pottery<\/title>/)
+    assert.match(next, /id="placefind-description"[^>]*content="Wheel-thrown mugs and weekend classes on South Congress\."/)
+    assert.match(next, /property="og:description"[^>]*content="Wheel-thrown mugs and weekend classes on South Congress\."/)
+    assert.equal((next.match(/name="description"/g) ?? []).length, 1)
+    assert.equal(next.includes(DEFAULT_SITE_DESCRIPTION), false)
+    assert.equal(/\$150/.test(next), false)
+
+    const fallback = applyListingHtmlHead(indexHtml, listing({ profileMetaDescription: "" }))
+    assert.match(fallback, /content="Harbor &amp; Oak Bakery in Portland, ME\."/)
+    assert.equal(fallback.includes(DEFAULT_SITE_DESCRIPTION), false)
+  })
+
+  it("replaces the live document description and restores the site default", () => {
+    type FakeNode = {
+      id: string
+      attrs: Map<string, string>
+      type?: string
+      textContent?: string
+      innerHTML?: string
+      children: FakeNode[]
+      setAttribute: (name: string, value: string) => void
+      getAttribute: (name: string) => string | null
+      removeAttribute: (name: string) => void
+      remove: () => void
+    }
+    const headChildren: FakeNode[] = []
+    function makeNode(): FakeNode {
+      const node: FakeNode = {
+        id: "",
+        attrs: new Map(),
+        children: [],
+        setAttribute(name, value) {
+          if (name === "id") node.id = value
+          node.attrs.set(name, value)
+        },
+        getAttribute(name) {
+          if (name === "id") return node.id || null
+          return node.attrs.get(name) ?? null
+        },
+        removeAttribute(name) {
+          if (name === "id") node.id = ""
+          node.attrs.delete(name)
+        },
+        remove() {
+          const index = headChildren.indexOf(node)
+          if (index >= 0) headChildren.splice(index, 1)
+        },
+      }
+      return node
+    }
+    function seedMeta(id: string, attr: "name" | "property", key: string, content: string) {
+      const node = makeNode()
+      node.setAttribute("id", id)
+      node.setAttribute(attr, key)
+      node.setAttribute("content", content)
+      headChildren.push(node)
+      return node
+    }
+    const descriptionMeta = seedMeta("placefind-description", "name", "description", DEFAULT_SITE_DESCRIPTION)
+    seedMeta("placefind-og-description", "property", "og:description", DEFAULT_SITE_DESCRIPTION)
+    const document = {
+      title: "PlaceFind — Local business directory",
+      head: {
+        children: headChildren,
+        appendChild(node: FakeNode) {
+          headChildren.push(node)
+          return node
+        },
+        querySelector(selector: string) {
+          const nameMatch = selector.match(/^meta\[name="([^"]+)"\]$/)
+          if (nameMatch) return headChildren.find((node) => node.getAttribute("name") === nameMatch[1]) ?? null
+          const propMatch = selector.match(/^meta\[property="([^"]+)"\]$/)
+          if (propMatch) return headChildren.find((node) => node.getAttribute("property") === propMatch[1]) ?? null
+          return null
+        },
+      },
+      getElementById(id: string) {
+        return headChildren.find((node) => node.id === id) ?? null
+      },
+      createElement() {
+        return makeNode()
+      },
+    }
+    Object.assign(globalThis, { document })
+
+    const restore = applyListingDocumentHead(
+      listing({ profileMetaDescription: "Wheel-thrown mugs and weekend classes on South Congress." }),
+      "https://placefind.example/listings/cedar-clay-studio-pottery-studio",
+    )
+    assert.equal(descriptionMeta.getAttribute("content"), "Wheel-thrown mugs and weekend classes on South Congress.")
+    assert.equal(
+      document.head.querySelector('meta[property="og:description"]')?.getAttribute("content"),
+      "Wheel-thrown mugs and weekend classes on South Congress.",
+    )
+    assert.equal(headChildren.filter((node) => node.getAttribute("name") === "description").length, 1)
+    assert.equal(document.title, "Harbor & Oak Bakery · 18 Exchange St, Portland, ME 04101")
+
+    restore()
+    assert.equal(descriptionMeta.getAttribute("content"), DEFAULT_SITE_DESCRIPTION)
+    assert.equal(document.head.querySelector('meta[property="og:description"]')?.getAttribute("content"), DEFAULT_SITE_DESCRIPTION)
+    assert.equal(document.title, "PlaceFind — Local business directory")
+
+    applyListingDocumentHead(listing({ profileMetaDescription: "" }))
+    assert.equal(descriptionMeta.getAttribute("content"), "Harbor & Oak Bakery in Portland, ME.")
+    assert.equal(descriptionMeta.getAttribute("content")?.includes("$150"), false)
+
+    delete (globalThis as { document?: unknown }).document
   })
 
   it("turns article markdown headings into H1–H6 tags", () => {

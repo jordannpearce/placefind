@@ -84,6 +84,7 @@ import { requestIp, runWebsiteSearch, VisitorSearchUsedError } from "./search-li
 import { readSearchQuery } from "./search-query.ts"
 import { canPublishListing, MEMBER_LISTING_MESSAGE } from "../src/lib/account.ts"
 import { listingPath } from "../src/lib/listings.ts"
+import { applyListingHtmlHead } from "../src/lib/profile.ts"
 import {
   confirmListingMatch,
   createListing,
@@ -1201,6 +1202,26 @@ async function start() {
     res.download(full, name)
   })
 
+  function listingPublicSlug(urlPath: string): string | null {
+    const match = urlPath.match(/^\/listings\/([^/]+)\/?$/)
+    if (!match || match[1] === "new") return null
+    try {
+      return decodeURIComponent(match[1])
+    } catch {
+      return match[1]
+    }
+  }
+
+  function listingForPublicPath(urlPath: string) {
+    const slug = listingPublicSlug(urlPath)
+    if (!slug) return null
+    try {
+      return getListing(slug)
+    } catch {
+      return null
+    }
+  }
+
   app.use((req, res, next) => {
     if (req.method !== "GET") return next()
     const match = req.path.match(/^\/listings\/([^/]+)(\/edit)?\/?$/)
@@ -1221,14 +1242,38 @@ async function start() {
   if (isProd) {
     const dist = process.env.PLACEFIND_UI_DIR || path.resolve(dirname, "../dist")
     app.use(express.static(dist))
-    app.get(/.*/, (_req, res) => {
-      res.sendFile(path.join(dist, "index.html"))
+    app.get(/.*/, (req, res) => {
+      const indexPath = path.join(dist, "index.html")
+      const listing = listingForPublicPath(req.path)
+      if (listing) {
+        const html = applyListingHtmlHead(
+          readFileSync(indexPath, "utf8"),
+          listing,
+          `${siteOrigin(req)}${listingPath(listing)}`,
+        )
+        res.status(200).type("html").send(html)
+        return
+      }
+      res.sendFile(indexPath)
     })
   } else {
     const { createServer } = await import("vite")
     const vite = await createServer({
       server: { middlewareMode: true, host: "0.0.0.0" },
       appType: "spa",
+    })
+    app.use(async (req, res, next) => {
+      if (req.method !== "GET") return next()
+      const listing = listingForPublicPath(req.path)
+      if (!listing) return next()
+      try {
+        const raw = readFileSync(path.resolve(dirname, "../index.html"), "utf8")
+        const transformed = await vite.transformIndexHtml(req.originalUrl, raw)
+        const html = applyListingHtmlHead(transformed, listing, `${siteOrigin(req)}${listingPath(listing)}`)
+        res.status(200).type("html").send(html)
+      } catch (error) {
+        next(error)
+      }
     })
     app.use(vite.middlewares)
   }
