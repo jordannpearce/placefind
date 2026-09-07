@@ -40,7 +40,12 @@ export function HomePage({ user, onGo }: Props) {
             PlaceFind is a web directory for people looking for local businesses — bakeries, clinics, shops, and
             offices. A business can publish its own listing, collect reviews, and show the story behind the brand.
           </p>
-          <p className="mt-4 max-w-xl text-sm leading-6 text-brass">{listingPriceCopy()}</p>
+          <p className="mt-4 max-w-xl text-sm leading-6 text-brass">
+            {listingPriceCopy()}{" "}
+            <button type="button" onClick={() => onGo("/pricing")} className="underline decoration-brass/50 hover:text-paper">
+              See pricing
+            </button>
+          </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <button
               type="button"

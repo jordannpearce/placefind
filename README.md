@@ -10,6 +10,7 @@ A web directory for local businesses. A shop can publish a listing for **$150 pe
 
 - Home: [http://127.0.0.1:43141/](http://127.0.0.1:43141/)
 - Directory: [http://127.0.0.1:43141/directory](http://127.0.0.1:43141/directory)
+- Pricing: [http://127.0.0.1:43141/pricing](http://127.0.0.1:43141/pricing)
 - Join to list a business: [http://127.0.0.1:43141/join](http://127.0.0.1:43141/join)
 - Join free to review or request a quote: [http://127.0.0.1:43141/join?for=review](http://127.0.0.1:43141/join?for=review)
 - Legal: `/terms` · `/policy` (`/privacy`) · `/email-policy` · `/data-policy` · `/refund`

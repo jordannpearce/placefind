@@ -46,6 +46,7 @@ describe("account kinds", () => {
     assert.equal(joinIntentFromSearch("?for=review"), "member")
     assert.equal(joinIntentFromSearch("for=quote&next=/listings/oak-bakery"), "member")
     assert.equal(safeAuthNext("/listings/oak-bakery"), "/listings/oak-bakery")
+    assert.equal(safeAuthNext("/pricing"), "/pricing")
     assert.equal(safeAuthNext("https://evil.example/listings/oak"), null)
     assert.equal(safeAuthNext("//evil.example"), null)
     assert.equal(safeAuthNext("/track"), null)

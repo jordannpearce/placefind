@@ -16,6 +16,7 @@ export type AppPath =
   | "/try"
   | "/demo"
   | "/directory"
+  | "/pricing"
   | "/dashboard"
   | "/listings"
   | "/terms"
@@ -52,6 +53,7 @@ const PATHS: AppPath[] = [
   "/try",
   "/demo",
   "/directory",
+  "/pricing",
   "/dashboard",
   "/listings",
   "/terms",
@@ -98,6 +100,7 @@ export function currentPath(): AppPath {
   if (path.startsWith("/try")) return "/try"
   if (path.startsWith("/demo")) return "/demo"
   if (path.startsWith("/directory")) return "/directory"
+  if (path.startsWith("/pricing")) return "/pricing"
   if (path.startsWith("/dashboard")) return "/dashboard"
   if (path.startsWith("/listings")) return "/listings"
   if (path.startsWith("/terms")) return "/terms"
@@ -124,7 +127,7 @@ export function allowedPath(next: AppPath, access: NavAccess): AppPath {
   if (next === "/reset") return "/reset"
   if (next === "/sell") return admin ? "/sell" : impersonating ? "/account" : "/admin"
   if (next === "/join") return user ? "/account" : "/join"
-  if (next === "/directory" || next === "/listings") return next
+  if (next === "/directory" || next === "/listings" || next === "/pricing") return next
   if (next === "/dashboard") return canUseOwnerTools(user) ? "/dashboard" : user ? "/account" : "/login"
   if (next === "/try" || next === "/demo") {
     if (desktop && !user) return "/login"
@@ -160,6 +163,7 @@ export function navLinks(access: NavAccess): NavLink[] {
   const links: NavLink[] = [
     { href: "/", label: "Home" },
     { href: "/directory", label: "Directory" },
+    { href: "/pricing", label: "Pricing" },
   ]
   if (!user) links.push({ href: "/#how-it-works", label: "How it works" })
   if (user) {
@@ -182,6 +186,7 @@ export function navLinks(access: NavAccess): NavLink[] {
 export function pageTitle(path: AppPath): string {
   if (path === "/") return "PlaceFind — Local business directory"
   if (path === "/directory") return "Directory · PlaceFind"
+  if (path === "/pricing") return "Pricing · PlaceFind"
   if (path === "/dashboard") return "Dashboard · PlaceFind"
   if (path === "/listings") return "Listing · PlaceFind"
   if (path === "/try" || path === "/demo") return "Test scan · PlaceFind"

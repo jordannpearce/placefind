@@ -8,6 +8,7 @@ import { ResetPage } from "./components/ResetPage.tsx"
 import { CrawlDashboard } from "./components/CrawlDashboard.tsx"
 import { DirectoryPage } from "./components/DirectoryPage.tsx"
 import { HomePage } from "./components/HomePage.tsx"
+import { PricingPage } from "./components/PricingPage.tsx"
 import { LegalPage } from "./components/LegalPage.tsx"
 import { ListingDetailPage } from "./components/ListingDetailPage.tsx"
 import { BusinessUpgradeCard } from "./components/BusinessUpgradeCard.tsx"
@@ -219,7 +220,7 @@ export default function App() {
     void runSearch(next)
   }
 
-  const needsDesktopLogin = desktop && !user && path !== "/admin" && path !== "/reset" && !isLegalPath(path)
+  const needsDesktopLogin = desktop && !user && path !== "/admin" && path !== "/reset" && path !== "/pricing" && !isLegalPath(path)
   const needsTrackLogin = !desktop && path === "/track" && !user
   const needsTryLogin = !desktop && (path === "/try" || path === "/demo") && !user
   const needsListingLogin = !desktop && path === "/listings" && listingCreate && !user
@@ -293,6 +294,7 @@ export default function App() {
         )}
         {showLegal && <LegalPage path={path} />}
         {showHome && <HomePage user={user} onGo={go} />}
+        {path === "/pricing" && <PricingPage user={user} onGo={go} />}
         {path === "/directory" && <DirectoryPage user={user} onGo={go} />}
         {path === "/dashboard" && user && <CrawlDashboard user={user} onGo={go} />}
         {path === "/listings" && listingCreate && user && canPublishListing(user) && (

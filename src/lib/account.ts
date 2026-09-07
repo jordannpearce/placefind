@@ -38,7 +38,7 @@ export function safeAuthNext(next: string | null | undefined): string | null {
   const trimmed = next.trim()
   if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.includes("://")) return null
   const path = trimmed.split("#")[0] ?? trimmed
-  if (path === "/directory" || path === "/account") return path
+  if (path === "/directory" || path === "/account" || path === "/pricing") return path
   if (path.startsWith("/listings/") && !path.includes("..")) return path
   return null
 }

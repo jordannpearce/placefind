@@ -16,6 +16,7 @@ const PUBLIC_FILES = [
   "components/SearchForm.tsx",
   "components/ResultPanel.tsx",
   "components/DirectoryPage.tsx",
+  "components/PricingPage.tsx",
   "components/ListingDetailPage.tsx",
   "components/ListingFormPage.tsx",
   "components/BusinessUpgradeCard.tsx",
@@ -31,6 +32,7 @@ const PUBLIC_FILES = [
 const PUBLIC_MARKETING_FILES = [
   "components/HomePage.tsx",
   "components/DirectoryPage.tsx",
+  "components/PricingPage.tsx",
   "components/SiteFooter.tsx",
   "components/AuthPage.tsx",
   "components/ListingDetailPage.tsx",
@@ -89,6 +91,11 @@ describe("public website copy", () => {
     assert.equal(/Harbor & Oak/.test(directory), false)
     const pricing = readFileSync(path.join(root, "lib/pricing.ts"), "utf8")
     assert.match(pricing, /\$150 per month/)
+    const pricingPage = readFileSync(path.join(root, "components/PricingPage.tsx"), "utf8")
+    assert.match(pricingPage, /LISTING_PRICE_LABEL|\$150/)
+    assert.match(pricingPage, /Neighbor/)
+    assert.match(pricingPage, /free/i)
+    assert.match(pricingPage, /not bill/)
   })
 
   it("keeps Track, Traffic, and rank-generator copy off public marketing pages", () => {

@@ -29,6 +29,7 @@ describe("allowedPath", () => {
     const guest = { desktop: false, store: true, admin: false, user: null } satisfies NavAccess
     assert.equal(allowedPath("/", guest), "/")
     assert.equal(allowedPath("/directory", guest), "/directory")
+    assert.equal(allowedPath("/pricing", guest), "/pricing")
     assert.equal(allowedPath("/listings", guest), "/listings")
     assert.equal(allowedPath("/track", guest), "/track")
     assert.equal(allowedPath("/try", guest), "/try")
@@ -78,7 +79,7 @@ describe("navLinks", () => {
 
   it("uses a directory nav on the public website and hides Test scan for visitors", () => {
     const guest = navLinks({ desktop: false, store: true, admin: false, user: null }).map((link) => link.label)
-    assert.deepEqual(guest, ["Home", "Directory", "How it works", "Join", "Sign in"])
+    assert.deepEqual(guest, ["Home", "Directory", "Pricing", "How it works", "Join", "Sign in"])
     assert.equal(guest.includes("Test scan"), false)
     assert.equal(guest.includes("Download"), false)
     assert.equal(guest.includes("Buy"), false)
@@ -93,6 +94,7 @@ describe("navLinks", () => {
     assert.deepEqual(labels, [
       "Home",
       "Directory",
+      "Pricing",
       "Create listing",
       "Dashboard",
       "Rank tracker",
@@ -110,7 +112,7 @@ describe("navLinks", () => {
     const member: AuthUser = { ...user, accountKind: "member" }
     const access = { desktop: false, store: true, admin: false, user: member } satisfies NavAccess
     const labels = navLinks(access).map((link) => link.label)
-    assert.deepEqual(labels, ["Home", "Directory", "Account"])
+    assert.deepEqual(labels, ["Home", "Directory", "Pricing", "Account"])
     assert.equal(labels.includes("Create listing"), false)
     assert.equal(labels.includes("Dashboard"), false)
     assert.equal(labels.includes("Rank tracker"), false)

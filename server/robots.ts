@@ -31,7 +31,7 @@ export function robotsTxt(origin: string): string {
 export function sitemapXml(origin: string, listingPaths: string[]): string {
   const base = origin.replace(/\/$/, "")
   const today = new Date().toISOString().slice(0, 10)
-  const staticPaths = ["/", "/directory", "/join", "/terms", "/policy", "/email-policy", "/data-policy", "/refund"]
+  const staticPaths = ["/", "/directory", "/pricing", "/join", "/terms", "/policy", "/email-policy", "/data-policy", "/refund"]
   const urls = [
     ...staticPaths,
     ...listingPaths.map((path) => (path.startsWith("/") ? path : `/listings/${path}`)),

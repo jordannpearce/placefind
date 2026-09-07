@@ -17,21 +17,45 @@ export function SiteFooter({ onGo }: Props) {
             A web directory for local businesses. List a shop for $150 per month, then publish a profile with reviews.
           </p>
         </div>
-        <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm" aria-label="Legal">
-          {legal.map((link) => (
+        <div className="grid gap-4">
+          <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm" aria-label="Site">
             <a
-              key={link.href}
-              href={link.href}
+              href="/pricing"
               onClick={(event) => {
                 event.preventDefault()
-                onGo(link.href)
+                onGo("/pricing")
               }}
               className="text-paper/75 hover:text-brass"
             >
-              {link.label}
+              Pricing
             </a>
-          ))}
-        </nav>
+            <a
+              href="/directory"
+              onClick={(event) => {
+                event.preventDefault()
+                onGo("/directory")
+              }}
+              className="text-paper/75 hover:text-brass"
+            >
+              Directory
+            </a>
+          </nav>
+          <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm" aria-label="Legal">
+            {legal.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                onClick={(event) => {
+                  event.preventDefault()
+                  onGo(link.href)
+                }}
+                className="text-paper/75 hover:text-brass"
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
+        </div>
       </div>
       <p className="mt-6 text-xs text-muted">© {new Date().getFullYear()} PlaceFind. All rights reserved.</p>
     </footer>
