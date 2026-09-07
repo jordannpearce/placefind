@@ -253,7 +253,7 @@ async function persistPostgres(name: StoreCollection) {
             row.email,
             row.passwordHash,
             row.role,
-            row.status === "suspended" ? "suspended" : "active",
+            row.status === "suspended" ? "suspended" : row.status === "pending" ? "pending" : "active",
             row.accountKind === "member" ? "member" : "business",
             row.createdAt,
           ],

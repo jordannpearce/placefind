@@ -139,7 +139,7 @@ export type AuthUser = {
   email: string
   role: "customer" | "admin"
   accountKind?: AccountKind
-  status: "active" | "suspended"
+  status: "active" | "suspended" | "pending"
   createdAt: string
 }
 

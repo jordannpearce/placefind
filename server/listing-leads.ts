@@ -1,10 +1,11 @@
 import type express from "express"
+import { ACCOUNT_PENDING_REVIEW_MESSAGE, canLeaveReview } from "../src/lib/account.ts"
 import type { QuoteLeadInput } from "../src/lib/quotes.ts"
 import { ListingError } from "./listings.ts"
 import { createReview, listingReviewSummary, reviewsForListing } from "./reviews.ts"
 import { submitQuoteLead } from "./quotes.ts"
 
-export type LeadUser = { id: string; name: string }
+export type LeadUser = { id: string; name: string; role?: string; status?: string; accountKind?: string }
 
 export function registerListingLeadRoutes(
   app: express.Express,
@@ -13,6 +14,10 @@ export function registerListingLeadRoutes(
   app.post("/api/listings/:id/reviews", (req, res) => {
     const user = requireUser(req, res)
     if (!user) return
+    if (!canLeaveReview(user)) {
+      res.status(403).json({ error: ACCOUNT_PENDING_REVIEW_MESSAGE })
+      return
+    }
     try {
       const review = createReview(String(req.params.id ?? ""), req.body ?? {}, user)
       res.status(201).json({

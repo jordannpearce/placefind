@@ -54,6 +54,17 @@ describe("allowedPath", () => {
     assert.equal(allowedPath("/join", access), "/account")
   })
 
+  it("sends a pending account to Account instead of owner tools", () => {
+    const pending: AuthUser = { ...user, status: "pending" }
+    const access = { desktop: false, store: true, admin: false, user: pending } satisfies NavAccess
+    assert.equal(allowedPath("/create-profile", access), "/account")
+    assert.equal(allowedPath("/dashboard", access), "/account")
+    assert.equal(allowedPath("/track", access), "/account")
+    const labels = navLinks(access).map((link) => link.label)
+    assert.equal(labels.includes("Create listing"), false)
+    assert.equal(labels.includes("Dashboard"), false)
+  })
+
   it("lets a signed-in leftover desktop customer use Lookup, Track, and Account", () => {
     const access = { desktop: true, store: false, admin: false, user } satisfies NavAccess
     assert.equal(allowedPath("/", access), "/")

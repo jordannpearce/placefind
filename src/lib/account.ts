@@ -2,9 +2,16 @@ import type { AuthUser } from "./types.ts"
 
 export type AccountKind = "business" | "member"
 export type JoinIntent = "business" | "member"
+export type UserStatus = "active" | "suspended" | "pending"
 
 export const MEMBER_LISTING_MESSAGE =
   "This account is for reviews. Anyone can request a quote. Listing a business is $150 per month on a business account."
+
+export const ACCOUNT_PENDING_MESSAGE =
+  "This account is waiting for PlaceFind admin approval. You can sign in and browse the directory, but you cannot publish a listing, leave a review, or use owner tools until an admin approves it."
+
+export const ACCOUNT_PENDING_REVIEW_MESSAGE =
+  "This account is waiting for PlaceFind admin approval. You can browse the directory, but you cannot leave a review until an admin approves it."
 
 export function parseAccountKind(value: unknown): AccountKind | null {
   if (value === "business" || value === "member") return value
@@ -17,12 +24,45 @@ export function accountKindOf(user: Pick<AuthUser, "role" | "accountKind"> | nul
   return user.accountKind === "member" ? "member" : "business"
 }
 
-export function canPublishListing(user: Pick<AuthUser, "role" | "accountKind"> | null | undefined): boolean {
-  return Boolean(user && accountKindOf(user) === "business")
+export function accountStatusOf(user: { status?: string } | null | undefined): UserStatus {
+  if (user?.status === "suspended") return "suspended"
+  if (user?.status === "pending") return "pending"
+  return "active"
 }
 
-export function canUseOwnerTools(user: Pick<AuthUser, "role" | "accountKind"> | null | undefined): boolean {
+export function isApprovedAccount(
+  user: Pick<AuthUser, "role" | "status"> | { role?: string; status?: string } | null | undefined,
+): boolean {
+  if (!user) return false
+  const status = accountStatusOf(user)
+  if (user.role === "admin") return status !== "suspended"
+  return status === "active"
+}
+
+export function canPublishListing(
+  user: Pick<AuthUser, "role" | "accountKind" | "status"> | null | undefined,
+): boolean {
+  return Boolean(user && isApprovedAccount(user) && accountKindOf(user) === "business")
+}
+
+export function canUseOwnerTools(
+  user: Pick<AuthUser, "role" | "accountKind" | "status"> | null | undefined,
+): boolean {
   return canPublishListing(user)
+}
+
+export function canLeaveReview(
+  user: Pick<AuthUser, "role" | "status"> | { role?: string; status?: string } | null | undefined,
+): boolean {
+  return isApprovedAccount(user)
+}
+
+export function listingCreateDenied(
+  user: Pick<AuthUser, "role" | "accountKind" | "status"> | null | undefined,
+): string | null {
+  if (canPublishListing(user)) return null
+  if (user && !isApprovedAccount(user)) return ACCOUNT_PENDING_MESSAGE
+  return MEMBER_LISTING_MESSAGE
 }
 
 export const JOIN_PATH = "/join"

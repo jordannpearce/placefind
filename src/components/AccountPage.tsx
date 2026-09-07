@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react"
-import { accountKindOf, canPublishListing } from "../lib/account.ts"
+import { accountKindOf, canPublishListing, isApprovedAccount } from "../lib/account.ts"
 import { becomeBusinessAccount, deleteListing, loadAccount, logout } from "../lib/api.ts"
 import { listingLocation, listingPath, mapsStatusLabel } from "../lib/listings.ts"
 import { LISTING_PRICE_LABEL } from "../lib/pricing.ts"
 import type { AccountUsage, AuthUser, DirectoryListing } from "../lib/types.ts"
 import { OwnerDeskTools } from "./OwnerDeskTools.tsx"
+import { PendingApprovalNotice } from "./PendingApprovalNotice.tsx"
 import { UsageCard } from "./UsageCard.tsx"
 
 type Props = {
@@ -21,6 +22,7 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
   const [usageError, setUsageError] = useState<string | null>(null)
   const [usageLoading, setUsageLoading] = useState(true)
   const [upgradeBusy, setUpgradeBusy] = useState(false)
+  const approved = isApprovedAccount(user)
   const owner = canPublishListing(user)
   const kind = accountKindOf(user)
 
@@ -46,9 +48,11 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
         <h2 className="mt-2 font-display text-3xl text-paper">{user.name}</h2>
         <p className="mt-1 text-sm text-muted">{user.email}</p>
         <p className="mt-3 text-sm leading-6 text-paper/80">
-          {owner
-            ? `Business account. A PlaceFind listing is ${LISTING_PRICE_LABEL}.`
-            : "Free neighbor account. Leave reviews and request quotes — PlaceFind does not charge this account."}
+          {!approved
+            ? "This account is signed in and waiting for admin approval."
+            : owner
+              ? `Business account. A PlaceFind listing is ${LISTING_PRICE_LABEL}.`
+              : "Free neighbor account. Leave reviews and request quotes — PlaceFind does not charge this account."}
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           {user.role === "admin" && (
@@ -60,7 +64,7 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
               Manage accounts
             </button>
           )}
-          {owner ? (
+          {approved && owner ? (
             <>
               <button
                 type="button"
@@ -91,7 +95,7 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
                 Traffic
               </button>
             </>
-          ) : (
+          ) : approved ? (
             <button
               type="button"
               disabled={upgradeBusy}
@@ -109,6 +113,14 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
             >
               {upgradeBusy ? "Working…" : `List a business · ${LISTING_PRICE_LABEL}`}
             </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onGo("/directory")}
+              className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
+            >
+              Browse the directory
+            </button>
           )}
           <button
             type="button"
@@ -122,6 +134,8 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
           </button>
         </div>
       </section>
+
+      {!approved && <PendingApprovalNotice user={user} />}
 
       {owner && (
         <section className="rounded-2xl border border-line bg-panel p-6">
@@ -139,7 +153,7 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
 
       {owner && <UsageCard usage={usage} error={usageError} loading={usageLoading} />}
 
-      {kind === "member" && (
+      {approved && kind === "member" && (
         <section className="rounded-2xl border border-line bg-panel p-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Reviews and quotes</p>
           <h3 className="mt-2 font-display text-2xl text-paper">No listing fee on this account</h3>

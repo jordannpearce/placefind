@@ -1,4 +1,4 @@
-import { canUseOwnerTools, isCreateProfilePath } from "./account.ts"
+import { canUseOwnerTools, isApprovedAccount, isCreateProfilePath } from "./account.ts"
 import { isLegalPath } from "./legal.ts"
 import type { AuthUser } from "./types.ts"
 
@@ -130,7 +130,10 @@ export function allowedPath(next: AppPath, access: NavAccess): AppPath {
   if (next === "/reset") return "/reset"
   if (next === "/sell") return admin ? "/sell" : impersonating ? "/account" : "/admin"
   if (next === "/join") return user ? "/account" : "/join"
-  if (next === "/create-profile") return user ? "/listings" : "/create-profile"
+  if (next === "/create-profile") {
+    if (!user) return "/create-profile"
+    return isApprovedAccount(user) ? "/listings" : "/account"
+  }
   if (next === "/directory" || next === "/listings" || next === "/pricing") return next
   if (next === "/dashboard") return canUseOwnerTools(user) ? "/dashboard" : user ? "/account" : "/login"
   if (next === "/try" || next === "/demo") {

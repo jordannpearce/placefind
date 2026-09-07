@@ -4,12 +4,14 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
 import { parseStreetAddress } from "../src/lib/address.ts"
+import { approveUser, signup } from "./auth.ts"
 import {
   applyListingProfile,
   confirmListingMatch,
   createListing,
   deleteListing,
   getListing,
+  listingIsApprovedForDirectory,
   listPublicListings,
   listingsForUser,
   publicListing,
@@ -246,6 +248,20 @@ describe("directory listings", () => {
     const drafted = applyListingProfile(blank.id, { profileContent: "Draft from the shop website.", crawlStatus: "ok" })
     assert.equal(drafted.profileContent, "Draft from the shop website.")
     assert.equal(drafted.profileCustomized, false)
+  })
+
+  it("hides listings owned by a pending account from the public directory", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-listing-pending-")))
+    signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const owner = signup({ name: "Pat Owner", email: "pat-pending@example.com", password: "password12" })
+    assert.equal(owner.user?.status, "pending")
+    const created = createListing({ name: "Pending Oven", city: "Portland", state: "OR" }, owner.user!.id)
+    assert.equal(listingIsApprovedForDirectory(created), false)
+    assert.equal(listPublicListings().some((row) => row.id === created.id), false)
+    assert.equal(listPublicListings({}, { includePendingOwners: true }).some((row) => row.id === created.id), true)
+    approveUser(owner.user!.id)
+    assert.equal(listingIsApprovedForDirectory(created), true)
+    assert.equal(listPublicListings().some((row) => row.id === created.id), true)
   })
 
   it("blocks another customer from editing a listing", () => {

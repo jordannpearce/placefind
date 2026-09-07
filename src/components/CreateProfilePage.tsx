@@ -23,8 +23,9 @@ export function CreateProfilePage({ onAuthed, onGo }: Props) {
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Business owner</p>
         <h2 className="mt-2 font-display text-3xl text-paper">Create a Profile</h2>
         <p className="mt-3 text-sm leading-6 text-muted">
-          Open a business owner account to publish and manage PlaceFind listings. After you create this account, you
-          can add a listing and write the public profile neighbors open from the directory.
+          Open a business owner account to publish and manage PlaceFind listings. An admin reviews new owner accounts
+          before a listing can be published. After approval, you can add a listing and write the public profile
+          neighbors open from the directory.
         </p>
         <ul className="mt-5 grid gap-2 text-sm leading-6 text-paper/85">
           <li className="rounded-xl border border-line bg-panel px-4 py-3">

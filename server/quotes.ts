@@ -1,6 +1,6 @@
 import { validateQuoteLead, type QuoteLead, type QuoteLeadInput } from "../src/lib/quotes.ts"
 import { findUserById } from "./auth.ts"
-import { getListing, ListingError, type DirectoryListing } from "./listings.ts"
+import { getListing, listingIsApprovedForDirectory, ListingError, type DirectoryListing } from "./listings.ts"
 import { quoteRequestEmail, sendMail, type OutboundMail } from "./mail.ts"
 
 export function listingQuoteAddress(listing: Pick<DirectoryListing, "email" | "ownerUserId">) {
@@ -14,6 +14,9 @@ export async function submitQuoteLead(
   input: QuoteLeadInput,
 ): Promise<{ lead: QuoteLead; mail: OutboundMail }> {
   const listing = getListing(listingId)
+  if (!listingIsApprovedForDirectory(listing)) {
+    throw new ListingError(404, "That listing is not in the directory.")
+  }
   const parsed = validateQuoteLead(input)
   if (parsed.error || !parsed.value) throw new ListingError(400, parsed.error || "Could not send that quote request.")
   const to = listingQuoteAddress(listing)

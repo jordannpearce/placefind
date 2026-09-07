@@ -22,7 +22,7 @@ export function JoinPage({ onAuthed, onGo }: Props) {
       <h2 className="mt-2 font-display text-3xl text-paper">Join PlaceFind</h2>
       <p className="mt-3 text-sm leading-6 text-muted">
         Create a free neighbor account to leave reviews on shops in the directory. Anyone can request a quote without
-        signing up. This account is not billed.
+        signing up. This account is not billed. An admin reviews new neighbor accounts before reviews go live.
       </p>
       <ul className="mt-5 grid gap-2 text-sm leading-6 text-paper/85">
         <li className="rounded-xl border border-line bg-ink px-4 py-3">Leave a named review on a listing</li>

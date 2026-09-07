@@ -6,10 +6,10 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
 import express from "express"
-import { createSession, signup, userFromCookie } from "./auth.ts"
-import { createListing, seedDirectoryListings } from "./listings.ts"
+import { ACCOUNT_PENDING_REVIEW_MESSAGE } from "../src/lib/account.ts"
+import { approveUser, createSession, signup, userFromCookie } from "./auth.ts"
+import { createListing, ListingError, seedDirectoryListings } from "./listings.ts"
 import { registerListingLeadRoutes } from "./listing-leads.ts"
-import { ListingError } from "./listings.ts"
 import { createReview, reviewsForListing, seedDirectoryReviews } from "./reviews.ts"
 import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
 
@@ -111,5 +111,42 @@ describe("signed-in reviews", () => {
       assert.equal(payload.review?.authorName, "Maya Chen")
       assert.equal(payload.review?.rating, 4)
     })
+  })
+
+  it("blocks a pending neighbor from posting a review until an admin approves", async () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-reviews-pending-")))
+    signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const pending = signup({ name: "Maya Chen", email: "maya-pending@example.com", password: "password12", kind: "member" })
+    assert.equal(pending.user?.status, "pending")
+    const listing = createListing({ name: "Harbor Street Cafe", city: "Portland", state: "OR" }, "owner-1")
+    const token = createSession(pending.user!.id)
+
+    assert.throws(
+      () => createReview(listing.id, { rating: 5, text: "Warm bread every morning." }, pending.user),
+      (error: unknown) => {
+        assert.ok(error instanceof ListingError)
+        assert.equal(error.status, 403)
+        assert.equal(error.message, ACCOUNT_PENDING_REVIEW_MESSAGE)
+        return true
+      },
+    )
+
+    await withLeadServer(async (port) => {
+      const blocked = await fetch(`http://127.0.0.1:${port}/api/listings/${listing.id}/reviews`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `pf_session=${token}`,
+        },
+        body: JSON.stringify({ rating: 5, text: "Warm bread every morning." }),
+      })
+      assert.equal(blocked.status, 403)
+      const denied = (await blocked.json()) as { error?: string }
+      assert.equal(denied.error, ACCOUNT_PENDING_REVIEW_MESSAGE)
+    })
+
+    approveUser(pending.user!.id)
+    const saved = createReview(listing.id, { rating: 5, text: "Warm bread every morning." }, pending.user)
+    assert.equal(saved.authorName, "Maya Chen")
   })
 })

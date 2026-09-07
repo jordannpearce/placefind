@@ -1,7 +1,7 @@
 import { LoaderCircle } from "lucide-react"
 import { useMemo, useState } from "react"
 import { accountKindOf } from "../lib/account.ts"
-import { createAdminUser, deleteAdminUser, impersonateAdminUser, setAdminUserStatus, updateAdminUser } from "../lib/api.ts"
+import { approveAdminUser, createAdminUser, deleteAdminUser, impersonateAdminUser, setAdminUserStatus, updateAdminUser } from "../lib/api.ts"
 import type { AccountKind, AuthUser, DirectoryListing } from "../lib/types.ts"
 
 type Draft = {
@@ -38,8 +38,9 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
   const [busy, setBusy] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [query, setQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "suspended">("all")
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "active" | "suspended">("all")
   const [roleFilter, setRoleFilter] = useState<"all" | "customer" | "admin">("all")
+  const [kindFilter, setKindFilter] = useState<"all" | "member" | "business">("all")
 
   const listingCounts = useMemo(() => {
     const counts = new Map<string, number>()
@@ -51,17 +52,29 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
     return counts
   }, [listings])
 
+  const pendingNeighbors = useMemo(
+    () => users.filter((row) => row.status === "pending" && accountKindOf(row) === "member"),
+    [users],
+  )
+  const pendingBusinesses = useMemo(
+    () => users.filter((row) => row.status === "pending" && accountKindOf(row) !== "member"),
+    [users],
+  )
+  const showPendingQueue = statusFilter === "all" || statusFilter === "pending"
+
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return [...users]
       .filter((row) => {
+        if (statusFilter === "all" && row.status === "pending") return false
         if (statusFilter !== "all" && row.status !== statusFilter) return false
         if (roleFilter !== "all" && row.role !== roleFilter) return false
+        if (kindFilter !== "all" && accountKindOf(row) !== kindFilter) return false
         if (!needle) return true
         return `${row.name} ${row.email}`.toLowerCase().includes(needle)
       })
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-  }, [users, query, statusFilter, roleFilter])
+  }, [users, query, statusFilter, roleFilter, kindFilter])
 
   function replaceUser(next: AuthUser) {
     onUsers((current) => current.map((row) => (row.id === next.id ? next : row)))
@@ -85,10 +98,10 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Users</p>
       <h2 className="mt-1 font-display text-3xl text-paper">Manage accounts</h2>
       <p className="mt-3 text-sm leading-6 text-muted">
-        Add, edit, suspend, or delete customer and admin accounts. Business accounts can list a shop for $150 per
-        month. Neighbor accounts are free for reviews and quotes. Suspended accounts cannot sign in. Deleting an
-        account also removes that owner’s listings, crawls, and usage. Use View as user to open the site as that
-        customer.
+        New Join and Create a Profile accounts wait here until you approve them. Approve, suspend, or delete customer
+        and admin accounts. Business accounts can list a shop for $150 per month after approval. Neighbor accounts are
+        free for reviews and quotes. Suspended accounts cannot sign in. Deleting an account also removes that owner’s
+        listings, crawls, and usage. Use View as user to open the site as that customer.
       </p>
 
       <form
@@ -163,7 +176,7 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
         </button>
       </form>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <div className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
         <label className="grid gap-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Search accounts</span>
           <input
@@ -181,8 +194,21 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
             className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
           >
             <option value="all">All</option>
+            <option value="pending">Pending</option>
             <option value="active">Active</option>
             <option value="suspended">Suspended</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Type</span>
+          <select
+            value={kindFilter}
+            onChange={(event) => setKindFilter(event.target.value as typeof kindFilter)}
+            className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+          >
+            <option value="all">All</option>
+            <option value="member">Neighbors</option>
+            <option value="business">Businesses</option>
           </select>
         </label>
         <label className="grid gap-1.5">
@@ -199,9 +225,100 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
         </label>
       </div>
 
+      {showPendingQueue && (
+        <div className="mt-6 grid gap-4">
+          <PendingApprovalGroup
+            title="Pending neighbors"
+            empty="No neighbor accounts waiting for approval."
+            rows={pendingNeighbors.filter((row) => {
+              if (kindFilter === "business") return false
+              const needle = query.trim().toLowerCase()
+              if (roleFilter !== "all" && row.role !== roleFilter) return false
+              if (!needle) return true
+              return `${row.name} ${row.email}`.toLowerCase().includes(needle)
+            })}
+            listingCounts={listingCounts}
+            busy={busy}
+            confirmDelete={confirmDelete}
+            currentUserId={currentUserId}
+            onApprove={(row) =>
+              void run(`approve-${row.id}`, async () => {
+                replaceUser(await approveAdminUser(row.id))
+                onMessage(`Approved ${row.email}.`)
+              })
+            }
+            onSuspend={(row) =>
+              void run(`status-${row.id}`, async () => {
+                replaceUser(await setAdminUserStatus(row.id, "suspended"))
+                onMessage(`Suspended ${row.email}.`)
+              })
+            }
+            onDelete={(row) =>
+              void run(`delete-${row.id}`, async () => {
+                await deleteAdminUser(row.id)
+                onUsers((current) => current.filter((item) => item.id !== row.id))
+                onListings?.((current) => current.filter((item) => item.ownerUserId !== row.id))
+                setConfirmDelete(null)
+                onMessage(`Deleted ${row.email}.`)
+              })
+            }
+            onConfirmDelete={setConfirmDelete}
+            onViewAs={(row) =>
+              void run(`view-${row.id}`, async () => {
+                onViewAs(await impersonateAdminUser(row.id))
+              })
+            }
+          />
+          <PendingApprovalGroup
+            title="Pending businesses"
+            empty="No business accounts waiting for approval."
+            rows={pendingBusinesses.filter((row) => {
+              if (kindFilter === "member") return false
+              const needle = query.trim().toLowerCase()
+              if (roleFilter !== "all" && row.role !== roleFilter) return false
+              if (!needle) return true
+              return `${row.name} ${row.email}`.toLowerCase().includes(needle)
+            })}
+            listingCounts={listingCounts}
+            busy={busy}
+            confirmDelete={confirmDelete}
+            currentUserId={currentUserId}
+            onApprove={(row) =>
+              void run(`approve-${row.id}`, async () => {
+                replaceUser(await approveAdminUser(row.id))
+                onMessage(`Approved ${row.email}.`)
+              })
+            }
+            onSuspend={(row) =>
+              void run(`status-${row.id}`, async () => {
+                replaceUser(await setAdminUserStatus(row.id, "suspended"))
+                onMessage(`Suspended ${row.email}.`)
+              })
+            }
+            onDelete={(row) =>
+              void run(`delete-${row.id}`, async () => {
+                await deleteAdminUser(row.id)
+                onUsers((current) => current.filter((item) => item.id !== row.id))
+                onListings?.((current) => current.filter((item) => item.ownerUserId !== row.id))
+                setConfirmDelete(null)
+                onMessage(`Deleted ${row.email}.`)
+              })
+            }
+            onConfirmDelete={setConfirmDelete}
+            onViewAs={(row) =>
+              void run(`view-${row.id}`, async () => {
+                onViewAs(await impersonateAdminUser(row.id))
+              })
+            }
+          />
+        </div>
+      )}
+
       <div className="mt-6 overflow-x-auto">
         {users.length === 0 ? (
           <p className="text-sm text-muted">No users yet. Create one above.</p>
+        ) : statusFilter === "pending" ? (
+          <p className="text-sm text-muted">Pending neighbors and businesses are listed above.</p>
         ) : rows.length === 0 ? (
           <p className="text-sm text-muted">No accounts match that search.</p>
         ) : (
@@ -278,8 +395,12 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
                       )}
                     </td>
                     <td className="py-3 pr-3">
-                      <span className={row.status === "suspended" ? "text-clay" : "text-moss"}>
-                        {row.status === "suspended" ? "Suspended" : "Active"}
+                      <span
+                        className={
+                          row.status === "suspended" ? "text-clay" : row.status === "pending" ? "text-brass" : "text-moss"
+                        }
+                      >
+                        {row.status === "suspended" ? "Suspended" : row.status === "pending" ? "Pending" : "Active"}
                       </span>
                     </td>
                     <td className="py-3 pr-3 text-paper/80">{listingCounts.get(row.id) ?? 0}</td>
@@ -328,6 +449,21 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
                         </div>
                       ) : (
                         <div className="flex flex-wrap gap-2">
+                          {row.status === "pending" && (
+                            <button
+                              type="button"
+                              disabled={busy === `approve-${row.id}`}
+                              onClick={() =>
+                                void run(`approve-${row.id}`, async () => {
+                                  replaceUser(await approveAdminUser(row.id))
+                                  onMessage(`Approved ${row.email}.`)
+                                })
+                              }
+                              className="rounded-lg bg-brass px-3 py-1.5 text-xs font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-40"
+                            >
+                              Approve
+                            </button>
+                          )}
                           {row.role !== "admin" && (
                             <button
                               type="button"
@@ -417,5 +553,117 @@ export function AdminUsers({ users, listings = [], currentUserId, onUsers, onLis
         )}
       </div>
     </section>
+  )
+}
+
+function PendingApprovalGroup({
+  title,
+  empty,
+  rows,
+  listingCounts,
+  busy,
+  confirmDelete,
+  currentUserId,
+  onApprove,
+  onSuspend,
+  onDelete,
+  onConfirmDelete,
+  onViewAs,
+}: {
+  title: string
+  empty: string
+  rows: AuthUser[]
+  listingCounts: Map<string, number>
+  busy: string | null
+  confirmDelete: string | null
+  currentUserId?: string
+  onApprove: (row: AuthUser) => void
+  onSuspend: (row: AuthUser) => void
+  onDelete: (row: AuthUser) => void
+  onConfirmDelete: (id: string | null) => void
+  onViewAs: (row: AuthUser) => void
+}) {
+  return (
+    <div className="rounded-xl border border-brass/30 bg-ink p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">{title}</p>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-sm text-muted">{empty}</p>
+      ) : (
+        <ul className="mt-3 grid gap-3">
+          {rows.map((row) => (
+            <li
+              key={row.id}
+              className="grid gap-3 rounded-lg border border-line bg-panel px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+            >
+              <div>
+                <p className="text-sm text-paper">{row.name}</p>
+                <p className="mt-1 text-sm text-muted">{row.email}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {accountKindOf(row) === "member" ? "Neighbor" : "Business"} · {formatCreated(row.createdAt)}
+                  {(listingCounts.get(row.id) ?? 0) > 0 ? ` · ${listingCounts.get(row.id)} listing${listingCounts.get(row.id) === 1 ? "" : "s"} hidden until approval` : ""}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy === `approve-${row.id}`}
+                  onClick={() => onApprove(row)}
+                  className="rounded-lg bg-brass px-3 py-1.5 text-xs font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-40"
+                >
+                  Approve
+                </button>
+                {row.role !== "admin" && (
+                  <button
+                    type="button"
+                    disabled={busy === `view-${row.id}`}
+                    onClick={() => onViewAs(row)}
+                    className="rounded-lg border border-brass px-3 py-1.5 text-xs font-semibold text-brass hover:bg-brass/10 disabled:opacity-40"
+                  >
+                    View as user
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={row.id === currentUserId || busy === `status-${row.id}`}
+                  onClick={() => onSuspend(row)}
+                  className="rounded-lg border border-line px-3 py-1.5 text-xs text-paper/80 hover:border-brass disabled:opacity-40"
+                >
+                  Suspend
+                </button>
+                {confirmDelete === row.id ? (
+                  <span className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-clay">Delete this account?</span>
+                    <button
+                      type="button"
+                      disabled={busy === `delete-${row.id}`}
+                      onClick={() => onDelete(row)}
+                      className="rounded-lg bg-clay px-3 py-1.5 font-semibold text-ink"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onConfirmDelete(null)}
+                      className="rounded-lg border border-line px-3 py-1.5 text-paper/80"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={row.id === currentUserId}
+                    onClick={() => onConfirmDelete(row.id)}
+                    className="rounded-lg border border-line px-3 py-1.5 text-xs text-clay hover:border-clay disabled:opacity-40"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
