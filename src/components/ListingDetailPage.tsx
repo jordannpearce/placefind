@@ -3,7 +3,6 @@ import { useEffect, useState } from "react"
 import { joinHref, loginHref } from "../lib/account.ts"
 import { createListingReview, loadListing, requestListingQuote } from "../lib/api.ts"
 import { listingLocation, listingPath, listingRedirectPath, mapsStatusDetail } from "../lib/listings.ts"
-import { LISTING_PRICE_LABEL } from "../lib/pricing.ts"
 import {
   applyListingDocumentHead,
   listingBusinessName,
@@ -240,7 +239,6 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
           )}
           {listing.hours && <p className="text-muted">{listing.hours}</p>}
           {listing.keywords.length > 0 && <p className="text-paper/80">{listing.keywords.join(" · ")}</p>}
-          <p className="text-xs text-muted">Directory listing · {LISTING_PRICE_LABEL}</p>
         </dl>
       </section>
 
