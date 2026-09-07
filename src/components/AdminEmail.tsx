@@ -229,8 +229,12 @@ export function AdminEmail({ users, outbox, mail, presets, onOutbox, onError, on
                     </td>
                     <td className="py-3 pr-3 text-paper">{row.name}</td>
                     <td className="py-3 pr-3 text-paper">{row.email}</td>
-                    <td className={`py-3 ${row.status === "suspended" ? "text-clay" : "text-moss"}`}>
-                      {row.status === "suspended" ? "Suspended" : "Active"}
+                    <td
+                      className={`py-3 ${
+                        row.status === "suspended" ? "text-clay" : row.status === "pending" ? "text-brass" : "text-moss"
+                      }`}
+                    >
+                      {row.status === "suspended" ? "Suspended" : row.status === "pending" ? "Pending" : "Active"}
                     </td>
                   </tr>
                 )

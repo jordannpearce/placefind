@@ -1,12 +1,11 @@
 import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto"
 import path from "node:path"
-import { parseAccountKind, type AccountKind } from "../src/lib/account.ts"
+import { accountStatusOf, parseAccountKind, type AccountKind, type UserStatus } from "../src/lib/account.ts"
 import { isPackagedBuyer } from "./runtime.ts"
 import { dataDir, readCollection, writeCollection } from "./store.ts"
 
 export type UserRole = "customer" | "admin"
-export type UserStatus = "active" | "suspended"
-export type { AccountKind }
+export type { AccountKind, UserStatus }
 
 export type User = {
   id: string
@@ -110,7 +109,7 @@ export function verifyPassword(password: string, stored: string) {
 }
 
 export function userStatus(user: Pick<User, "status"> | { status?: string } | null | undefined): UserStatus {
-  return user?.status === "suspended" ? "suspended" : "active"
+  return accountStatusOf(user)
 }
 
 function normalizeAccountKind(row: Pick<User, "role"> & { accountKind?: string }): AccountKind {
@@ -222,7 +221,7 @@ export function signup(input: {
     passwordHash: hashPassword(password),
     role,
     accountKind: role === "admin" ? "business" : requestedKind,
-    status: "active",
+    status: role === "admin" ? "active" : "pending",
     createdAt: new Date().toISOString(),
   }
   writeUsers([user, ...users])
@@ -329,8 +328,8 @@ export function updateManagedUser(
   }
   let status = userStatus(current)
   if (input.status != null) {
-    if (input.status !== "active" && input.status !== "suspended") {
-      return { error: "Status must be active or suspended." }
+    if (input.status !== "active" && input.status !== "suspended" && input.status !== "pending") {
+      return { error: "Status must be active, pending, or suspended." }
     }
     if (input.status === "suspended" && actorId === id) {
       return { error: "You cannot suspend your own account." }
@@ -377,6 +376,16 @@ export function deleteManagedUser(id: string, actorId?: string): { ok?: boolean;
 
 export function setUserStatus(id: string, status: UserStatus, actorId?: string) {
   return updateManagedUser(id, { status }, actorId)
+}
+
+export function approveUser(id: string, actorId?: string): { user?: PublicUser; error?: string } {
+  const current = findUserById(id)
+  if (!current) return { error: "That user was not found." }
+  if (userStatus(current) === "suspended") {
+    return { error: "Unsuspend this account instead of approving it." }
+  }
+  if (userStatus(current) === "active") return { user: publicUser(current) }
+  return updateManagedUser(id, { status: "active" }, actorId)
 }
 
 export function seedAdminAccount(input: { email: string; password: string; name?: string }): {

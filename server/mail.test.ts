@@ -20,6 +20,7 @@ import {
   sendBroadcast,
   sendSignupWelcome,
   welcomeEmail,
+  accountApprovedEmail,
   writeMailConfig,
 } from "./mail.ts"
 import { reloadStoreFromDisk, resetStoreForTests } from "./store.ts"
@@ -53,7 +54,24 @@ describe("welcomeEmail", () => {
     const message = welcomeEmail({ name: "Maya", product: "PlaceFind", price: "150", kind: "member" })
     assert.match(message.text, /account is free/)
     assert.match(message.text, /does not charge this account \$150/)
+    assert.match(message.text, /admin will review/)
     assert.equal(/download|windows|license key/i.test(message.text), false)
+  })
+})
+
+describe("accountApprovedEmail", () => {
+  it("tells a neighbor they can leave reviews after approval", () => {
+    const message = accountApprovedEmail({ name: "Maya", product: "PlaceFind", kind: "member" })
+    assert.match(message.subject, /approved/i)
+    assert.match(message.text, /reviews/)
+    assert.equal(/resend|keygen|dataforseo|scrappey/i.test(message.text), false)
+  })
+
+  it("tells a business owner they can publish a listing after approval", () => {
+    const message = accountApprovedEmail({ name: "Pat", product: "PlaceFind", kind: "business" })
+    assert.match(message.subject, /approved/i)
+    assert.match(message.text, /listing/)
+    assert.equal(/resend|keygen|dataforseo|scrappey/i.test(message.text), false)
   })
 })
 

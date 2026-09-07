@@ -17,12 +17,14 @@ import { BusinessUpgradeCard } from "./components/BusinessUpgradeCard.tsx"
 import { ListingFormPage } from "./components/ListingFormPage.tsx"
 import { ResultPanel } from "./components/ResultPanel.tsx"
 import { SearchForm } from "./components/SearchForm.tsx"
+import { PendingApprovalNotice } from "./components/PendingApprovalNotice.tsx"
 import { SiteFooter } from "./components/SiteFooter.tsx"
 import { TrackPage } from "./components/TrackPage.tsx"
 import {
   afterSignupHref,
   canPublishListing,
   createProfileHref,
+  isApprovedAccount,
   isCreateProfilePath,
   joinHref,
   joinIntentFromSearch,
@@ -213,6 +215,10 @@ export default function App() {
   }
 
   function onAuthed(next: AuthUser) {
+    if (!isApprovedAccount(next)) {
+      void refreshSession(next, "/account")
+      return
+    }
     const nextPath = safeAuthNext(new URLSearchParams(window.location.search).get("next"))
     if (path === "/join") {
       void refreshSession(next, afterSignupHref("member", nextPath))
@@ -285,6 +291,11 @@ export default function App() {
     <div className="min-h-screen bg-ink">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(224,177,91,0.08),transparent_28%),radial-gradient(circle_at_80%_0%,rgba(111,154,120,0.08),transparent_24%)]" />
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-5 sm:px-6">
+        {user && !isApprovedAccount(user) && !impersonating && (
+          <div className="mb-4">
+            <PendingApprovalNotice user={user} compact />
+          </div>
+        )}
         {impersonating && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brass/40 bg-brass/10 px-4 py-3">
             <p className="text-sm text-paper">
@@ -347,10 +358,13 @@ export default function App() {
         {path === "/pricing" && <PricingPage user={user} onGo={go} />}
         {path === "/directory" && <DirectoryPage user={user} onGo={go} />}
         {path === "/dashboard" && user && <CrawlDashboard user={user} onGo={go} />}
-        {path === "/listings" && listingCreate && user && canPublishListing(user) && (
+        {path === "/listings" && listingCreate && user && !isApprovedAccount(user) && (
+          <PendingApprovalNotice user={user} />
+        )}
+        {path === "/listings" && listingCreate && user && isApprovedAccount(user) && canPublishListing(user) && (
           <ListingFormPage user={user} onGo={go} />
         )}
-        {path === "/listings" && listingCreate && user && !canPublishListing(user) && (
+        {path === "/listings" && listingCreate && user && isApprovedAccount(user) && !canPublishListing(user) && (
           <BusinessUpgradeCard user={user} onUpgraded={setUser} onGo={go} />
         )}
         {path === "/listings" && listingId && listingEdit && user && (

@@ -372,7 +372,7 @@ export async function updateAdminUser(
     password?: string
     role?: "customer" | "admin"
     kind?: "business" | "member"
-    status?: "active" | "suspended"
+    status?: "active" | "suspended" | "pending"
   },
 ): Promise<AuthUser> {
   const payload = await request<{ user: AuthUser }>(`/api/admin/users/${id}`, {
@@ -389,6 +389,11 @@ export async function deleteAdminUser(id: string): Promise<void> {
 export async function setAdminUserStatus(id: string, status: "active" | "suspended"): Promise<AuthUser> {
   const path = status === "suspended" ? `/api/admin/users/${id}/suspend` : `/api/admin/users/${id}/unsuspend`
   const payload = await request<{ user: AuthUser }>(path, { method: "POST" })
+  return payload.user
+}
+
+export async function approveAdminUser(id: string): Promise<AuthUser> {
+  const payload = await request<{ user: AuthUser }>(`/api/admin/users/${id}/approve`, { method: "POST" })
   return payload.user
 }
 

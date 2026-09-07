@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  approveUser,
   becomeBusiness,
   canManage,
   clearSession,
@@ -41,6 +42,7 @@ import {
   readOutbox,
   resolveCampaignCopy,
   selectMailRecipients,
+  sendAccountApproved,
   sendBroadcast,
   sendMail,
   sendSignupWelcome,
@@ -82,7 +84,7 @@ import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
 import { requestIp, runWebsiteSearch, VisitorSearchUsedError } from "./search-limit.ts"
 import { readSearchQuery } from "./search-query.ts"
-import { canPublishListing, MEMBER_LISTING_MESSAGE } from "../src/lib/account.ts"
+import { canUseOwnerTools, listingCreateDenied } from "../src/lib/account.ts"
 import { listingPath } from "../src/lib/listings.ts"
 import { applyListingHtmlHead } from "../src/lib/profile.ts"
 import {
@@ -90,6 +92,7 @@ import {
   createListing,
   deleteListing,
   getListing,
+  listingIsApprovedForDirectory,
   ListingError,
   listPublicListings,
   listingsForUser,
@@ -175,6 +178,16 @@ async function start() {
     return null
   }
 
+  function requireApprovedOwner(req: express.Request, res: express.Response) {
+    const user = requireUser(req, res)
+    if (!user) return null
+    if (!canUseOwnerTools(user)) {
+      res.status(403).json({ error: listingCreateDenied(user) || "This account cannot use owner tools yet." })
+      return null
+    }
+    return user
+  }
+
   function campaignMeta() {
     return { maxKeywords: MAX_KEYWORDS, maxGridSize: MAX_GRID_SIZE, allowedGridSizes: ALLOWED_GRID_SIZES }
   }
@@ -231,7 +244,7 @@ async function start() {
     const admin = canManage(req.headers.cookie)
     const user = actor(req)
     res.json({
-      listings: listPublicListings(query).map((row) => ({
+      listings: listPublicListings(query, { includePendingOwners: admin }).map((row) => ({
         ...publicListing(row, admin || row.ownerUserId === user?.id),
         reviewSummary: listingReviewSummary(row.id),
       })),
@@ -243,9 +256,14 @@ async function start() {
       const listing = getListing(String(req.params.id ?? ""))
       const admin = canManage(req.headers.cookie)
       const user = actor(req)
+      const owner = listing.ownerUserId === user?.id
+      if (!listingIsApprovedForDirectory(listing) && !admin && !owner) {
+        res.status(404).json({ error: "That listing is not in the directory." })
+        return
+      }
       const reviews = reviewsForListing(listing.id)
       res.json({
-        listing: publicListing(listing, admin || listing.ownerUserId === user?.id),
+        listing: publicListing(listing, admin || owner),
         reviews,
         reviewSummary: listingReviewSummary(listing.id),
       })
@@ -267,7 +285,7 @@ async function start() {
   })
 
   app.post("/api/crawls", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedOwner(req, res)
     if (!user) return
     try {
       const job = requestListingCrawl(
@@ -304,8 +322,9 @@ async function start() {
     const user = requireUser(req, res)
     if (!user) return
     try {
-      if (!canPublishListing(user)) {
-        res.status(403).json({ error: MEMBER_LISTING_MESSAGE })
+      const denied = listingCreateDenied(user)
+      if (denied) {
+        res.status(403).json({ error: denied })
         return
       }
       const listing = createListing(req.body ?? {}, user.id)
@@ -441,7 +460,7 @@ async function start() {
   })
 
   app.post("/api/campaigns", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedOwner(req, res)
     if (!user) return
     try {
       res.status(201).json({ campaign: createCampaign(req.body ?? {}, user.id), ...campaignMeta() })
@@ -934,7 +953,7 @@ async function start() {
       })),
       mailPresets: mailPresets(readProduct()),
       geoPoints: geoPointsMeta(),
-      listings: listPublicListings().map((row) => publicListing(row, true)),
+      listings: listPublicListings({}, { includePendingOwners: true }).map((row) => publicListing(row, true)),
     })
   })
 
@@ -1092,6 +1111,23 @@ async function start() {
       const missing = result.error === "That user was not found."
       res.status(missing ? 404 : 400).json({ error: result.error || "Could not unsuspend the user." })
       return
+    }
+    res.json({ user: result.user, users: readUsers().map(publicUser) })
+  })
+
+  app.post("/api/admin/users/:id/approve", async (req, res) => {
+    if (!manage(req, res)) return
+    const admin = actor(req)
+    const result = approveUser(String(req.params.id ?? ""), admin?.id)
+    if (result.error || !result.user) {
+      const missing = result.error === "That user was not found."
+      res.status(missing ? 404 : 400).json({ error: result.error || "Could not approve the user." })
+      return
+    }
+    try {
+      await sendAccountApproved(result.user)
+    } catch {
+      // Approval still stands if mail is not configured.
     }
     res.json({ user: result.user, users: readUsers().map(publicUser) })
   })

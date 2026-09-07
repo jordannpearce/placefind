@@ -2,8 +2,12 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
   accountKindOf,
+  ACCOUNT_PENDING_MESSAGE,
+  canLeaveReview,
   canPublishListing,
   canUseOwnerTools,
+  isApprovedAccount,
+  listingCreateDenied,
   afterSignupHref,
   createProfileHref,
   isCreateProfilePath,
@@ -41,6 +45,15 @@ describe("account kinds", () => {
     assert.equal(canPublishListing(member), false)
     assert.equal(canPublishListing(admin), true)
     assert.equal(canUseOwnerTools(member), false)
+    assert.equal(isApprovedAccount(business), true)
+    assert.equal(canLeaveReview(business), true)
+    const pending: AuthUser = { ...business, status: "pending" }
+    assert.equal(isApprovedAccount(pending), false)
+    assert.equal(canPublishListing(pending), false)
+    assert.equal(canUseOwnerTools(pending), false)
+    assert.equal(canLeaveReview(pending), false)
+    assert.equal(listingCreateDenied(pending), ACCOUNT_PENDING_MESSAGE)
+    assert.equal(listingCreateDenied(member), MEMBER_LISTING_MESSAGE)
     assert.match(MEMBER_LISTING_MESSAGE, /\$150 per month/)
     assert.match(MEMBER_LISTING_MESSAGE, /reviews/)
     assert.match(MEMBER_LISTING_MESSAGE, /Anyone can request a quote/)

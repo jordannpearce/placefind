@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto"
 import path from "node:path"
+import { ACCOUNT_PENDING_REVIEW_MESSAGE, canLeaveReview } from "../src/lib/account.ts"
 import { reviewSummary, validateReview, type ListingReview } from "../src/lib/reviews.ts"
+import { findUserById } from "./auth.ts"
 import { getListing, ListingError } from "./listings.ts"
 import { dataDir, readCollection, writeCollection } from "./store.ts"
 
@@ -114,6 +116,10 @@ export function createReview(
 ): ListingReview {
   if (!author?.id || !author.name?.trim()) {
     throw new ListingError(401, "Sign in to leave a review.")
+  }
+  const stored = findUserById(author.id)
+  if (stored && !canLeaveReview(stored)) {
+    throw new ListingError(403, ACCOUNT_PENDING_REVIEW_MESSAGE)
   }
   const listing = getListing(listingId)
   const parsed = validateReview({ ...input, authorName: author.name })

@@ -450,15 +450,33 @@ export function welcomeEmail(input: {
     return {
       to: "",
       subject: `Welcome to ${input.product}`,
-      text: `Hi ${first},\n\nYour ${input.product} account is free. Leave reviews and request quotes. PlaceFind does not charge this account $150 — that fee is only for a business listing.\n`,
-      html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} account is free. Leave reviews and request quotes. PlaceFind does not charge this account $150 — that fee is only for a business listing.</p>`,
+      text: `Hi ${first},\n\nYour ${input.product} account is free. An admin will review it before you can leave reviews. After approval, leave reviews and request quotes. PlaceFind does not charge this account $150 — that fee is only for a business listing.\n`,
+      html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} account is free. An admin will review it before you can leave reviews. After approval, leave reviews and request quotes. PlaceFind does not charge this account $150 — that fee is only for a business listing.</p>`,
     }
   }
   return {
     to: "",
     subject: `Welcome to ${input.product}`,
-    text: `Hi ${first},\n\nYour ${input.product} account is ready. Sign in to add your business to the directory for $150 per month.\n`,
-    html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} account is ready. Sign in to add your business to the directory for $150 per month.</p>`,
+    text: `Hi ${first},\n\nYour ${input.product} account is ready for review. An admin will approve it before you can publish a listing. After approval, sign in to add your business to the directory for $150 per month.\n`,
+    html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} account is ready for review. An admin will approve it before you can publish a listing. After approval, sign in to add your business to the directory for $150 per month.</p>`,
+  }
+}
+
+export function accountApprovedEmail(input: { name: string; product: string; kind?: string }): MailMessage {
+  const first = input.name.split(" ")[0] || "there"
+  if (input.kind === "member") {
+    return {
+      to: "",
+      subject: `${input.product} approved your account`,
+      text: `Hi ${first},\n\nYour ${input.product} neighbor account is approved. You can leave reviews and request quotes.\n`,
+      html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} neighbor account is approved. You can leave reviews and request quotes.</p>`,
+    }
+  }
+  return {
+    to: "",
+    subject: `${input.product} approved your account`,
+    text: `Hi ${first},\n\nYour ${input.product} business account is approved. You can publish a listing and use owner tools.\n`,
+    html: `<p>Hi ${escapeHtml(first)},</p><p>Your ${escapeHtml(input.product)} business account is approved. You can publish a listing and use owner tools.</p>`,
   }
 }
 
@@ -585,6 +603,16 @@ export async function sendSignupWelcome(user: { name: string; email: string; acc
     kind: user.accountKind,
   })
   return sendMail({ ...welcome, to: user.email })
+}
+
+export async function sendAccountApproved(user: { name: string; email: string; accountKind?: string }): Promise<OutboundMail> {
+  const product = readProduct()
+  const message = accountApprovedEmail({
+    name: user.name,
+    product: product.name,
+    kind: user.accountKind,
+  })
+  return sendMail({ ...message, to: user.email })
 }
 
 export async function sendMail(message: MailMessage): Promise<OutboundMail> {

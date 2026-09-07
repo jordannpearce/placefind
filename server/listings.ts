@@ -11,6 +11,8 @@ import {
   profileSchemaError,
   stripCrawlArticleFooter,
 } from "../src/lib/profile.ts"
+import { isApprovedAccount } from "../src/lib/account.ts"
+import { findUserById, publicUser } from "./auth.ts"
 import { mapsPlaceUrl } from "./match.ts"
 import { toStateAbbr } from "./states.ts"
 import { dataDir, readCollection, writeCollection } from "./store.ts"
@@ -594,13 +596,24 @@ export function seedDirectoryListings(force = false): DirectoryListing[] {
   return readListings()
 }
 
-export function listPublicListings(query: ListingQuery = {}): DirectoryListing[] {
+export function listingIsApprovedForDirectory(listing: Pick<DirectoryListing, "ownerUserId">): boolean {
+  if (!listing.ownerUserId || listing.ownerUserId === SEED_OWNER_ID) return true
+  const owner = findUserById(listing.ownerUserId)
+  if (!owner) return true
+  return isApprovedAccount(publicUser(owner))
+}
+
+export function listPublicListings(
+  query: ListingQuery = {},
+  options: { includePendingOwners?: boolean } = {},
+): DirectoryListing[] {
   const name = query.name?.trim().toLowerCase() ?? ""
   const city = query.city?.trim().toLowerCase() ?? ""
   const state = (toStateAbbr(query.state?.trim() ?? "") || query.state?.trim() || "").toLowerCase()
   const keyword = query.keyword?.trim().toLowerCase() ?? ""
   return readListings()
     .filter((listing) => {
+      if (!options.includePendingOwners && !listingIsApprovedForDirectory(listing)) return false
       if (name && !listing.name.toLowerCase().includes(name) && !haystack(listing).includes(name)) return false
       if (city && listing.city.toLowerCase() !== city && !listing.city.toLowerCase().includes(city)) return false
       if (state && listing.state.toLowerCase() !== state) return false

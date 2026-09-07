@@ -1,6 +1,7 @@
 import { ExternalLink, LoaderCircle, Mail, MapPin, Phone, Star } from "lucide-react"
 import { useEffect, useState } from "react"
-import { joinHref, loginHref } from "../lib/account.ts"
+import { canLeaveReview, joinHref, loginHref } from "../lib/account.ts"
+import { PendingApprovalNotice } from "./PendingApprovalNotice.tsx"
 import { createListingReview, loadListing, requestListingQuote } from "../lib/api.ts"
 import { listingLocation, listingPath, listingRedirectPath, mapsStatusDetail, mapsStatusIsNotFound } from "../lib/listings.ts"
 import {
@@ -276,7 +277,11 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
             ))}
           </ul>
         )}
-        {user ? (
+        {user && !canLeaveReview(user) ? (
+          <div className="mt-6">
+            <PendingApprovalNotice user={user} compact />
+          </div>
+        ) : user ? (
           <form
             className="mt-6 grid gap-3"
             onSubmit={(event) => {

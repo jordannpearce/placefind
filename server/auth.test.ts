@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
 import {
+  approveUser,
   becomeBusiness,
   canLocalBootstrap,
   canManage,
@@ -443,6 +444,74 @@ describe("admin account management", () => {
       if (previous == null) delete process.env.PLACEFIND_DATA_DIR
       else process.env.PLACEFIND_DATA_DIR = previous
     }
+  })
+})
+
+describe("manual approval", () => {
+  function isolate() {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-auth-approve-")))
+  }
+
+  after(() => {
+    delete process.env.PLACEFIND_DATA_DIR
+    reloadStoreFromDisk()
+  })
+
+  it("keeps the first admin active and starts public signups as pending", () => {
+    isolate()
+    const admin = signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    assert.equal(admin.user?.role, "admin")
+    assert.equal(admin.user?.status, "active")
+    const neighbor = signup({
+      name: "Maya Chen",
+      email: "maya@example.com",
+      password: "password12",
+      kind: "member",
+    })
+    const business = signup({ name: "Pat Owner", email: "pat@example.com", password: "password12" })
+    assert.equal(neighbor.user?.status, "pending")
+    assert.equal(neighbor.user?.accountKind, "member")
+    assert.equal(business.user?.status, "pending")
+    assert.equal(business.user?.accountKind, "business")
+    const signedIn = login({ email: "maya@example.com", password: "password12" })
+    assert.equal(signedIn.error, undefined)
+    assert.equal(signedIn.user?.status, "pending")
+    assert.equal(userFromCookie(`pf_session=${createSession(neighbor.user!.id)}`)?.status, "pending")
+    const managed = createManagedUser({
+      name: "Casey",
+      email: "casey@example.com",
+      password: "password12",
+      role: "customer",
+    })
+    assert.equal(managed.user?.status, "active")
+  })
+
+  it("lets an admin approve a pending account", () => {
+    isolate()
+    const admin = signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const pending = signup({ name: "Sam", email: "sam@example.com", password: "password12", kind: "member" })
+    assert.equal(pending.user?.status, "pending")
+    const approved = approveUser(pending.user!.id, admin.user!.id)
+    assert.equal(approved.error, undefined)
+    assert.equal(approved.user?.status, "active")
+    assert.equal(login({ email: "sam@example.com", password: "password12" }).user?.status, "active")
+    const again = approveUser(pending.user!.id, admin.user!.id)
+    assert.equal(again.user?.status, "active")
+  })
+
+  it("does not treat approve as unsuspend", () => {
+    isolate()
+    signup({ name: "Ada", email: "ada@example.com", password: "password12" })
+    const customer = createManagedUser({
+      name: "Sam",
+      email: "sam@example.com",
+      password: "password12",
+      role: "customer",
+    })
+    setUserStatus(customer.user!.id, "suspended")
+    const result = approveUser(customer.user!.id)
+    assert.equal(result.user, undefined)
+    assert.match(result.error ?? "", /unsuspend/i)
   })
 })
 
