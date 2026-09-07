@@ -143,7 +143,6 @@ export function allowedPath(next: AppPath, access: NavAccess): AppPath {
   if (desktop && !user) return "/login"
   if (next === "/track") {
     if (desktop && !user) return "/login"
-    if (user && !canUseOwnerTools(user)) return "/account"
     return "/track"
   }
   if (next === "/account") return user ? "/account" : "/login"
@@ -158,10 +157,8 @@ export function navLinks(access: NavAccess): NavLink[] {
   if (desktop && !user) return []
 
   if (desktop) {
-    const links: NavLink[] = [
-      { href: "/", label: "Lookup" },
-      { href: "/track", label: "Track" },
-    ]
+    const links: NavLink[] = [{ href: "/", label: "Lookup" }]
+    if (canUseOwnerTools(user)) links.push({ href: "/track", label: "Track" })
     if (user) links.push({ href: "/account", label: "Account" })
     if (admin) links.push({ href: "/admin", label: "Admin" })
     return links

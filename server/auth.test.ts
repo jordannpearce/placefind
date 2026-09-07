@@ -535,6 +535,8 @@ describe("account kinds", () => {
     assert.equal(member.user?.accountKind, "member")
     const upgraded = becomeBusiness(member.user!.id)
     assert.equal(upgraded.user?.accountKind, "business")
+    assert.equal(upgraded.user?.status, "pending")
+    assert.equal(upgraded.user?.status, "pending")
     const neighbor = createManagedUser({
       name: "Owen Blake",
       email: "owen@example.com",
@@ -543,6 +545,9 @@ describe("account kinds", () => {
       kind: "member",
     })
     assert.equal(neighbor.user?.accountKind, "member")
+    const switched = becomeBusiness(neighbor.user!.id)
+    assert.equal(switched.user?.accountKind, "business")
+    assert.equal(switched.user?.status, "pending")
   })
 
   it("locks public Join and Create a Profile signups to the route kind", () => {

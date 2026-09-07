@@ -1,6 +1,6 @@
 import { LoaderCircle, MapPinned, Search } from "lucide-react"
 import { useEffect, useState } from "react"
-import { joinHref, listBusinessHref } from "../lib/account.ts"
+import { joinHref, listBusinessHref, showCreateListingCta } from "../lib/account.ts"
 import { searchDirectory } from "../lib/api.ts"
 import { listingLocation, listingPath } from "../lib/listings.ts"
 import type { AuthUser, DirectoryListing } from "../lib/types.ts"
@@ -18,6 +18,7 @@ function hasDirectoryFilters(query: { name: string; city: string; state: string;
 }
 
 export function DirectoryPage({ user, onGo }: Props) {
+  const listingCta = showCreateListingCta(user)
   const [query, setQuery] = useState(emptyQuery)
   const [applied, setApplied] = useState(emptyQuery)
   const [listings, setListings] = useState<DirectoryListing[]>([])
@@ -93,13 +94,15 @@ export function DirectoryPage({ user, onGo }: Props) {
             </button>
           </form>
           <div className="mt-4 grid gap-2">
-            <button
-              type="button"
-              onClick={() => onGo(listBusinessHref(user))}
-              className="text-left text-sm text-brass hover:underline"
-            >
-              {user ? "Create your listing" : "Create a Profile · $150 per month"}
-            </button>
+            {listingCta && (
+              <button
+                type="button"
+                onClick={() => onGo(listBusinessHref(user))}
+                className="text-left text-sm text-brass hover:underline"
+              >
+                {user ? "Create your listing" : "Create a Profile · $150 per month"}
+              </button>
+            )}
             {!user && (
               <button
                 type="button"
@@ -136,13 +139,15 @@ export function DirectoryPage({ user, onGo }: Props) {
                     The directory is empty until a business owner publishes a listing. There are no sample shops here.
                   </p>
                   <div className="mt-5 flex flex-wrap items-center justify-center gap-4">
-                    <button
-                      type="button"
-                      onClick={() => onGo(listBusinessHref(user))}
-                      className="text-sm text-brass hover:underline"
-                    >
-                      {user ? "Create a listing" : "Create a Profile"}
-                    </button>
+                    {listingCta && (
+                      <button
+                        type="button"
+                        onClick={() => onGo(listBusinessHref(user))}
+                        className="text-sm text-brass hover:underline"
+                      >
+                        {user ? "Create a listing" : "Create a Profile"}
+                      </button>
+                    )}
                     {!user && (
                       <button
                         type="button"

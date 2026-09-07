@@ -59,10 +59,12 @@ describe("allowedPath", () => {
     const access = { desktop: false, store: true, admin: false, user: pending } satisfies NavAccess
     assert.equal(allowedPath("/create-profile", access), "/account")
     assert.equal(allowedPath("/dashboard", access), "/account")
-    assert.equal(allowedPath("/track", access), "/account")
+    assert.equal(allowedPath("/track", access), "/track")
     const labels = navLinks(access).map((link) => link.label)
     assert.equal(labels.includes("Create listing"), false)
     assert.equal(labels.includes("Dashboard"), false)
+    assert.equal(labels.includes("Rank tracker"), false)
+    assert.equal(labels.includes("Traffic"), false)
   })
 
   it("lets a signed-in leftover desktop customer use Lookup, Track, and Account", () => {
@@ -72,6 +74,34 @@ describe("allowedPath", () => {
     assert.equal(allowedPath("/account", access), "/account")
     assert.equal(allowedPath("/download", access), "/")
     assert.equal(allowedPath("/buy", access), "/")
+  })
+
+  it("keeps Track and Traffic off pending businesses and neighbors, including leftover desktop", () => {
+    const pendingBiz: AuthUser = { ...user, accountKind: "business", status: "pending" }
+    const neighbor: AuthUser = { ...user, accountKind: "member", status: "active" }
+    const pendingAccess = { desktop: false, store: true, admin: false, user: pendingBiz } satisfies NavAccess
+    const neighborAccess = { desktop: false, store: true, admin: false, user: neighbor } satisfies NavAccess
+    const desktopNeighbor = { desktop: true, store: false, admin: false, user: neighbor } satisfies NavAccess
+    assert.equal(allowedPath("/track", pendingAccess), "/track")
+    assert.equal(allowedPath("/dashboard", pendingAccess), "/account")
+    assert.equal(allowedPath("/track", neighborAccess), "/track")
+    assert.equal(allowedPath("/track", desktopNeighbor), "/track")
+    assert.equal(navLinks(pendingAccess).some((link) => link.href.startsWith("/track")), false)
+    assert.equal(navLinks(neighborAccess).some((link) => link.href.startsWith("/track")), false)
+    assert.equal(navLinks(desktopNeighbor).map((link) => link.label).includes("Track"), false)
+  })
+
+  it("gives approved businesses and admins Rank tracker and Traffic", () => {
+    const owner: AuthUser = { ...user, accountKind: "business", status: "active" }
+    const access = { desktop: false, store: true, admin: false, user: owner } satisfies NavAccess
+    const staff = { desktop: false, store: true, admin: true, user: admin } satisfies NavAccess
+    assert.equal(allowedPath("/track", access), "/track")
+    assert.equal(allowedPath("/dashboard", access), "/dashboard")
+    const labels = navLinks(access).map((link) => link.label)
+    assert.equal(labels.includes("Rank tracker"), true)
+    assert.equal(labels.includes("Traffic"), true)
+    assert.equal(labels.includes("Create listing"), true)
+    assert.equal(navLinks(staff).map((link) => link.label).includes("Rank tracker"), true)
   })
 })
 
@@ -139,7 +169,40 @@ describe("navLinks", () => {
     assert.equal(labels.includes("Rank tracker"), false)
     assert.equal(labels.includes("Traffic"), false)
     assert.equal(allowedPath("/dashboard", access), "/account")
-    assert.equal(allowedPath("/track", access), "/account")
+    assert.equal(allowedPath("/track", access), "/track")
+  })
+
+  it("keeps Track and Traffic off until a business account is approved", () => {
+    const pendingBusiness: AuthUser = { ...user, accountKind: "business", status: "pending" }
+    const approvedBusiness: AuthUser = { ...user, accountKind: "business", status: "active" }
+    const approvedNeighbor: AuthUser = { ...user, accountKind: "member", status: "active" }
+    const pendingAccess = { desktop: false, store: true, admin: false, user: pendingBusiness } satisfies NavAccess
+    const businessAccess = { desktop: false, store: true, admin: false, user: approvedBusiness } satisfies NavAccess
+    const neighborAccess = { desktop: false, store: true, admin: false, user: approvedNeighbor } satisfies NavAccess
+    const adminAccess = { desktop: false, store: true, admin: true, user: admin } satisfies NavAccess
+
+    for (const access of [pendingAccess, neighborAccess]) {
+      const labels = navLinks(access).map((link) => link.label)
+      assert.equal(labels.includes("Create listing"), false)
+      assert.equal(labels.includes("Rank tracker"), false)
+      assert.equal(labels.includes("Traffic"), false)
+      assert.equal(allowedPath("/track", access), "/track")
+    }
+
+    const businessLabels = navLinks(businessAccess).map((link) => link.label)
+    assert.equal(businessLabels.includes("Create listing"), true)
+    assert.equal(businessLabels.includes("Rank tracker"), true)
+    assert.equal(businessLabels.includes("Traffic"), true)
+    assert.equal(allowedPath("/track", businessAccess), "/track")
+
+    const adminLabels = navLinks(adminAccess).map((link) => link.label)
+    assert.equal(adminLabels.includes("Create listing"), true)
+    assert.equal(adminLabels.includes("Rank tracker"), true)
+    assert.equal(adminLabels.includes("Traffic"), true)
+    assert.equal(adminLabels.includes("Admin"), true)
+
+    const pendingDesktop = { desktop: true, store: false, admin: false, user: pendingBusiness } satisfies NavAccess
+    assert.deepEqual(navLinks(pendingDesktop).map((link) => link.label), ["Lookup", "Account"])
   })
 
   it("shows Admin only for admin users", () => {

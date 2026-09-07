@@ -7,6 +7,9 @@ export type UserStatus = "active" | "suspended" | "pending"
 export const MEMBER_LISTING_MESSAGE =
   "This account is for reviews. Anyone can request a quote. Listing a business is $150 per month on a business account."
 
+export const MEMBER_OWNER_TOOLS_MESSAGE =
+  "This account is for reviews and quotes. Rank tracker, Traffic, and Create listing are for approved business accounts."
+
 export const ACCOUNT_PENDING_MESSAGE =
   "This account is waiting for PlaceFind admin approval. You can sign in and browse the directory, but you cannot publish a listing, leave a review, or use owner tools until an admin approves it."
 
@@ -51,6 +54,18 @@ export function canUseOwnerTools(
   return canPublishListing(user)
 }
 
+export function canUseRankTracker(
+  user: Pick<AuthUser, "role" | "accountKind" | "status"> | null | undefined,
+): boolean {
+  return canUseOwnerTools(user)
+}
+
+export function canUseTraffic(
+  user: Pick<AuthUser, "role" | "accountKind" | "status"> | null | undefined,
+): boolean {
+  return canUseOwnerTools(user)
+}
+
 export function canLeaveReview(
   user: Pick<AuthUser, "role" | "status"> | { role?: string; status?: string } | null | undefined,
 ): boolean {
@@ -61,8 +76,24 @@ export function listingCreateDenied(
   user: Pick<AuthUser, "role" | "accountKind" | "status"> | null | undefined,
 ): string | null {
   if (canPublishListing(user)) return null
+  if (user && accountKindOf(user) === "member") return MEMBER_LISTING_MESSAGE
   if (user && !isApprovedAccount(user)) return ACCOUNT_PENDING_MESSAGE
   return MEMBER_LISTING_MESSAGE
+}
+
+export function ownerToolDenied(
+  user: Pick<AuthUser, "role" | "accountKind" | "status"> | null | undefined,
+): string | null {
+  if (canUseOwnerTools(user)) return null
+  if (user && accountKindOf(user) === "member") return MEMBER_OWNER_TOOLS_MESSAGE
+  if (user && !isApprovedAccount(user)) return ACCOUNT_PENDING_MESSAGE
+  return MEMBER_OWNER_TOOLS_MESSAGE
+}
+
+export function showCreateListingCta(
+  user: Pick<AuthUser, "role" | "accountKind" | "status"> | null | undefined,
+): boolean {
+  return !user || canPublishListing(user)
 }
 
 export const JOIN_PATH = "/join"
@@ -115,6 +146,10 @@ export function loginHref(next?: string | null): string {
   return dest ? `/login?${new URLSearchParams({ next: dest }).toString()}` : "/login"
 }
 
-export function listBusinessHref(user: Pick<AuthUser, "role" | "accountKind"> | null | undefined): string {
-  return user ? "/listings/new" : CREATE_PROFILE_PATH
+export function listBusinessHref(
+  user: Pick<AuthUser, "role" | "accountKind" | "status"> | null | undefined,
+): string {
+  if (!user) return CREATE_PROFILE_PATH
+  if (canPublishListing(user)) return "/listings/new"
+  return "/account"
 }

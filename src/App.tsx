@@ -13,16 +13,16 @@ import { HomePage } from "./components/HomePage.tsx"
 import { PricingPage } from "./components/PricingPage.tsx"
 import { LegalPage } from "./components/LegalPage.tsx"
 import { ListingDetailPage } from "./components/ListingDetailPage.tsx"
-import { BusinessUpgradeCard } from "./components/BusinessUpgradeCard.tsx"
 import { ListingFormPage } from "./components/ListingFormPage.tsx"
 import { ResultPanel } from "./components/ResultPanel.tsx"
 import { SearchForm } from "./components/SearchForm.tsx"
-import { PendingApprovalNotice } from "./components/PendingApprovalNotice.tsx"
+import { PendingApprovalNotice, ToolAccessNotice } from "./components/PendingApprovalNotice.tsx"
 import { SiteFooter } from "./components/SiteFooter.tsx"
 import { TrackPage } from "./components/TrackPage.tsx"
 import {
   afterSignupHref,
   canPublishListing,
+  canUseOwnerTools,
   createProfileHref,
   isApprovedAccount,
   isCreateProfilePath,
@@ -284,7 +284,12 @@ export default function App() {
   const showHome = !desktop && path === "/"
   const showLegal = isLegalPath(path)
   const showLookup = ((desktop && path === "/") || (!desktop && (path === "/try" || path === "/demo") && Boolean(user))) && !needsDesktopLogin
-  const showTrack = path === "/track" && Boolean(user)
+  const showTrack = path === "/track" && canUseOwnerTools(user)
+  const showDashboard = path === "/dashboard" && canUseOwnerTools(user)
+  const blockedOwnerRoute =
+    Boolean(user) &&
+    !canUseOwnerTools(user) &&
+    (path === "/track" || path === "/dashboard" || (path === "/listings" && (listingCreate || listingEdit)))
   const showWebsiteChrome = !desktop
 
   return (
@@ -357,17 +362,12 @@ export default function App() {
         {showHome && <HomePage user={user} onGo={go} />}
         {path === "/pricing" && <PricingPage user={user} onGo={go} />}
         {path === "/directory" && <DirectoryPage user={user} onGo={go} />}
-        {path === "/dashboard" && user && <CrawlDashboard user={user} onGo={go} />}
-        {path === "/listings" && listingCreate && user && !isApprovedAccount(user) && (
-          <PendingApprovalNotice user={user} />
-        )}
-        {path === "/listings" && listingCreate && user && isApprovedAccount(user) && canPublishListing(user) && (
+        {showDashboard && user && <CrawlDashboard user={user} onGo={go} />}
+        {blockedOwnerRoute && user && <ToolAccessNotice user={user} />}
+        {path === "/listings" && listingCreate && user && canPublishListing(user) && (
           <ListingFormPage user={user} onGo={go} />
         )}
-        {path === "/listings" && listingCreate && user && isApprovedAccount(user) && !canPublishListing(user) && (
-          <BusinessUpgradeCard user={user} onUpgraded={setUser} onGo={go} />
-        )}
-        {path === "/listings" && listingId && listingEdit && user && (
+        {path === "/listings" && listingId && listingEdit && user && canPublishListing(user) && (
           <ListingFormPage listingId={listingId} user={user} onGo={go} />
         )}
         {path === "/listings" && listingId && !listingEdit && (

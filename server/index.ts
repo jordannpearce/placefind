@@ -84,7 +84,7 @@ import { publicCheckoutWarning } from "./public-copy.ts"
 import { searchBusiness } from "./search.ts"
 import { requestIp, runWebsiteSearch, VisitorSearchUsedError } from "./search-limit.ts"
 import { readSearchQuery } from "./search-query.ts"
-import { canUseOwnerTools, listingCreateDenied } from "../src/lib/account.ts"
+import { listingCreateDenied, ownerToolDenied } from "../src/lib/account.ts"
 import { listingPath } from "../src/lib/listings.ts"
 import { applyListingHtmlHead } from "../src/lib/profile.ts"
 import {
@@ -178,14 +178,23 @@ async function start() {
     return null
   }
 
-  function requireApprovedOwner(req: express.Request, res: express.Response) {
+  function requireApprovedOwner(
+    req: express.Request,
+    res: express.Response,
+    denied: (user: NonNullable<ReturnType<typeof actor>>) => string | null = listingCreateDenied,
+  ) {
     const user = requireUser(req, res)
     if (!user) return null
-    if (!canUseOwnerTools(user)) {
-      res.status(403).json({ error: listingCreateDenied(user) || "This account cannot use owner tools yet." })
+    const message = denied(user)
+    if (message) {
+      res.status(403).json({ error: message })
       return null
     }
     return user
+  }
+
+  function requireApprovedTracker(req: express.Request, res: express.Response) {
+    return requireApprovedOwner(req, res, ownerToolDenied)
   }
 
   function campaignMeta() {
@@ -279,7 +288,7 @@ async function start() {
   registerListingLeadRoutes(app, requireUser)
 
   app.get("/api/crawls", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedOwner(req, res)
     if (!user) return
     res.json({ crawls: crawlsForUser(user.id, user.role === "admin").map(publicCrawl) })
   })
@@ -305,7 +314,7 @@ async function start() {
   })
 
   app.get("/api/crawls/:id", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedOwner(req, res)
     if (!user) return
     try {
       res.json({ crawl: publicCrawl(getCrawl(String(req.params.id ?? ""), user.id, user.role === "admin")) })
@@ -339,7 +348,7 @@ async function start() {
   })
 
   app.patch("/api/listings/:id", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedOwner(req, res)
     if (!user) return
     try {
       const listing = updateListing(String(req.params.id ?? ""), req.body ?? {}, user.id, user.role === "admin")
@@ -354,7 +363,7 @@ async function start() {
   })
 
   app.delete("/api/listings/:id", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedOwner(req, res)
     if (!user) return
     try {
       deleteListing(String(req.params.id ?? ""), user.id, user.role === "admin")
@@ -369,7 +378,7 @@ async function start() {
   })
 
   app.post("/api/listings/:id/verify", async (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedOwner(req, res)
     if (!user) return
     const keys = isSellerMode() ? ((req.body ?? {}) as ApiKeys) : {}
     try {
@@ -391,7 +400,7 @@ async function start() {
   })
 
   app.post("/api/listings/:id/confirm", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedOwner(req, res)
     if (!user) return
     const body = (req.body ?? {}) as {
       placeId?: string
@@ -454,13 +463,13 @@ async function start() {
   })
 
   app.get("/api/campaigns", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     res.json({ campaigns: readCampaigns(user.id), ...campaignMeta() })
   })
 
   app.post("/api/campaigns", (req, res) => {
-    const user = requireApprovedOwner(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
       res.status(201).json({ campaign: createCampaign(req.body ?? {}, user.id), ...campaignMeta() })
@@ -474,7 +483,7 @@ async function start() {
   })
 
   app.get("/api/campaigns/:id", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     const campaign = getCampaign(String(req.params.id ?? ""), user.id)
     if (!campaign) {
@@ -485,7 +494,7 @@ async function start() {
   })
 
   app.patch("/api/campaigns/:id", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
       res.json({ campaign: updateCampaign(String(req.params.id ?? ""), req.body ?? {}, user.id), ...campaignMeta() })
@@ -499,7 +508,7 @@ async function start() {
   })
 
   app.get("/api/geocode", async (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     const city = String(req.query.city ?? "")
     const state = String(req.query.state ?? "")
@@ -512,7 +521,7 @@ async function start() {
   })
 
   app.get("/api/campaigns/:id/grid", async (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     const gridSize = req.query.gridSize == null || req.query.gridSize === "" ? undefined : Number(req.query.gridSize)
     const spacingMiles =
@@ -535,7 +544,7 @@ async function start() {
   })
 
   app.delete("/api/campaigns/:id", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
       deleteCampaign(String(req.params.id ?? ""), user.id)
@@ -550,7 +559,7 @@ async function start() {
   })
 
   app.get("/api/campaigns/:id/scans", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
       res.json({ scans: listCampaignScans(String(req.params.id ?? ""), user.id), ...campaignMeta() })
@@ -564,7 +573,7 @@ async function start() {
   })
 
   app.post("/api/campaigns/:id/scans", async (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     const body = (req.body ?? {}) as ApiKeys & { keywords?: string[] | string; keyword?: string }
     const keys = isSellerMode() ? body : {}
@@ -593,7 +602,7 @@ async function start() {
   })
 
   app.get("/api/campaigns/:id/scans/:a/compare/:b", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
       res.json({
@@ -610,7 +619,7 @@ async function start() {
   })
 
   app.get("/api/campaigns/:id/scans/:scanId", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
       res.json({ scan: getCampaignScan(String(req.params.id ?? ""), String(req.params.scanId ?? ""), user.id), ...campaignMeta() })
@@ -626,7 +635,7 @@ async function start() {
   app.post("/api/campaigns/:id/scan", async (req, res) => {
     req.setTimeout(10 * 60 * 1000)
     res.setTimeout(10 * 60 * 1000)
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     const body = (req.body ?? {}) as ApiKeys & { keywords?: string[] | string; keyword?: string }
     const keys = isSellerMode() ? body : {}
@@ -647,7 +656,7 @@ async function start() {
   })
 
   app.post("/api/campaigns/:id/traffic", async (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     const body = (req.body ?? {}) as ApiKeys & {
       pinIds?: string[]
@@ -680,7 +689,7 @@ async function start() {
   })
 
   app.post("/api/campaigns/:id/traffic/stop", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
       const result = stopCampaignTraffic(String(req.params.id ?? ""), user.id)
@@ -695,7 +704,7 @@ async function start() {
   })
 
   app.get("/api/campaigns/:id/traffic", (req, res) => {
-    const user = requireUser(req, res)
+    const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
       const result = getCampaignTraffic(String(req.params.id ?? ""), user.id)

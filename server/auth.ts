@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto"
 import path from "node:path"
-import { accountStatusOf, parseAccountKind, type AccountKind, type UserStatus } from "../src/lib/account.ts"
+import { accountKindOf, accountStatusOf, parseAccountKind, type AccountKind, type UserStatus } from "../src/lib/account.ts"
 import { isPackagedBuyer } from "./runtime.ts"
 import { dataDir, readCollection, writeCollection } from "./store.ts"
 
@@ -432,7 +432,12 @@ export function becomeBusiness(id: string): { user?: PublicUser; error?: string 
   const users = readUsers()
   const current = users.find((user) => user.id === id)
   if (!current) return { error: "That user was not found." }
-  const next: User = { ...current, accountKind: "business" }
+  const convertingMember = current.role !== "admin" && accountKindOf(current) === "member"
+  const next: User = {
+    ...current,
+    accountKind: "business",
+    status: convertingMember ? "pending" : userStatus(current),
+  }
   writeUsers(users.map((user) => (user.id === id ? next : user)))
   return { user: publicUser(next) }
 }

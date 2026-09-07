@@ -104,14 +104,14 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
                 void becomeBusinessAccount()
                   .then((next) => {
                     onUser?.(next)
-                    onGo("/listings/new")
+                    onGo("/account")
                   })
                   .catch((err) => setError(err instanceof Error ? err.message : "Could not switch this account."))
                   .finally(() => setUpgradeBusy(false))
               }}
               className="h-11 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a] disabled:opacity-60"
             >
-              {upgradeBusy ? "Working…" : `List a business · ${LISTING_PRICE_LABEL}`}
+              {upgradeBusy ? "Working…" : `Switch to a business profile · ${LISTING_PRICE_LABEL}`}
             </button>
           ) : (
             <button
@@ -158,8 +158,9 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Reviews and quotes</p>
           <h3 className="mt-2 font-display text-2xl text-paper">No listing fee on this account</h3>
           <p className="mt-3 text-sm leading-6 text-muted">
-            Use this account to review shops and ask for quotes. Browse the directory, open a profile, and write as
-            yourself. If you own a shop, switch to a business listing for {LISTING_PRICE_LABEL}.
+            Use this account to review shops and ask for quotes. Rank tracker, Traffic, and Create listing stay off
+            neighbor accounts. If you own a shop, switch to a business profile for {LISTING_PRICE_LABEL}. An admin has
+            to approve that before those tools unlock.
           </p>
           <button type="button" onClick={() => onGo("/directory")} className="mt-4 text-sm text-brass hover:underline">
             Open the directory

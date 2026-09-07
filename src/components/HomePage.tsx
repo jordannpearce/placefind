@@ -1,7 +1,7 @@
 import { ArrowRight, BadgeDollarSign, NotebookPen, Store } from "lucide-react"
 import { useEffect, useState } from "react"
 import { searchDirectory } from "../lib/api.ts"
-import { joinHref, listBusinessHref } from "../lib/account.ts"
+import { joinHref, listBusinessHref, showCreateListingCta } from "../lib/account.ts"
 import { listingLocation, listingPath } from "../lib/listings.ts"
 import { LISTING_PRICE_LABEL, listingPriceCopy } from "../lib/pricing.ts"
 import { CITY_PHOTOS } from "../lib/sample-listing.ts"
@@ -20,6 +20,7 @@ function stars(average: number | null | undefined) {
 export function HomePage({ user, onGo }: Props) {
   const [featured, setFeatured] = useState<DirectoryListing[]>([])
   const [loaded, setLoaded] = useState(false)
+  const listingCta = showCreateListingCta(user)
 
   useEffect(() => {
     void searchDirectory({})
@@ -55,13 +56,15 @@ export function HomePage({ user, onGo }: Props) {
               Browse the directory
               <ArrowRight className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => onGo(listBusinessHref(user))}
-              className="inline-flex h-12 items-center rounded-lg border border-line px-5 text-sm text-paper hover:border-brass"
-            >
-              {user ? "Create a listing" : `List your business · ${LISTING_PRICE_LABEL}`}
-            </button>
+            {listingCta && (
+              <button
+                type="button"
+                onClick={() => onGo(listBusinessHref(user))}
+                className="inline-flex h-12 items-center rounded-lg border border-line px-5 text-sm text-paper hover:border-brass"
+              >
+                {user ? "Create a listing" : `List your business · ${LISTING_PRICE_LABEL}`}
+              </button>
+            )}
             {!user && (
               <button
                 type="button"
@@ -188,13 +191,15 @@ export function HomePage({ user, onGo }: Props) {
               the directory.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => onGo(listBusinessHref(user))}
-                className="inline-flex h-11 items-center rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
-              >
-                {user ? "Create a listing" : "List your business"}
-              </button>
+              {listingCta && (
+                <button
+                  type="button"
+                  onClick={() => onGo(listBusinessHref(user))}
+                  className="inline-flex h-11 items-center rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
+                >
+                  {user ? "Create a listing" : "List your business"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onGo("/directory")}
@@ -254,13 +259,15 @@ export function HomePage({ user, onGo }: Props) {
               customized profile is not replaced.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => onGo(listBusinessHref(user))}
-                className="inline-flex h-11 items-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
-              >
-                {user ? "Create a listing" : "Start a listing"}
-              </button>
+              {listingCta && (
+                <button
+                  type="button"
+                  onClick={() => onGo(listBusinessHref(user))}
+                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-brass px-4 font-semibold text-ink hover:bg-[#ecc77a]"
+                >
+                  {user ? "Create a listing" : "Start a listing"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onGo("/directory")}

@@ -6,8 +6,13 @@ import {
   canLeaveReview,
   canPublishListing,
   canUseOwnerTools,
+  canUseRankTracker,
+  canUseTraffic,
   isApprovedAccount,
   listingCreateDenied,
+  MEMBER_OWNER_TOOLS_MESSAGE,
+  ownerToolDenied,
+  showCreateListingCta,
   afterSignupHref,
   createProfileHref,
   isCreateProfilePath,
@@ -51,9 +56,21 @@ describe("account kinds", () => {
     assert.equal(isApprovedAccount(pending), false)
     assert.equal(canPublishListing(pending), false)
     assert.equal(canUseOwnerTools(pending), false)
+    assert.equal(canUseRankTracker(pending), false)
+    assert.equal(canUseTraffic(pending), false)
+    assert.equal(canUseRankTracker(business), true)
+    assert.equal(canUseTraffic(admin), true)
+    assert.equal(canUseRankTracker(member), false)
     assert.equal(canLeaveReview(pending), false)
     assert.equal(listingCreateDenied(pending), ACCOUNT_PENDING_MESSAGE)
     assert.equal(listingCreateDenied(member), MEMBER_LISTING_MESSAGE)
+    assert.equal(ownerToolDenied(pending), ACCOUNT_PENDING_MESSAGE)
+    assert.equal(ownerToolDenied(member), MEMBER_OWNER_TOOLS_MESSAGE)
+    assert.equal(ownerToolDenied(business), null)
+    assert.equal(showCreateListingCta(null), true)
+    assert.equal(showCreateListingCta(business), true)
+    assert.equal(showCreateListingCta(member), false)
+    assert.equal(showCreateListingCta(pending), false)
     assert.match(MEMBER_LISTING_MESSAGE, /\$150 per month/)
     assert.match(MEMBER_LISTING_MESSAGE, /reviews/)
     assert.match(MEMBER_LISTING_MESSAGE, /Anyone can request a quote/)
@@ -83,6 +100,7 @@ describe("account kinds", () => {
     assert.equal(isCreateProfilePath("/join"), false)
     assert.equal(listBusinessHref(null), "/create-profile")
     assert.equal(listBusinessHref(business), "/listings/new")
-    assert.equal(listBusinessHref(member), "/listings/new")
+    assert.equal(listBusinessHref(member), "/account")
+    assert.equal(listBusinessHref({ ...business, status: "pending" }), "/account")
   })
 })

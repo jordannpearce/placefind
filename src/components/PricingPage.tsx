@@ -1,5 +1,5 @@
 import { Check } from "lucide-react"
-import { joinHref, listBusinessHref } from "../lib/account.ts"
+import { isApprovedAccount, joinHref, listBusinessHref, showCreateListingCta } from "../lib/account.ts"
 import { LISTING_PRICE_LABEL, LISTING_PRICE_SHORT } from "../lib/pricing.ts"
 import type { AuthUser } from "../lib/types.ts"
 
@@ -79,10 +79,16 @@ export function PricingPage({ user, onGo }: Props) {
           </ul>
           <button
             type="button"
-            onClick={() => onGo(listingHref)}
+            onClick={() => onGo(showCreateListingCta(user) ? listingHref : "/account")}
             className="mt-8 h-12 rounded-lg bg-brass px-5 font-semibold text-ink hover:bg-[#ecc77a]"
           >
-            {user ? "Create a listing" : `List your business · ${LISTING_PRICE_LABEL}`}
+            {showCreateListingCta(user)
+              ? user
+                ? "Create a listing"
+                : `List your business · ${LISTING_PRICE_LABEL}`
+              : isApprovedAccount(user)
+                ? "This account is for reviews and quotes"
+                : "Waiting for admin approval"}
           </button>
         </article>
       </section>
