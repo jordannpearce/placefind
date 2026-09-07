@@ -1,6 +1,6 @@
 import { LoaderCircle, MapPinned, Search } from "lucide-react"
 import { useEffect, useState } from "react"
-import { listBusinessHref } from "../lib/account.ts"
+import { joinHref, listBusinessHref } from "../lib/account.ts"
 import { searchDirectory } from "../lib/api.ts"
 import { listingLocation, listingPath } from "../lib/listings.ts"
 import type { AuthUser, DirectoryListing } from "../lib/types.ts"
@@ -92,13 +92,24 @@ export function DirectoryPage({ user, onGo }: Props) {
               {loading ? "Searching…" : "Search directory"}
             </button>
           </form>
-          <button
-            type="button"
-            onClick={() => onGo(listBusinessHref(user))}
-            className="mt-4 text-sm text-brass hover:underline"
-          >
-            {user ? "Create your listing" : "List your business · $150 per month"}
-          </button>
+          <div className="mt-4 grid gap-2">
+            <button
+              type="button"
+              onClick={() => onGo(listBusinessHref(user))}
+              className="text-left text-sm text-brass hover:underline"
+            >
+              {user ? "Create your listing" : "Create a Profile · $150 per month"}
+            </button>
+            {!user && (
+              <button
+                type="button"
+                onClick={() => onGo(joinHref("member"))}
+                className="text-left text-sm text-brass hover:underline"
+              >
+                Join to leave reviews
+              </button>
+            )}
+          </div>
         </aside>
 
         <div>
@@ -124,13 +135,24 @@ export function DirectoryPage({ user, onGo }: Props) {
                   <p className="mt-2 text-sm leading-6 text-muted">
                     The directory is empty until a business owner publishes a listing. There are no sample shops here.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => onGo(listBusinessHref(user))}
-                    className="mt-5 text-sm text-brass hover:underline"
-                  >
-                    {user ? "Create a listing" : "List your business"}
-                  </button>
+                  <div className="mt-5 flex flex-wrap items-center justify-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => onGo(listBusinessHref(user))}
+                      className="text-sm text-brass hover:underline"
+                    >
+                      {user ? "Create a listing" : "Create a Profile"}
+                    </button>
+                    {!user && (
+                      <button
+                        type="button"
+                        onClick={() => onGo(joinHref("member"))}
+                        className="text-sm text-brass hover:underline"
+                      >
+                        Join to leave reviews
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
             </div>
