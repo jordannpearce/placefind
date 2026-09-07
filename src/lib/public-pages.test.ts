@@ -71,6 +71,14 @@ describe("public website copy", () => {
     }
   })
 
+  it("does not show Maps match copy on the public listing profile", () => {
+    const page = readFileSync(path.join(root, "components/ListingDetailPage.tsx"), "utf8")
+    assert.equal(/Matched /.test(page), false)
+    assert.equal(/mapsStatus !== "pending"/.test(page), false)
+    assert.match(page, /mapsStatusIsNotFound/)
+    assert.match(page, /GoogleBusinessProfileCta/)
+  })
+
   it("always offers the quote form and never mentions a missing listing email", () => {
     const page = readFileSync(path.join(root, "components/ListingDetailPage.tsx"), "utf8")
     assert.match(page, /Request a quote/)

@@ -172,9 +172,6 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
             Open in Maps
           </a>
         )}
-        {listing.mapsStatus !== "pending" && !mapsStatusIsNotFound(listing.mapsStatus) && (
-          <p className="mt-2 text-xs leading-5 text-muted">{mapsStatusDetail(listing)}</p>
-        )}
         {mapsStatusIsNotFound(listing.mapsStatus) && <GoogleBusinessProfileCta intro={mapsStatusDetail(listing)} />}
         <p className="mt-3 text-sm text-brass">
           {summary.average != null
