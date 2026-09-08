@@ -8,6 +8,7 @@ import {
   applyListingHtmlHead,
   CRAWL_ARTICLE_FOOTER,
   DEFAULT_SITE_DESCRIPTION,
+  listingCanonicalHref,
   listingDocumentDescription,
   listingDocumentTitle,
   listingHasEnhancedProfile,
@@ -113,10 +114,13 @@ describe("listing profile helpers", () => {
 
   it("rewrites the SPA shell so listing meta replaces the $150 marketing line", () => {
     const custom = listing({
+      id: "listing-cedar",
+      slug: "cedar-clay-studio-pottery-studio",
+      name: "Cedar & Clay Studio",
       profilePageTitle: "Cedar & Clay Studio · Austin pottery",
       profileMetaDescription: "Wheel-thrown mugs and weekend classes on South Congress.",
     })
-    const next = applyListingHtmlHead(indexHtml, custom, "https://placefind.example/listings/cedar-clay-studio-pottery-studio")
+    const next = applyListingHtmlHead(indexHtml, custom, "https://placefind.example/listings/listing-cedar")
     assert.match(next, /<title>Cedar &amp; Clay Studio · Austin pottery<\/title>/)
     assert.match(next, /id="placefind-description"[^>]*content="Wheel-thrown mugs and weekend classes on South Congress\."/)
     assert.match(next, /property="og:description"[^>]*content="Wheel-thrown mugs and weekend classes on South Congress\."/)
@@ -141,6 +145,52 @@ describe("listing profile helpers", () => {
     assert.equal(ownerCanonical.includes("https://shop.example"), false)
     assert.match(ownerCanonical, /name="robots"/)
     assert.equal((ownerCanonical.match(/rel="canonical"/g) ?? []).length, 1)
+  })
+
+  it("keeps a placefind.to listing slug canonical even when opened by id", () => {
+    const cedar = listing({
+      id: "listing-cedar",
+      slug: "cedar-clay-studio-pottery-studio",
+      name: "Cedar & Clay Studio",
+      category: "Pottery studio",
+    })
+    const expected = '<link id="placefind-canonical" rel="canonical" href="https://placefind.to/listings/cedar-clay-studio-pottery-studio">'
+    const fromSlug = applyListingHtmlHead(indexHtml, cedar, "/listings/cedar-clay-studio-pottery-studio")
+    const fromId = applyListingHtmlHead(indexHtml, cedar, "/listings/listing-cedar", "http://127.0.0.1:43141")
+    assert.equal(fromSlug.includes(expected), true)
+    assert.equal(fromId.includes(expected), true)
+    assert.equal(listingCanonicalHref(cedar, "/listings/listing-cedar"), "https://placefind.to/listings/cedar-clay-studio-pottery-studio")
+    assert.equal((fromId.match(/rel="canonical"/g) ?? []).length, 1)
+
+    const shopHead = applyListingHtmlHead(
+      indexHtml,
+      listing({
+        ...cedar,
+        profileHeadHtml: '<link rel="canonical" href="https://shop.example"><meta name="robots" content="index,follow">',
+      }),
+    )
+    assert.equal(shopHead.includes(expected), true)
+    assert.equal(shopHead.includes("https://shop.example"), false)
+    assert.equal((shopHead.match(/rel="canonical"/g) ?? []).length, 1)
+
+    const ownerListing = applyListingHtmlHead(
+      indexHtml,
+      listing({
+        ...cedar,
+        profileHeadHtml: '<link rel="canonical" href="https://placefind.to/listings/cedar-clay-studio-pottery-studio">',
+      }),
+    )
+    assert.equal(ownerListing.includes(expected), true)
+    assert.equal(
+      listingCanonicalHref(
+        listing({
+          id: "listing-cedar",
+          slug: "cedar-clay-studio-pottery-studio",
+          profileHeadHtml: '<link rel="canonical" href="https://www.placefind.to/listings/other-clay-studio">',
+        }),
+      ),
+      "https://placefind.to/listings/other-clay-studio",
+    )
   })
 
   it("replaces the live document description and restores the site default", () => {
@@ -236,6 +286,115 @@ describe("listing profile helpers", () => {
     applyListingDocumentHead(listing({ profileMetaDescription: "" }))
     assert.equal(descriptionMeta.getAttribute("content"), "Harbor & Oak Bakery in Portland, ME.")
     assert.equal(descriptionMeta.getAttribute("content")?.includes("$150"), false)
+
+    delete (globalThis as { document?: unknown }).document
+  })
+
+  it("updates the same document canonical tag for listing navigation and owner head", () => {
+    type FakeNode = {
+      tagName: string
+      id: string
+      attrs: Map<string, string>
+      children: FakeNode[]
+      innerHTML: string
+      setAttribute: (name: string, value: string) => void
+      getAttribute: (name: string) => string | null
+      removeAttribute: (name: string) => void
+      remove: () => void
+    }
+    const headChildren: FakeNode[] = []
+    function makeNode(tagName = "DIV"): FakeNode {
+      const node: FakeNode = {
+        tagName,
+        id: "",
+        attrs: new Map(),
+        children: [],
+        get innerHTML() {
+          return ""
+        },
+        set innerHTML(value: string) {
+          node.children = []
+          for (const match of value.matchAll(/<(link|meta)\b([^>]*)\/?>/gi)) {
+            const child = makeNode(match[1]!.toUpperCase())
+            const attrs = match[2] ?? ""
+            for (const attr of attrs.matchAll(/\b([a-z:]+)\s*=\s*["']([^"']+)["']/gi)) {
+              child.setAttribute(attr[1]!, attr[2]!)
+            }
+            node.children.push(child)
+          }
+        },
+        setAttribute(name, value) {
+          if (name === "id") node.id = value
+          node.attrs.set(name, value)
+        },
+        getAttribute(name) {
+          if (name === "id") return node.id || null
+          return node.attrs.get(name) ?? null
+        },
+        removeAttribute(name) {
+          if (name === "id") node.id = ""
+          node.attrs.delete(name)
+        },
+        remove() {
+          const index = headChildren.indexOf(node)
+          if (index >= 0) headChildren.splice(index, 1)
+        },
+      }
+      return node
+    }
+    const canonical = makeNode("LINK")
+    canonical.setAttribute("id", "placefind-canonical")
+    canonical.setAttribute("rel", "canonical")
+    canonical.setAttribute("href", "https://placefind.to/")
+    headChildren.push(canonical)
+    const document = {
+      title: "PlaceFind — Local business directory",
+      head: {
+        children: headChildren,
+        appendChild(node: FakeNode) {
+          headChildren.push(node)
+          return node
+        },
+        querySelector(selector: string) {
+          if (selector === 'link[rel="canonical"]') {
+            return headChildren.find((node) => node.tagName === "LINK" && node.getAttribute("rel") === "canonical") ?? null
+          }
+          return null
+        },
+      },
+      getElementById(id: string) {
+        return headChildren.find((node) => node.id === id) ?? null
+      },
+      createElement(tag: string) {
+        return makeNode(tag.toUpperCase())
+      },
+    }
+    Object.assign(globalThis, { document })
+
+    const cedar = listing({
+      id: "listing-cedar",
+      slug: "cedar-clay-studio-pottery-studio",
+      name: "Cedar & Clay Studio",
+      profileHeadHtml: '<link rel="canonical" href="https://shop.example">',
+    })
+    const restoreCedar = applyListingDocumentHead(cedar, "https://127.0.0.1/listings/listing-cedar")
+    assert.equal(canonical.getAttribute("href"), "https://placefind.to/listings/cedar-clay-studio-pottery-studio")
+    assert.equal(document.head.querySelector('link[rel="canonical"]'), canonical)
+    assert.equal(headChildren.filter((node) => node.getAttribute("rel") === "canonical").length, 1)
+    assert.equal(headChildren.some((node) => node.getAttribute("href") === "https://shop.example"), false)
+
+    restoreCedar()
+    assert.equal(canonical.getAttribute("href"), "https://placefind.to/")
+
+    const nextListing = listing({
+      id: "listing-harbor",
+      slug: "harbor-oak-bakery",
+      profileHeadHtml: '<link rel="canonical" href="https://placefind.to/listings/harbor-oak-bakery">',
+    })
+    applyListingDocumentHead(nextListing, "/listings/listing-harbor")
+    assert.equal(document.head.querySelector('link[rel="canonical"]')?.getAttribute("href"), "https://placefind.to/listings/harbor-oak-bakery")
+    assert.equal(document.head.querySelector('link[rel="canonical"]'), canonical)
+    assert.equal(headChildren.filter((node) => node.getAttribute("rel") === "canonical").length, 1)
 
     delete (globalThis as { document?: unknown }).document
   })

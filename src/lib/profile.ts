@@ -1,5 +1,5 @@
 import { applyDocumentCanonical, canonicalUrl, isCanonicalLinkElement, upsertHtmlCanonical } from "./canonical.ts"
-import { listingLocation, listingPath } from "./listings.ts"
+import { isPlaceFindListingUrl, listingCanonicalUrl, listingLocation } from "./listings.ts"
 import type { DirectoryListing } from "./types.ts"
 
 export const CRAWL_ARTICLE_FOOTER =
@@ -163,12 +163,23 @@ function upsertHtmlMeta(html: string, attr: "name" | "property", key: string, co
   return html.replace(/<\/head>/i, `    ${tag}\n  </head>`)
 }
 
+function ownerPlaceFindListingCanonical(headHtml: string): string | undefined {
+  const sanitized = sanitizeOwnerHeadHtml(headHtml)
+  for (const match of sanitized.matchAll(/<link\b([^>]*)\/?>/gi)) {
+    const attrs = match[1] ?? ""
+    if (!/\brel\s*=\s*(["']?)canonical\1/i.test(attrs)) continue
+    const href = attrs.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1]
+    if (href && isPlaceFindListingUrl(href)) return canonicalUrl(href)
+  }
+  return undefined
+}
+
 export function listingCanonicalHref(
-  listing: Pick<DirectoryListing, "id"> & { slug?: string },
-  pageUrl?: string,
-  origin?: string | null,
+  listing: Pick<DirectoryListing, "id"> & { slug?: string; profileHeadHtml?: string },
+  _pageUrl?: string,
+  _origin?: string | null,
 ): string {
-  return canonicalUrl(pageUrl || listingPath(listing), origin)
+  return ownerPlaceFindListingCanonical(listing.profileHeadHtml ?? "") ?? listingCanonicalUrl(listing)
 }
 
 export function applyListingHtmlHead(
