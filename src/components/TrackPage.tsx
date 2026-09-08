@@ -204,6 +204,7 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
   const [competitorsGeoOnly, setCompetitorsGeoOnly] = useState(false)
   const [competitorsScope, setCompetitorsScope] = useState<"all" | "pin">("all")
   const [ownedListings, setOwnedListings] = useState<DirectoryListing[]>([])
+  const [listingsLoaded, setListingsLoaded] = useState(false)
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null)
 
   const cappedBusiness = isCappedBusinessAccount(user)
@@ -211,6 +212,7 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
     () => ownedListingForTrack(ownedListings, user?.listingId),
     [ownedListings, user?.listingId],
   )
+  const waitingForOwnedListing = cappedBusiness && !listingsLoaded && !lockedListing
   const visibleListings = useMemo(
     () => businessTrackListings(user, ownedListings),
     [user, ownedListings],
@@ -374,10 +376,14 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
     let active = true
     void loadAccount()
       .then((account) => {
-        if (active) setOwnedListings(account.listings ?? [])
+        if (!active) return
+        setOwnedListings(account.listings ?? [])
+        setListingsLoaded(true)
       })
       .catch(() => {
-        if (active) setOwnedListings([])
+        if (!active) return
+        setOwnedListings([])
+        setListingsLoaded(true)
       })
     return () => {
       active = false
@@ -1198,14 +1204,16 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
           )}
         </div>
         <p className="mb-4 text-sm leading-6 text-muted">
-            {cappedBusiness
-              ? lockedListing
-                ? BUSINESS_TRACK_SCAN_COPY
+          {cappedBusiness
+            ? lockedListing
+              ? BUSINESS_TRACK_SCAN_COPY
+              : waitingForOwnedListing
+                ? "Loading your listing…"
                 : BUSINESS_NO_LISTING_TRACK_COPY
-              : ownedListings.length > 0
-                ? "Pick one of your listings, or search Maps, then scan ranks around it."
-                : "Search for the business, click the right Maps listing, then scan ranks around it."}
-            {cappedBusiness && !lockedListing && (
+            : ownedListings.length > 0
+              ? "Pick one of your listings, or search Maps, then scan ranks around it."
+              : "Search for the business, click the right Maps listing, then scan ranks around it."}
+            {cappedBusiness && listingsLoaded && !lockedListing && (
               <>
                 {" "}
                 <a href={listBusinessHref(user)} className="text-brass hover:underline">
@@ -1219,7 +1227,9 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
             {cappedBusiness
               ? lockedListing
                 ? "No campaign yet. Confirm your listing, then scan that one shop."
-                : BUSINESS_NO_LISTING_TRACK_COPY
+                : waitingForOwnedListing
+                  ? "Loading your listing…"
+                  : BUSINESS_NO_LISTING_TRACK_COPY
               : ownedListings.length > 0
                 ? "No campaigns yet. Pick one of your businesses or search, confirm the listing, then scan."
                 : "No campaigns yet. Search a business, confirm the listing, then scan."}
@@ -1278,7 +1288,9 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
                   : cappedBusiness
                     ? lockedListing
                       ? BUSINESS_TRACK_LOCKED_COPY
-                      : BUSINESS_NO_LISTING_TRACK_COPY
+                      : waitingForOwnedListing
+                        ? "Loading your listing…"
+                        : BUSINESS_NO_LISTING_TRACK_COPY
                     : ownedListings.length > 0
                       ? "Choose one of your PlaceFind listings, or search Maps for a different business."
                       : "Find the listing first. Do not scan until you have clicked the correct business."}
