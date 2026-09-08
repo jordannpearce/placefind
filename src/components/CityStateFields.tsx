@@ -7,9 +7,10 @@ type Props = {
   onCity: (city: string) => void
   onState: (state: string) => void
   fieldClassName: string
+  disabled?: boolean
 }
 
-export function CityStateFields({ city, state, onCity, onState, fieldClassName }: Props) {
+export function CityStateFields({ city, state, onCity, onState, fieldClassName, disabled }: Props) {
   return (
     <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(7rem,7.5rem)]">
       <label className="grid min-w-0 gap-1.5">
@@ -19,7 +20,8 @@ export function CityStateFields({ city, state, onCity, onState, fieldClassName }
           onChange={(event) => onCity(event.target.value)}
           placeholder="Austin"
           autoComplete="off"
-          className={`box-border w-full min-w-0 ${fieldClassName}`}
+          disabled={disabled}
+          className={`box-border w-full min-w-0 ${fieldClassName}${disabled ? " opacity-70" : ""}`}
         />
       </label>
       <label className="grid min-w-0 gap-1.5">
@@ -28,7 +30,8 @@ export function CityStateFields({ city, state, onCity, onState, fieldClassName }
           <select
             value={state}
             onChange={(event) => onState(event.target.value)}
-            className={`box-border w-full min-w-0 appearance-none pr-9 ${fieldClassName}`}
+            disabled={disabled}
+            className={`box-border w-full min-w-0 appearance-none pr-9 ${fieldClassName}${disabled ? " opacity-70" : ""}`}
           >
             <option value="">Select</option>
             {US_STATES.map((row) => (

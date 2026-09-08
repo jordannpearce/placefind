@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
 import { ACCOUNT_HAS_LISTING_MESSAGE } from "../src/lib/account.ts"
+import { keywordCapMessage } from "../src/lib/keywords.ts"
 import { parseStreetAddress } from "../src/lib/address.ts"
 import { approveUser, signup } from "./auth.ts"
 import {
@@ -293,6 +294,47 @@ describe("directory listings", () => {
     assert.equal(secondAdmin.name, "Admin Support Shop")
     assert.equal(listingLimitDenied({ id: "owner-1", role: "customer" }), ACCOUNT_HAS_LISTING_MESSAGE)
     assert.equal(listingLimitDenied({ id: "admin-1", role: "admin" }), null)
+  })
+
+  it("rejects a sixth listing keyword", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-listing-keywords-")))
+    assert.throws(
+      () =>
+        createListing(
+          {
+            name: "Harbor Street Cafe",
+            city: "Portland",
+            state: "OR",
+            keywords: ["coffee", "pastry", "brunch", "espresso", "latte", "mocha"],
+          },
+          "owner-1",
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof ListingError)
+        assert.equal(error.status, 400)
+        assert.equal(error.message, keywordCapMessage())
+        return true
+      },
+    )
+    const created = createListing(
+      {
+        name: "Harbor Street Cafe",
+        city: "Portland",
+        state: "OR",
+        keywords: ["coffee", "pastry", "brunch", "espresso", "latte"],
+      },
+      "owner-1",
+    )
+    assert.deepEqual(created.keywords, ["coffee", "pastry", "brunch", "espresso", "latte"])
+    assert.throws(
+      () => updateListing(created.id, { keywords: [...created.keywords, "mocha"] }, "owner-1"),
+      (error: unknown) => {
+        assert.ok(error instanceof ListingError)
+        assert.equal(error.message, keywordCapMessage())
+        return true
+      },
+    )
+    assert.deepEqual(getListing(created.id).keywords, created.keywords)
   })
 
   it("blocks another customer from editing a listing", () => {

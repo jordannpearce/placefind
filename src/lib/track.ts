@@ -256,11 +256,12 @@ export function campaignInputFromListing(
 ): CampaignInput {
   return {
     name: listing.title,
-    businessName: listing.title,
+    businessName: extra.businessName || listing.title,
+    listingId: extra.listingId,
     listingTitle: listing.title,
     listingAddress: listing.address,
-    city: listing.city || query.city,
-    state: listing.state || query.state,
+    city: extra.city || listing.city || query.city,
+    state: extra.state || listing.state || query.state,
     placeId: listing.placeId,
     center: { lat: listing.lat, lng: listing.lng },
     ...extra,

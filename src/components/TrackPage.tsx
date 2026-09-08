@@ -19,6 +19,21 @@ import {
   stopCampaignTraffic,
   updateCampaign,
 } from "../lib/api.ts"
+import {
+  BUSINESS_MAPS_OTHER_LISTING_MESSAGE,
+  BUSINESS_NO_LISTING_TRACK_COPY,
+  BUSINESS_TRACK_LOCKED_COPY,
+  BUSINESS_TRACK_SCAN_COPY,
+  businessTrackListings,
+  campaignMatchesOwnedListing,
+  isCappedBusinessAccount,
+  mapsPlaceAllowedForOwnedListing,
+  matchingBusinessCampaign,
+  ownedListingForTrack,
+  showBusinessNewCampaign,
+  showSearchOtherBusiness,
+} from "../lib/business-track.ts"
+import { listBusinessHref } from "../lib/account.ts"
 import { listingLocation, listingMapsMatchFromPlace } from "../lib/listings.ts"
 import { buildPreviewPoints, gridPinId, gridPinLabel, pinColor, rankColor, rankLabel } from "../lib/grid.ts"
 import { pointsWithCompare, rankChangeColor, rankChangeLabel } from "../lib/scan-compare.ts"
@@ -69,7 +84,10 @@ import {
   trafficStartConfirmCopy,
 } from "../lib/traffic-plan.ts"
 import {
+  MAX_KEYWORDS,
+  acceptKeywordText,
   formatKeywordText,
+  keywordCapMessage,
   keywordHelpCopy,
   mergeKeywordLists,
   parseKeywordText,
@@ -99,6 +117,7 @@ import type {
   TrafficLogLine,
   TrafficPinResult,
   TrafficSchedule,
+  AuthUser,
 } from "../lib/types.ts"
 import { GridMap } from "./GridMap.tsx"
 
@@ -107,6 +126,7 @@ type Props = {
   hosted: HostedKeyStatus | null
   seller: boolean
   desktop?: boolean
+  user?: AuthUser | null
 }
 
 const emptyQuery = (): SearchQuery => ({ name: "", city: "", state: "" })
@@ -142,9 +162,9 @@ function scanWhen(run: { finishedAt?: string; scannedAt?: string; startedAt?: st
   return formatWhen(run.finishedAt || run.scannedAt || run.startedAt)
 }
 
-export function TrackPage({ keys, hosted, seller, desktop }: Props) {
+export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [maxKeywords, setMaxKeywords] = useState(20)
+  const [maxKeywords, setMaxKeywords] = useState(MAX_KEYWORDS)
   const [allowedGridSizes, setAllowedGridSizes] = useState([3, 5, 7])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [query, setQuery] = useState<SearchQuery>(emptyQuery)
@@ -186,9 +206,22 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   const [ownedListings, setOwnedListings] = useState<DirectoryListing[]>([])
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null)
 
+  const cappedBusiness = isCappedBusinessAccount(user)
+  const lockedListing = useMemo(
+    () => ownedListingForTrack(ownedListings, user?.listingId),
+    [ownedListings, user?.listingId],
+  )
+  const visibleListings = useMemo(
+    () => businessTrackListings(user, ownedListings),
+    [user, ownedListings],
+  )
+  const visibleCampaigns = useMemo(() => {
+    if (!cappedBusiness || !lockedListing) return campaigns
+    return campaigns.filter((campaign) => campaignMatchesOwnedListing(campaign, lockedListing))
+  }, [campaigns, cappedBusiness, lockedListing])
   const selected = useMemo(
-    () => (campaigns ?? []).find((campaign) => campaign.id === selectedId) ?? null,
-    [campaigns, selectedId],
+    () => (visibleCampaigns ?? []).find((campaign) => campaign.id === selectedId) ?? null,
+    [visibleCampaigns, selectedId],
   )
 
   const listings = listingsFromSearch(searchResult)
@@ -350,6 +383,20 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       active = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!cappedBusiness || !lockedListing || loading) return
+    const mine = matchingBusinessCampaign(campaigns, lockedListing)
+    if (mine && selectedId !== mine.id) {
+      setCreating(false)
+      setSelectedId(mine.id)
+      applyCampaign(mine)
+      setSelectedListingId(lockedListing.id)
+      return
+    }
+    if (selectedListingId === lockedListing.id) return
+    void onPickOwnedListing(lockedListing)
+  }, [cappedBusiness, lockedListing?.id, loading, campaigns, selectedId])
 
   useEffect(() => {
     if (!selected || creating || confirmed || selected.center || selected.lastGridScan?.center) return
@@ -540,7 +587,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
     setPreviewCenter({ lat: next.lat, lng: next.lng })
     setError(null)
     setNotice(`Confirmed ${next.title}. Set a keyword and grid, then scan.`)
-    const owned = ownedOverride ?? ownedListings.find((row) => row.id === selectedListingId)
+    const owned = ownedOverride ?? lockedListing ?? ownedListings.find((row) => row.id === selectedListingId)
     if (persistFrom && owned && shouldPersistOwnedListingMatch(owned, persistFrom)) {
       try {
         const saved = await confirmListingMatch(owned.id, listingMapsMatchFromPlace(persistFrom))
@@ -556,6 +603,10 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
         await updateCampaign(
           selected.id,
           campaignInputFromListing(next, usedQuery, {
+            listingId: owned?.id,
+            businessName: owned?.name || next.title,
+            city: owned?.city || next.city || usedQuery.city,
+            state: owned?.state || next.state || usedQuery.state,
             keywords: selected.keywords,
             gridSize,
             spacingMiles,
@@ -576,7 +627,11 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       setError("That listing is missing a map location. Choose another one.")
       return
     }
-    const owned = ownedListings.find((row) => row.id === selectedListingId)
+    const owned = lockedListing ?? ownedListings.find((row) => row.id === selectedListingId)
+    if (cappedBusiness && owned && !mapsPlaceAllowedForOwnedListing(owned, listing)) {
+      setError(BUSINESS_MAPS_OTHER_LISTING_MESSAGE)
+      return
+    }
     await applyConfirmedListing(next, listing, undefined, owned)
   }
 
@@ -751,6 +806,10 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       if (!campaign || creating) {
         campaign = await createCampaign(
           campaignInputFromListing(confirmed, query, {
+            listingId: lockedListing?.id || selectedListingId || undefined,
+            businessName: lockedListing?.name || confirmed.title,
+            city: lockedListing?.city || confirmed.city || query.city,
+            state: lockedListing?.state || confirmed.state || query.state,
             keywords: targets,
             gridSize,
             spacingMiles,
@@ -763,7 +822,16 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
       } else {
         campaign = await updateCampaign(
           campaign.id,
-          campaignInputFromListing(confirmed, query, { keywords: targets, gridSize, spacingMiles, pinSource }),
+          campaignInputFromListing(confirmed, query, {
+            listingId: lockedListing?.id || selectedListingId || undefined,
+            businessName: lockedListing?.name || confirmed.title,
+            city: lockedListing?.city || confirmed.city || query.city,
+            state: lockedListing?.state || confirmed.state || query.state,
+            keywords: targets,
+            gridSize,
+            spacingMiles,
+            pinSource,
+          }),
         )
         replaceCampaign(campaign)
       }
@@ -847,6 +915,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
   }
 
   function startCreate() {
+    if (!showBusinessNewCampaign(user)) return
     setCreating(true)
     setSelectedId(null)
     applyCampaign(null)
@@ -1117,29 +1186,47 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Campaigns</p>
             <h2 className="font-display text-2xl text-paper">Grid tracker</h2>
           </div>
-          <button
-            type="button"
-            onClick={startCreate}
-            className="inline-flex h-9 items-center gap-1 rounded-lg bg-brass px-3 text-sm font-semibold text-ink hover:bg-[#ecc77a]"
-          >
-            <Plus className="h-4 w-4" />
-            New
-          </button>
+          {showBusinessNewCampaign(user) && (
+            <button
+              type="button"
+              onClick={startCreate}
+              className="inline-flex h-9 items-center gap-1 rounded-lg bg-brass px-3 text-sm font-semibold text-ink hover:bg-[#ecc77a]"
+            >
+              <Plus className="h-4 w-4" />
+              New
+            </button>
+          )}
         </div>
         <p className="mb-4 text-sm leading-6 text-muted">
-          {ownedListings.length > 0
-            ? "Pick one of your listings, or search Maps, then scan ranks around it."
-            : "Search for the business, click the right Maps listing, then scan ranks around it."}
+            {cappedBusiness
+              ? lockedListing
+                ? BUSINESS_TRACK_SCAN_COPY
+                : BUSINESS_NO_LISTING_TRACK_COPY
+              : ownedListings.length > 0
+                ? "Pick one of your listings, or search Maps, then scan ranks around it."
+                : "Search for the business, click the right Maps listing, then scan ranks around it."}
+            {cappedBusiness && !lockedListing && (
+              <>
+                {" "}
+                <a href={listBusinessHref(user)} className="text-brass hover:underline">
+                  Create your listing
+                </a>
+              </>
+            )}
         </p>
-        {campaigns.length === 0 ? (
+        {visibleCampaigns.length === 0 ? (
           <p className="rounded-xl border border-dashed border-line px-3 py-4 text-sm text-muted">
-            {ownedListings.length > 0
-              ? "No campaigns yet. Pick one of your businesses or search, confirm the listing, then scan."
-              : "No campaigns yet. Search a business, confirm the listing, then scan."}
+            {cappedBusiness
+              ? lockedListing
+                ? "No campaign yet. Confirm your listing, then scan that one shop."
+                : BUSINESS_NO_LISTING_TRACK_COPY
+              : ownedListings.length > 0
+                ? "No campaigns yet. Pick one of your businesses or search, confirm the listing, then scan."
+                : "No campaigns yet. Search a business, confirm the listing, then scan."}
           </p>
         ) : (
           <ul className="grid gap-1">
-            {campaigns.map((campaign) => {
+            {visibleCampaigns.map((campaign) => {
               const active = !creating && campaign.id === selectedId
               return (
                 <li key={campaign.id}>
@@ -1179,16 +1266,22 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                   ? confirmed.title
                   : selected && !creating
                     ? selected.name
-                    : ownedListings.length > 0
-                      ? "Pick a listing, or search"
-                      : "Search, confirm, then scan"}
+                    : cappedBusiness && lockedListing
+                      ? lockedListing.name
+                      : ownedListings.length > 0
+                        ? "Pick a listing, or search"
+                        : "Search, confirm, then scan"}
               </h3>
               <p className="mt-1 text-sm text-muted">
                 {confirmed
                   ? confirmed.address
-                  : ownedListings.length > 0
-                    ? "Choose one of your PlaceFind listings, or search Maps for a different business."
-                    : "Find the listing first. Do not scan until you have clicked the correct business."}
+                  : cappedBusiness
+                    ? lockedListing
+                      ? BUSINESS_TRACK_LOCKED_COPY
+                      : BUSINESS_NO_LISTING_TRACK_COPY
+                    : ownedListings.length > 0
+                      ? "Choose one of your PlaceFind listings, or search Maps for a different business."
+                      : "Find the listing first. Do not scan until you have clicked the correct business."}
               </p>
             </div>
             {selected && !creating && (
@@ -1226,15 +1319,18 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             ))}
           </ol>
 
-          {ownedListings.length > 0 && (
+          {visibleListings.length > 0 && (
             <div className="mt-6" data-testid="owned-listings">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Your businesses</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                {cappedBusiness ? "Your listing" : "Your businesses"}
+              </p>
               <p className="mt-1 text-sm text-muted">
-                Pick a listing you already created. If it has a Maps match, we confirm it here so you can scan without
-                searching again.
+                {cappedBusiness
+                  ? BUSINESS_TRACK_LOCKED_COPY
+                  : "Pick a listing you already created. If it has a Maps match, we confirm it here so you can scan without searching again."}
               </p>
               <ul className="mt-3 grid gap-2">
-                {ownedListings.map((listing) => {
+                {visibleListings.map((listing) => {
                   const picked = selectedListingId === listing.id
                   return (
                     <li key={listing.id}>
@@ -1263,7 +1359,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               void onSearch()
             }}
           >
-            {ownedListings.length > 0 && (
+            {showSearchOtherBusiness(user) && ownedListings.length > 0 && (
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
                 Or search a different business
               </p>
@@ -1275,7 +1371,8 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 onChange={(event) => onQueryChange({ ...query, name: event.target.value })}
                 placeholder="Franklin Barbecue"
                 autoComplete="off"
-                className="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none placeholder:text-muted/50 focus:border-brass"
+                disabled={cappedBusiness}
+                className={`h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none placeholder:text-muted/50 focus:border-brass${cappedBusiness ? " opacity-70" : ""}`}
               />
             </label>
             <CityStateFields
@@ -1284,6 +1381,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
               onCity={(city) => onQueryChange({ ...query, city })}
               onState={(state) => onQueryChange({ ...query, state })}
               fieldClassName="h-11 rounded-lg border border-line bg-ink px-3 text-paper outline-none placeholder:text-muted/50 focus:border-brass"
+              disabled={cappedBusiness}
             />
             <button
               type="submit"
@@ -1304,6 +1402,7 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
             result={searchResult}
             listings={listings}
             confirmed={confirmed}
+            lockedListing={cappedBusiness ? lockedListing : null}
             onConfirm={(listing) => void confirmListing(listing)}
           />
         </section>
@@ -1418,8 +1517,10 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                 data-testid="scan-keywords"
                 value={keywordDraft}
                 onChange={(event) => {
-                  setKeywordDraft(event.target.value)
-                  const parsed = parseKeywordText(event.target.value)
+                  const next = acceptKeywordText(keywordDraft, event.target.value, maxKeywords)
+                  if (next.error) setError(next.error)
+                  setKeywordDraft(next.text)
+                  const parsed = parseKeywordText(next.text)
                   if (parsed[0] && !parsed.some((row) => row.toLowerCase() === activeKeyword.toLowerCase())) {
                     setActiveKeyword(parsed[0])
                   }
@@ -1551,7 +1652,14 @@ export function TrackPage({ keys, hosted, seller, desktop }: Props) {
                   <textarea
                     data-testid="traffic-keywords"
                     value={trafficKeywordDraft}
-                    onChange={(event) => setTrafficKeywordDraft(event.target.value)}
+                    onChange={(event) => {
+                      const listed = mergeKeywordLists(trafficKeywords, parseKeywordText(event.target.value))
+                      if (listed.length > maxKeywords) {
+                        setError(keywordCapMessage(maxKeywords))
+                        return
+                      }
+                      setTrafficKeywordDraft(event.target.value)
+                    }}
                     placeholder="Add more: ribs, sliced brisket"
                     rows={2}
                     autoComplete="off"
@@ -2435,12 +2543,14 @@ function ListingResults({
   result,
   listings,
   confirmed,
+  lockedListing,
   onConfirm,
 }: {
   searching: boolean
   result: SearchResponse | null
   listings: BusinessListing[]
   confirmed: ConfirmedListing | null
+  lockedListing?: DirectoryListing | null
   onConfirm: (listing: BusinessListing) => void
 }) {
   if (searching) {
@@ -2456,8 +2566,12 @@ function ListingResults({
     return (
       <p className="mt-3 text-sm text-muted">
         {confirmed
-          ? "This listing is confirmed. Search again if you need a different match."
-          : "Search for the business first. Matches show title, address, and rating — click one to confirm it."}
+          ? lockedListing
+            ? "Your listing is confirmed. Rank tracker and Traffic stay on this shop."
+            : "This listing is confirmed. Search again if you need a different match."
+          : lockedListing
+            ? "Find the Maps listing that matches your PlaceFind shop. Competitor results stay disabled."
+            : "Search for the business first. Matches show title, address, and rating — click one to confirm it."}
       </p>
     )
   }
@@ -2477,12 +2591,14 @@ function ListingResults({
     <ul className="mt-4 grid gap-2">
       {listings.map((listing) => {
         const selected = Boolean(confirmed && confirmed.placeId === listing.placeId?.trim() && confirmed.title === listing.title)
+        const allowed = !lockedListing || mapsPlaceAllowedForOwnedListing(lockedListing, listing)
         return (
           <li key={`${listing.placeId || listing.title}-${listing.address}`}>
             <button
               type="button"
+              disabled={!allowed}
               onClick={() => onConfirm(listing)}
-              className={`w-full rounded-xl border px-4 py-3 text-left ${selected ? "border-brass bg-brass/10" : "border-line bg-ink hover:border-brass/60"}`}
+              className={`w-full rounded-xl border px-4 py-3 text-left ${selected ? "border-brass bg-brass/10" : allowed ? "border-line bg-ink hover:border-brass/60" : "border-line bg-ink/60 opacity-50"}`}
             >
               <span className="flex flex-wrap items-start justify-between gap-2">
                 <span>
@@ -2493,6 +2609,9 @@ function ListingResults({
                   )}
                   <span className="block font-display text-xl text-paper">{listing.title}</span>
                   <span className="mt-1 block text-sm text-muted">{listing.address}</span>
+                  {!allowed && (
+                    <span className="mt-1 block text-xs text-muted">Not your listing — this account cannot track it</span>
+                  )}
                 </span>
                 {listing.rating != null && (
                   <span className="inline-flex items-center gap-1 text-sm text-brass">

@@ -54,6 +54,7 @@ import { isDesktopRequest, isSellerMode, passwordResetUrl, publicSiteUrl } from 
 import {
   ALLOWED_GRID_SIZES,
   CampaignError,
+  type CampaignInput,
   MAX_GRID_SIZE,
   MAX_KEYWORDS,
   compareCampaignScans,
@@ -85,6 +86,15 @@ import { searchBusiness } from "./search.ts"
 import { requestIp, runWebsiteSearch, VisitorSearchUsedError } from "./search-limit.ts"
 import { readSearchQuery } from "./search-query.ts"
 import { listingCreateDenied, ownerToolDenied } from "../src/lib/account.ts"
+import { isCappedBusinessAccount } from "../src/lib/business-track.ts"
+import {
+  assertBusinessCampaignAccess,
+  assertBusinessCampaignCreate,
+  assertBusinessCampaignUpdate,
+  assertBusinessTraffic,
+  businessCampaignsForUser,
+  withOwnedListingCampaignInput,
+} from "./business-track.ts"
 import { listingPath } from "../src/lib/listings.ts"
 import { applyListingHtmlHead } from "../src/lib/profile.ts"
 import {
@@ -473,14 +483,20 @@ async function start() {
   app.get("/api/campaigns", (req, res) => {
     const user = requireApprovedTracker(req, res)
     if (!user) return
-    res.json({ campaigns: readCampaigns(user.id), ...campaignMeta() })
+    const campaigns = isCappedBusinessAccount(user) ? businessCampaignsForUser(user.id) : readCampaigns(user.id)
+    res.json({ campaigns, ...campaignMeta() })
   })
 
   app.post("/api/campaigns", (req, res) => {
     const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
-      res.status(201).json({ campaign: createCampaign(req.body ?? {}, user.id), ...campaignMeta() })
+      const body = (req.body ?? {}) as CampaignInput
+      assertBusinessCampaignCreate(user, body)
+      res.status(201).json({
+        campaign: createCampaign(withOwnedListingCampaignInput(user, body), user.id),
+        ...campaignMeta(),
+      })
     } catch (error) {
       if (error instanceof CampaignError) {
         res.status(error.status).json({ error: error.message })
@@ -498,6 +514,15 @@ async function start() {
       res.status(404).json({ error: "That campaign was not found." })
       return
     }
+    try {
+      assertBusinessCampaignAccess(user, campaign)
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      throw error
+    }
     res.json({ campaign, ...campaignMeta() })
   })
 
@@ -505,7 +530,17 @@ async function start() {
     const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
-      res.json({ campaign: updateCampaign(String(req.params.id ?? ""), req.body ?? {}, user.id), ...campaignMeta() })
+      const campaign = getCampaign(String(req.params.id ?? ""), user.id)
+      if (!campaign) {
+        res.status(404).json({ error: "That campaign was not found." })
+        return
+      }
+      const body = (req.body ?? {}) as CampaignInput
+      assertBusinessCampaignUpdate(user, campaign, body)
+      res.json({
+        campaign: updateCampaign(String(req.params.id ?? ""), withOwnedListingCampaignInput(user, body), user.id),
+        ...campaignMeta(),
+      })
     } catch (error) {
       if (error instanceof CampaignError) {
         res.status(error.status).json({ error: error.message })
@@ -536,6 +571,12 @@ async function start() {
       req.query.spacingMiles == null || req.query.spacingMiles === "" ? undefined : Number(req.query.spacingMiles)
     const pinSource = req.query.pinSource == null || req.query.pinSource === "" ? undefined : String(req.query.pinSource)
     try {
+      const campaign = getCampaign(String(req.params.id ?? ""), user.id)
+      if (!campaign) {
+        res.status(404).json({ error: "That campaign was not found." })
+        return
+      }
+      assertBusinessCampaignAccess(user, campaign)
       const result = await loadCampaignGrid(String(req.params.id ?? ""), user.id, {
         gridSize,
         spacingMiles,
@@ -555,6 +596,12 @@ async function start() {
     const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
+      const campaign = getCampaign(String(req.params.id ?? ""), user.id)
+      if (!campaign) {
+        res.status(404).json({ error: "That campaign was not found." })
+        return
+      }
+      assertBusinessCampaignAccess(user, campaign)
       deleteCampaign(String(req.params.id ?? ""), user.id)
       res.json({ ok: true })
     } catch (error) {
@@ -570,6 +617,12 @@ async function start() {
     const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
+      const campaign = getCampaign(String(req.params.id ?? ""), user.id)
+      if (!campaign) {
+        res.status(404).json({ error: "That campaign was not found." })
+        return
+      }
+      assertBusinessCampaignAccess(user, campaign)
       res.json({ scans: listCampaignScans(String(req.params.id ?? ""), user.id), ...campaignMeta() })
     } catch (error) {
       if (error instanceof CampaignError) {
@@ -589,6 +642,15 @@ async function start() {
     if (!campaign) {
       res.status(404).json({ error: "That campaign was not found." })
       return
+    }
+    try {
+      assertBusinessCampaignAccess(user, campaign)
+    } catch (error) {
+      if (error instanceof CampaignError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      throw error
     }
     const requested = normalizeKeywords([
       ...(body.keywords == null ? [] : Array.isArray(body.keywords) ? body.keywords : [body.keywords]),
@@ -613,6 +675,12 @@ async function start() {
     const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
+      const campaign = getCampaign(String(req.params.id ?? ""), user.id)
+      if (!campaign) {
+        res.status(404).json({ error: "That campaign was not found." })
+        return
+      }
+      assertBusinessCampaignAccess(user, campaign)
       res.json({
         compare: compareCampaignScans(String(req.params.id ?? ""), String(req.params.a ?? ""), String(req.params.b ?? ""), user.id),
         ...campaignMeta(),
@@ -630,6 +698,12 @@ async function start() {
     const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
+      const campaign = getCampaign(String(req.params.id ?? ""), user.id)
+      if (!campaign) {
+        res.status(404).json({ error: "That campaign was not found." })
+        return
+      }
+      assertBusinessCampaignAccess(user, campaign)
       res.json({ scan: getCampaignScan(String(req.params.id ?? ""), String(req.params.scanId ?? ""), user.id), ...campaignMeta() })
     } catch (error) {
       if (error instanceof CampaignError) {
@@ -652,6 +726,12 @@ async function start() {
       ...(body.keyword == null ? [] : [body.keyword]),
     ])
     try {
+      const campaign = getCampaign(String(req.params.id ?? ""), user.id)
+      if (!campaign) {
+        res.status(404).json({ error: "That campaign was not found." })
+        return
+      }
+      assertBusinessCampaignAccess(user, campaign)
       const result = await scanCampaign(String(req.params.id ?? ""), keys, requested.length ? requested : undefined, user.id)
       res.json({ ...result, ...campaignMeta() })
     } catch (error) {
@@ -675,6 +755,12 @@ async function start() {
     }
     const keys = isSellerMode() ? body : {}
     try {
+      const campaign = getCampaign(String(req.params.id ?? ""), user.id)
+      if (!campaign) {
+        res.status(404).json({ error: "That campaign was not found." })
+        return
+      }
+      assertBusinessTraffic(user, campaign)
       const result = startCampaignTraffic(
         String(req.params.id ?? ""),
         keys,
@@ -700,6 +786,12 @@ async function start() {
     const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
+      const campaign = getCampaign(String(req.params.id ?? ""), user.id)
+      if (!campaign) {
+        res.status(404).json({ error: "That campaign was not found." })
+        return
+      }
+      assertBusinessTraffic(user, campaign)
       const result = stopCampaignTraffic(String(req.params.id ?? ""), user.id)
       res.json({ ...result, ...campaignMeta() })
     } catch (error) {
@@ -715,6 +807,12 @@ async function start() {
     const user = requireApprovedTracker(req, res)
     if (!user) return
     try {
+      const campaign = getCampaign(String(req.params.id ?? ""), user.id)
+      if (!campaign) {
+        res.status(404).json({ error: "That campaign was not found." })
+        return
+      }
+      assertBusinessTraffic(user, campaign)
       const result = getCampaignTraffic(String(req.params.id ?? ""), user.id)
       res.json({ ...result, ...campaignMeta() })
     } catch (error) {

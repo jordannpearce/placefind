@@ -10,7 +10,7 @@ import {
   searchBusiness,
   updateListing,
 } from "../lib/api.ts"
-import { formatKeywordText } from "../lib/keywords.ts"
+import { acceptKeywordText, formatKeywordText, listingKeywordHelpCopy, parseKeywordsOrError } from "../lib/keywords.ts"
 import { listingPriceCopy, LISTING_PRICE_LABEL } from "../lib/pricing.ts"
 import {
   listingFormFromPlace,
@@ -167,10 +167,16 @@ export function ListingFormPage({ listingId, user, onGo, onUser }: Props) {
   }
 
   async function save(): Promise<DirectoryListing | null> {
+    const parsed = parseKeywordsOrError(form.keywords)
+    if (parsed.error) {
+      setError(parsed.error)
+      return null
+    }
+    const payload = { ...form, keywords: parsed.keywords }
     setSaving(true)
     setError(null)
     try {
-      const next = await attachMapsMatch(listingId ? await updateListing(listingId, form) : await createListing(form))
+      const next = await attachMapsMatch(listingId ? await updateListing(listingId, payload) : await createListing(payload))
       if (!listingId) onUser?.({ ...user, listingId: next.id, listingSlug: next.slug ?? null })
       setListing(next)
       setForm(formFromListing(next))
@@ -441,10 +447,17 @@ export function ListingFormPage({ listingId, user, onGo, onUser }: Props) {
                 <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Keywords</span>
                 <input
                   value={typeof form.keywords === "string" ? form.keywords : formatKeywordText(form.keywords ?? [])}
-                  onChange={(event) => setForm({ ...form, keywords: event.target.value })}
+                  onChange={(event) => {
+                    const current = typeof form.keywords === "string" ? form.keywords : formatKeywordText(form.keywords ?? [])
+                    const next = acceptKeywordText(current, event.target.value)
+                    if (next.error) setError(next.error)
+                    else if (error === listingKeywordHelpCopy()) setError(null)
+                    setForm({ ...form, keywords: next.text })
+                  }}
                   placeholder="sourdough, coffee, pastry"
                   className={fieldClass}
                 />
+                <span className="text-xs leading-5 text-muted">{listingKeywordHelpCopy()}</span>
               </label>
               <label className="grid gap-1.5">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Phone</span>

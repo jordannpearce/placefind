@@ -10,6 +10,7 @@ import {
   bestGridRank,
   buildGridPoints,
   createCampaign,
+  getCampaign,
   hasConfirmedListing,
   listingNotConfirmedForScheduleMessage,
   listingNotConfirmedMessage,
@@ -90,7 +91,31 @@ describe("validateCampaign", () => {
       state: "TX",
       keywords,
     })
-    assert.equal(parsed.error, `A campaign can have at most ${MAX_KEYWORDS} keywords.`)
+    assert.equal(parsed.error, "Up to 5 keywords.")
+    assert.equal(MAX_KEYWORDS, 5)
+    assert.equal(keywords.length, 6)
+  })
+
+  it("rejects a sixth keyword on save and does not keep extras for the next run", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-keyword-cap-")))
+    const five = ["barbecue", "brisket", "ribs", "sausage", "turkey"]
+    const created = createCampaign({
+      name: "Austin BBQ",
+      businessName: "Franklin Barbecue",
+      city: "Austin",
+      state: "TX",
+      keywords: five,
+    })
+    assert.throws(
+      () => updateCampaign(created.id, { keywords: [...five, "burnt ends"] }),
+      (error: unknown) => {
+        assert.ok(error instanceof CampaignError)
+        assert.equal(error.status, 400)
+        assert.equal(error.message, "Up to 5 keywords.")
+        return true
+      },
+    )
+    assert.deepEqual(getCampaign(created.id)?.keywords, five)
   })
 
   it("accepts the maximum number of unique keywords", () => {
@@ -564,6 +589,34 @@ describe("rank scan Maps keys", () => {
     if (previous.dataDir == null) delete process.env.PLACEFIND_DATA_DIR
     else process.env.PLACEFIND_DATA_DIR = previous.dataDir
     reloadStoreFromDisk()
+  })
+
+  it("rejects a sixth keyword on the next run before a Maps scan", async () => {
+    isolateKeys()
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-scan-keyword-cap-")))
+    const five = ["barbecue", "brisket", "ribs", "sausage", "turkey"]
+    const campaign = createCampaign(
+      {
+        name: "Austin BBQ",
+        businessName: "Franklin Barbecue",
+        city: "Austin",
+        state: "TX",
+        keywords: five,
+        placeId: "sample-franklin",
+        center: { lat: 30.2701, lng: -97.7313 },
+      },
+      "user-a",
+    )
+    saveCampaign({ ...campaign, keywords: [...five, "burnt ends"] })
+    await assert.rejects(
+      () => scanCampaign(campaign.id, emptyApiKeys(), undefined, "user-a"),
+      (error: unknown) => {
+        assert.ok(error instanceof CampaignError)
+        assert.equal(error.message, "Up to 5 keywords.")
+        return true
+      },
+    )
+    assert.deepEqual(getCampaign(campaign.id)?.keywords, [...five, "burnt ends"])
   })
 
   it("returns the public message when Maps keys are missing", async () => {

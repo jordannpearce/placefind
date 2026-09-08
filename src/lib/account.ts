@@ -101,7 +101,7 @@ export type ListingAccount = Pick<AuthUser, "role" | "accountKind" | "status" | 
 
 export function ownedListingOf(user: ListingAccount | null | undefined): OwnedListingRef | null {
   const id = user?.listingId?.trim()
-  if (!id) return null
+  if (!user || !id) return null
   return { id, slug: user.listingSlug?.trim() || undefined }
 }
 

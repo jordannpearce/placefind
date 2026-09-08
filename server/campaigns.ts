@@ -61,6 +61,7 @@ export type GeoPoint = {
 
 export type CampaignInput = {
   name?: string
+  listingId?: string
   businessName?: string
   city?: string
   state?: string
@@ -161,6 +162,7 @@ export type GridScanRun = {
 export type Campaign = {
   id: string
   userId: string
+  listingId: string
   name: string
   businessName: string
   city: string
@@ -293,10 +295,11 @@ export function hasConfirmedListing(campaign: Pick<Campaign, "placeId">): boolea
 }
 
 export function validateCampaign(input: CampaignInput): {
-  value?: Pick<Campaign, "name" | "businessName" | "city" | "state" | "placeId" | "listingTitle" | "listingAddress" | "keywords" | "gridSize" | "spacingMiles" | "zoom" | "pinSource" | "center">
+  value?: Pick<Campaign, "name" | "listingId" | "businessName" | "city" | "state" | "placeId" | "listingTitle" | "listingAddress" | "keywords" | "gridSize" | "spacingMiles" | "zoom" | "pinSource" | "center">
   error?: string
 } {
   const name = input.name?.trim() ?? ""
+  const listingId = input.listingId?.trim() ?? ""
   const businessName = input.businessName?.trim() ?? ""
   const city = input.city?.trim() ?? ""
   const state = input.state?.trim() ?? ""
@@ -316,6 +319,7 @@ export function validateCampaign(input: CampaignInput): {
   return {
     value: {
       name,
+      listingId,
       businessName,
       city,
       state,
@@ -698,6 +702,7 @@ function normalizeStoredCampaign(row: Campaign): Campaign {
   return {
     id: row.id || newId(),
     userId: row.userId ?? "",
+    listingId: row.listingId ?? "",
     name: row.name ?? "",
     businessName: row.businessName ?? "",
     city: row.city ?? "",
@@ -764,6 +769,7 @@ export function updateCampaign(id: string, input: CampaignInput, userId?: string
   if (userId && !ownsCampaign(current, userId)) throw new CampaignError("That campaign was not found.", 404)
   const parsed = validateCampaign({
     name: input.name !== undefined ? input.name : current.name,
+    listingId: input.listingId !== undefined ? input.listingId : current.listingId,
     businessName: input.businessName !== undefined ? input.businessName : current.businessName,
     city: input.city !== undefined ? input.city : current.city,
     state: input.state !== undefined ? input.state : current.state,
@@ -1017,10 +1023,6 @@ export async function scanCampaign(
 
   const keys = mergeHostedKeys(rawKeys)
   try {
-    if (!mapsScanConfigured(rawKeys)) {
-      throw new CampaignError(mapsKeysMissingMessage())
-    }
-
     const keywords = selectScanKeywords(campaign, requestedKeywords)
     if (keywords.length === 0) {
       throw new CampaignError("Add at least one keyword before running a scan.")
@@ -1028,13 +1030,15 @@ export async function scanCampaign(
     if (keywords.length > MAX_KEYWORDS) {
       throw new CampaignError(keywordCapMessage())
     }
-    if (!hasConfirmedListing(campaign)) {
-      throw new CampaignError(listingNotConfirmedMessage(), 400)
-    }
-
     const persistedKeywords = mergeKeywordLists(campaign.keywords, keywords)
     if (persistedKeywords.length > MAX_KEYWORDS) {
       throw new CampaignError(keywordCapMessage())
+    }
+    if (!mapsScanConfigured(rawKeys)) {
+      throw new CampaignError(mapsKeysMissingMessage())
+    }
+    if (!hasConfirmedListing(campaign)) {
+      throw new CampaignError(listingNotConfirmedMessage(), 400)
     }
     if (persistedKeywords.join("\0") !== campaign.keywords.join("\0")) {
       saveCampaign({ ...campaign, keywords: persistedKeywords, updatedAt: new Date().toISOString() })

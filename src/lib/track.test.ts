@@ -232,6 +232,17 @@ describe("campaignInputFromListing", () => {
     assert.equal(input.listingTitle, "Franklin Barbecue")
     assert.equal(input.listingAddress, "900 E 11th St, Austin, TX 78702")
     assert.deepEqual(input.keywords, ["barbecue"])
+    const locked = campaignInputFromListing(selected, { name: "Franklin", city: "Austin", state: "TX" }, {
+      listingId: "listing-1",
+      businessName: "Harbor Street Cafe",
+      city: "Portland",
+      state: "OR",
+      keywords: ["coffee"],
+    })
+    assert.equal(locked.listingId, "listing-1")
+    assert.equal(locked.businessName, "Harbor Street Cafe")
+    assert.equal(locked.city, "Portland")
+    assert.equal(locked.state, "OR")
   })
 })
 

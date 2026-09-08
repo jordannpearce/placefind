@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto"
 import path from "node:path"
 import { formatStreetAddress, parseStreetAddress } from "../src/lib/address.ts"
-import { normalizeKeywords } from "../src/lib/keywords.ts"
+import { keywordCapMessage, MAX_KEYWORDS, normalizeKeywords } from "../src/lib/keywords.ts"
 import { listingSlugFromParts, mapsCategory } from "../src/lib/listings.ts"
 import { LISTING_MONTHLY_PRICE } from "../src/lib/pricing.ts"
 import {
@@ -462,6 +462,7 @@ export function validateListing(input: ListingInput): { value?: ListingInput; er
   if (name.length < 2) return { error: "Enter the business name." }
   if (city.length < 2) return { error: "Enter the city." }
   if (!state) return { error: "Choose a state." }
+  if (keywords.length > MAX_KEYWORDS) return { error: keywordCapMessage() }
   if (email && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 120)) {
     return { error: "Enter a valid business email." }
   }
