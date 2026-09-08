@@ -121,12 +121,26 @@ describe("listing profile helpers", () => {
     assert.match(next, /id="placefind-description"[^>]*content="Wheel-thrown mugs and weekend classes on South Congress\."/)
     assert.match(next, /property="og:description"[^>]*content="Wheel-thrown mugs and weekend classes on South Congress\."/)
     assert.equal((next.match(/name="description"/g) ?? []).length, 1)
+    assert.match(next, /id="placefind-canonical"[^>]*href="https:\/\/placefind\.to\/listings\/cedar-clay-studio-pottery-studio"/)
+    assert.match(next, /property="og:url"[^>]*content="https:\/\/placefind\.to\/listings\/cedar-clay-studio-pottery-studio"/)
     assert.equal(next.includes(DEFAULT_SITE_DESCRIPTION), false)
     assert.equal(/\$150/.test(next), false)
 
     const fallback = applyListingHtmlHead(indexHtml, listing({ profileMetaDescription: "" }))
     assert.match(fallback, /content="Harbor &amp; Oak Bakery in Portland, ME\."/)
     assert.equal(fallback.includes(DEFAULT_SITE_DESCRIPTION), false)
+
+    const ownerCanonical = applyListingHtmlHead(
+      indexHtml.replace(
+        "</head>",
+        '<link rel="canonical" href="https://shop.example"><meta name="robots" content="index,follow"></head>',
+      ),
+      listing({ slug: "harbor-oak-bakery" }),
+    )
+    assert.match(ownerCanonical, /id="placefind-canonical"[^>]*href="https:\/\/placefind\.to\/listings\/harbor-oak-bakery"/)
+    assert.equal(ownerCanonical.includes("https://shop.example"), false)
+    assert.match(ownerCanonical, /name="robots"/)
+    assert.equal((ownerCanonical.match(/rel="canonical"/g) ?? []).length, 1)
   })
 
   it("replaces the live document description and restores the site default", () => {

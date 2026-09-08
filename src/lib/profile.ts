@@ -1,4 +1,5 @@
-import { listingLocation } from "./listings.ts"
+import { applyDocumentCanonical, canonicalUrl, isCanonicalLinkElement, upsertHtmlCanonical } from "./canonical.ts"
+import { listingLocation, listingPath } from "./listings.ts"
 import type { DirectoryListing } from "./types.ts"
 
 export const CRAWL_ARTICLE_FOOTER =
@@ -162,15 +163,29 @@ function upsertHtmlMeta(html: string, attr: "name" | "property", key: string, co
   return html.replace(/<\/head>/i, `    ${tag}\n  </head>`)
 }
 
-export function applyListingHtmlHead(html: string, listing: DirectoryListing, pageUrl?: string): string {
+export function listingCanonicalHref(
+  listing: Pick<DirectoryListing, "id"> & { slug?: string },
+  pageUrl?: string,
+  origin?: string | null,
+): string {
+  return canonicalUrl(pageUrl || listingPath(listing), origin)
+}
+
+export function applyListingHtmlHead(
+  html: string,
+  listing: DirectoryListing,
+  pageUrl?: string,
+  origin?: string | null,
+): string {
   const title = listingDocumentTitle(listing)
   const description = listingDocumentDescription(listing)
+  const href = listingCanonicalHref(listing, pageUrl, origin)
   let next = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeOwnerText(title)}</title>`)
   next = upsertHtmlMeta(next, "name", "description", description, "placefind-description")
   next = upsertHtmlMeta(next, "property", "og:description", description, "placefind-og-description")
   next = upsertHtmlMeta(next, "property", "og:title", title, "placefind-og-title")
-  if (pageUrl) next = upsertHtmlMeta(next, "property", "og:url", pageUrl, "placefind-og-url")
-  return next
+  next = upsertHtmlMeta(next, "property", "og:url", href, "placefind-og-url")
+  return upsertHtmlCanonical(next, href)
 }
 
 function upsertDocumentMeta(id: string, attr: "name" | "property", key: string, content: string): () => void {
@@ -322,6 +337,7 @@ export function applyListingDocumentHead(listing: DirectoryListing, pageUrl?: st
   }
 
   const description = listingDocumentDescription(listing)
+  const href = listingCanonicalHref(listing, pageUrl)
   const restores = [
     () => {
       document.title = previousTitle
@@ -329,10 +345,10 @@ export function applyListingDocumentHead(listing: DirectoryListing, pageUrl?: st
     upsertDocumentMeta("placefind-description", "name", "description", description),
     upsertDocumentMeta("placefind-og-description", "property", "og:description", description),
     upsertDocumentMeta("placefind-og-title", "property", "og:title", title),
+    upsertDocumentMeta("placefind-og-url", "property", "og:url", href),
   ]
-  if (pageUrl) restores.push(upsertDocumentMeta("placefind-og-url", "property", "og:url", pageUrl))
 
-  const schema = parseOwnerSchema(listing.profileSchema ?? "") || defaultListingSchema(listing, pageUrl)
+  const schema = parseOwnerSchema(listing.profileSchema ?? "") || defaultListingSchema(listing, href)
   if (schema) {
     const script = document.createElement("script")
     script.type = "application/ld+json"
@@ -345,10 +361,11 @@ export function applyListingDocumentHead(listing: DirectoryListing, pageUrl?: st
     const holder = document.createElement("div")
     holder.innerHTML = headHtml
     for (const child of [...holder.children]) {
+      if (isCanonicalLinkElement(child as HTMLElement)) continue
       add(child as HTMLElement)
     }
   }
-
+  restores.push(applyDocumentCanonical(href))
   return () => {
     for (const restore of restores.reverse()) restore()
     for (const node of added) node.remove()

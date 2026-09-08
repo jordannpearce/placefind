@@ -32,6 +32,7 @@ import {
   loginHref,
   safeAuthNext,
 } from "./lib/account.ts"
+import { applyDocumentCanonical } from "./lib/canonical.ts"
 import { isLegalPath } from "./lib/legal.ts"
 import { loadRuntime, searchBusiness, stopImpersonation } from "./lib/api.ts"
 import {
@@ -121,6 +122,11 @@ export default function App() {
   useEffect(() => {
     document.title = pageTitle(path)
   }, [path])
+
+  useEffect(() => {
+    const routePath = typeof window === "undefined" ? "/" : window.location.pathname
+    return applyDocumentCanonical(routePath, publicUrl || undefined)
+  }, [path, listingId, listingCreate, listingEdit, publicUrl])
 
   useEffect(() => {
     if (path === "/") scrollToHash(window.location.hash)

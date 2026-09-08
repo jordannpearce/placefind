@@ -95,6 +95,7 @@ import {
   businessCampaignsForUser,
   withOwnedListingCampaignInput,
 } from "./business-track.ts"
+import { applyDocumentHtmlCanonical } from "../src/lib/canonical.ts"
 import { listingPath } from "../src/lib/listings.ts"
 import { applyListingHtmlHead } from "../src/lib/profile.ts"
 import {
@@ -1387,23 +1388,32 @@ async function start() {
     next()
   })
 
+  function applyPublicDocumentHead(html: string, urlPath: string) {
+    const listing = listingForPublicPath(urlPath)
+    const origin = publicSiteUrl()
+    if (listing) return applyListingHtmlHead(html, listing, listingPath(listing), origin)
+    return applyDocumentHtmlCanonical(html, urlPath, origin)
+  }
+
+  function isHtmlDocumentPath(urlPath: string) {
+    if (urlPath.startsWith("/api/") || urlPath === "/api") return false
+    if (urlPath.startsWith("/@") || urlPath.startsWith("/node_modules") || urlPath.startsWith("/src/")) return false
+    if (urlPath === "/robots.txt" || urlPath === "/sitemap.xml") return false
+    if (/\.[a-zA-Z0-9]+$/.test(urlPath) && !urlPath.endsWith(".html")) return false
+    return true
+  }
+
   const isProd = process.env.NODE_ENV === "production" || Boolean(process.env.PLACEFIND_STATIC)
   if (isProd) {
     const dist = process.env.PLACEFIND_UI_DIR || path.resolve(dirname, "../dist")
     app.use(express.static(dist))
     app.get(/.*/, (req, res) => {
       const indexPath = path.join(dist, "index.html")
-      const listing = listingForPublicPath(req.path)
-      if (listing) {
-        const html = applyListingHtmlHead(
-          readFileSync(indexPath, "utf8"),
-          listing,
-          `${siteOrigin(req)}${listingPath(listing)}`,
-        )
-        res.status(200).type("html").send(html)
+      if (!isHtmlDocumentPath(req.path)) {
+        res.sendFile(indexPath)
         return
       }
-      res.sendFile(indexPath)
+      res.status(200).type("html").send(applyPublicDocumentHead(readFileSync(indexPath, "utf8"), req.path))
     })
   } else {
     const { createServer } = await import("vite")
@@ -1412,14 +1422,11 @@ async function start() {
       appType: "spa",
     })
     app.use(async (req, res, next) => {
-      if (req.method !== "GET") return next()
-      const listing = listingForPublicPath(req.path)
-      if (!listing) return next()
+      if (req.method !== "GET" || !isHtmlDocumentPath(req.path)) return next()
       try {
         const raw = readFileSync(path.resolve(dirname, "../index.html"), "utf8")
         const transformed = await vite.transformIndexHtml(req.originalUrl, raw)
-        const html = applyListingHtmlHead(transformed, listing, `${siteOrigin(req)}${listingPath(listing)}`)
-        res.status(200).type("html").send(html)
+        res.status(200).type("html").send(applyPublicDocumentHead(transformed, req.path))
       } catch (error) {
         next(error)
       }

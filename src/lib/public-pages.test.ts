@@ -178,6 +178,7 @@ describe("public website copy", () => {
     assert.equal((html.match(/googletagmanager\.com\/gtag\/js\?id=G-K9S9SHZMSF/g) ?? []).length, 1)
     assert.equal((html.match(/gtag\('config', 'G-K9S9SHZMSF'\)/g) ?? []).length, 1)
     assert.equal((html.match(/googletagmanager\.com\/gtag\/js/g) ?? []).length, 1)
+    assert.match(html, /id="placefind-canonical"[^>]*href="https:\/\/placefind\.to\/"/)
   })
 
   it("does not mention download, Windows, or license keys on the public site", () => {

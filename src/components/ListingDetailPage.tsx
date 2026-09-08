@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { canLeaveReview, joinHref, loginHref } from "../lib/account.ts"
 import { PendingApprovalNotice } from "./PendingApprovalNotice.tsx"
 import { createListingReview, loadListing, requestListingQuote } from "../lib/api.ts"
+import { canonicalUrl } from "../lib/canonical.ts"
 import { listingLocation, listingPath, listingRedirectPath, mapsStatusDetail, mapsStatusIsNotFound } from "../lib/listings.ts"
 import {
   applyListingDocumentHead,
@@ -78,7 +79,7 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
 
   useEffect(() => {
     if (!listing) return
-    return applyListingDocumentHead(listing, typeof window !== "undefined" ? window.location.href : undefined)
+    return applyListingDocumentHead(listing, canonicalUrl(listingPath(listing)))
   }, [listing])
 
   async function submitReview() {
