@@ -24,6 +24,7 @@ import {
   mapsStatusLabel,
   type ListingMapsMatch,
 } from "../lib/listings.ts"
+import { BUSINESS_FACT_FIELDS } from "../lib/business-facts.ts"
 import { emptyKeys } from "../lib/storage.ts"
 import type { AuthUser, BusinessListing, DirectoryListing, ListingInput } from "../lib/types.ts"
 import { CityStateFields } from "./CityStateFields.tsx"
@@ -48,6 +49,12 @@ const emptyForm = (): ListingInput => ({
   email: "",
   website: "",
   hours: "",
+  yearsInBusiness: "",
+  licenseInfo: "",
+  insuranceInfo: "",
+  priceOptions: "",
+  serviceArea: "",
+  paymentMethods: "",
   profilePageTitle: "",
   profileMetaDescription: "",
   profileHeadHtml: "",
@@ -75,6 +82,12 @@ function formFromListing(row: DirectoryListing): ListingInput {
     email: row.email ?? "",
     website: row.website,
     hours: row.hours,
+    yearsInBusiness: row.yearsInBusiness ?? "",
+    licenseInfo: row.licenseInfo ?? "",
+    insuranceInfo: row.insuranceInfo ?? "",
+    priceOptions: row.priceOptions ?? "",
+    serviceArea: row.serviceArea ?? "",
+    paymentMethods: row.paymentMethods ?? "",
     profilePageTitle: row.profilePageTitle ?? "",
     profileMetaDescription: row.profileMetaDescription ?? "",
     profileHeadHtml: row.profileHeadHtml ?? "",
@@ -184,8 +197,8 @@ export function ListingFormPage({ listingId, user, onGo, onUser }: Props) {
       setPendingNotFound(false)
       setNotice(
         listingId
-          ? "Listing saved. The public profile uses the article, HTML, and page title you entered here."
-          : "Listing created. Write the public article, custom HTML, and page title here, or use Crawl Website for a first draft.",
+          ? "Listing saved. The public profile uses the business details, article, HTML, and page title you entered here."
+          : "Listing created. Add business details and write the public article here. Crawl Website lists pages from the shop site — it does not write the article.",
       )
       if (!listingId) onGo(`${listingPath(next)}/edit`)
       return next
@@ -500,11 +513,24 @@ export function ListingFormPage({ listingId, user, onGo, onUser }: Props) {
               <div className="mt-4 rounded-xl border border-line bg-ink px-4 py-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Enhanced profile</p>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  Write the public article, headings, custom HTML, page title, meta description, extra header tags, and
-                  schema yourself. Crawl Website can draft an article from the shop site, but it will not replace a
-                  profile you have already customized here.
+                  Add the facts neighbors ask about, then write the public article, headings, custom HTML, page title,
+                  meta description, extra header tags, and schema. Crawl Website lists pages from the shop site. It
+                  does not write the article or replace details you entered here.
                 </p>
               </div>
+              {BUSINESS_FACT_FIELDS.map((field) => (
+                <label key={field.key} className="grid gap-1.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">{field.label}</span>
+                  <input
+                    value={form[field.key] ?? ""}
+                    onChange={(event) => setForm({ ...form, [field.key]: event.target.value })}
+                    placeholder={field.placeholder}
+                    maxLength={field.key === "priceOptions" ? 240 : field.key === "yearsInBusiness" ? 80 : 200}
+                    className={fieldClass}
+                  />
+                  <span className="text-xs leading-5 text-muted">{field.help}</span>
+                </label>
+              ))}
               <label className="grid gap-1.5">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Page title</span>
                 <input

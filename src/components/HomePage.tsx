@@ -129,8 +129,9 @@ export function HomePage({ user, onGo }: Props) {
               <li className="rounded-xl border border-line bg-panel px-4 py-3">
                 <p className="text-sm font-semibold text-paper">3. Build an enhanced profile</p>
                 <p className="mt-1 text-sm leading-6 text-muted">
-                  Write the public article, custom HTML, page title, and schema on the listing. Crawl Website can draft
-                  an article from the shop site. A profile you customize is not overwritten.
+                  Write the public article, custom HTML, page title, and schema on the listing. Add year started,
+                  license, insurance, and other shop facts there too. A website crawl lists pages from the shop site.
+                  It does not write the article.
                 </p>
               </li>
             </ol>
@@ -163,7 +164,7 @@ export function HomePage({ user, onGo }: Props) {
             <h4 className="mt-3 font-display text-xl text-paper">Reviews and enhanced info</h4>
             <p className="mt-2 text-sm leading-6 text-muted">
               Neighbors leave reviews from a free account. Anyone can request a quote. The public profile can include
-              the owner’s own article and HTML, plus a crawl draft if they want one.
+              the owner’s own article, HTML, and business details, plus page URLs from a website crawl.
             </p>
           </article>
         </div>
@@ -255,8 +256,8 @@ export function HomePage({ user, onGo }: Props) {
             <h3 className="mt-2 font-display text-3xl text-paper">List your shop for {LISTING_PRICE_LABEL}</h3>
             <p className="mt-3 max-w-xl text-sm leading-7 text-muted">
               Create an account, publish the listing, then write the public article, HTML, and page title yourself.
-              Crawl Website can draft an article from the shop site. The listing details you entered stay put, and a
-              customized profile is not replaced.
+              A website crawl lists pages from the shop site. It does not write the article. The listing details you
+              entered stay put.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               {listingCta && (

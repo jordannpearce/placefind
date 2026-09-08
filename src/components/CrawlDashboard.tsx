@@ -12,7 +12,7 @@ type Props = {
 }
 
 function statusLabel(status: CrawlJob["status"] | DirectoryListing["crawlStatus"]) {
-  if (status === "ok") return "Article written"
+  if (status === "ok") return "Website crawled"
   if (status === "running" || status === "queued") return "Crawling website…"
   if (status === "error") return "Crawl could not finish"
   return "Ready to crawl"
@@ -101,9 +101,9 @@ export function CrawlDashboard({ user, onGo }: Props) {
         <h2 className="mt-2 font-display text-3xl text-paper">Your business desk</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
           This desk is separate from the public directory. Open Rank tracker or Traffic for a signed-in scan, or crawl
-          the listing website for a first-draft profile article. Write your own article, HTML, page title, and schema
-          from Edit listing. Crawl Website does not change the listing form — name, address, phone, website, hours,
-          category, keywords, and Maps details stay as you entered them. A customized profile is not overwritten.
+          the listing website to collect page URLs. Write your own article, HTML, page title, and schema from Edit
+          listing. A website crawl lists pages from the shop site — up to 80 unique same-host URLs, skipping images
+          and other files. It does not write the public article or overwrite business details you entered.
         </p>
         <p className="mt-2 text-sm text-muted">Signed in as {user.email}.</p>
         <div className="mt-6">
@@ -172,7 +172,7 @@ export function CrawlDashboard({ user, onGo }: Props) {
                 {statusLabel(active?.status || selected.crawlStatus)}{" "}
                 {selected.lastCrawledAt ? `· last run ${new Date(selected.lastCrawledAt).toLocaleDateString()}` : ""}
                 {selected.profileCustomized
-                  ? " · this listing has a customized public profile, so a new crawl will not replace it"
+                  ? " · this listing has owner-written details, so a new crawl will not replace them"
                   : ""}
               </p>
             )}
@@ -192,47 +192,9 @@ export function CrawlDashboard({ user, onGo }: Props) {
             {active.pagesCrawled ? ` · ${active.pagesCrawled} pages read` : ""}
           </p>
           {active.error && <p className="mt-3 text-sm text-clay">{active.error}</p>}
-          {(active.brand || active.licenseInfo || active.yearsInBusiness || active.specialty) && (
-            <div className="mt-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Found on this crawl</p>
-              <p className="mt-1 text-xs text-muted">
-                Read-only crawl results. These facts are used to write the article. They are not saved over the listing
-                form.
-              </p>
-              <dl className="mt-3 grid gap-3 sm:grid-cols-2 text-sm">
-                {active.brand && (
-                  <div>
-                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">Brand found</dt>
-                    <dd className="mt-1 text-paper">{active.brand}</dd>
-                  </div>
-                )}
-                {active.licenseInfo && (
-                  <div>
-                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">License found</dt>
-                    <dd className="mt-1 text-paper">{active.licenseInfo}</dd>
-                  </div>
-                )}
-                {active.yearsInBusiness && (
-                  <div>
-                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">How long in business</dt>
-                    <dd className="mt-1 text-paper">{active.yearsInBusiness}</dd>
-                  </div>
-                )}
-                {active.specialty && (
-                  <div>
-                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">Specializes in</dt>
-                    <dd className="mt-1 text-paper">{active.specialty}</dd>
-                  </div>
-                )}
-              </dl>
-            </div>
-          )}
-          {active.article && (
-            <div className="mt-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Profile article</p>
-              <div className="mt-2 whitespace-pre-wrap text-sm leading-7 text-paper/90">{active.article}</div>
-            </div>
-          )}
+          <p className="mt-3 text-sm leading-6 text-muted">
+            Page URLs from this crawl are saved on the public listing. The crawl does not write a profile article.
+          </p>
           <button
             type="button"
             onClick={() => onGo(listingPath(listings.find((row) => row.id === active.listingId) ?? active.listingId))}
@@ -250,8 +212,8 @@ export function CrawlDashboard({ user, onGo }: Props) {
             {active.pages?.length} page{(active.pages?.length ?? 0) === 1 ? "" : "s"} from this website
           </h3>
           <p className="mt-2 text-sm text-muted">
-            Every page PlaceFind opened is listed here — URL, whether it loaded, the title or snippet, and any facts
-            pulled from that page. This is a crawl log, not a list of listing-form edits.
+            Every page this website crawl opened is listed here — URL, whether it loaded, and the title if the page
+            had one. This is a crawl log. It does not write the public article.
           </p>
           <ul className="mt-5 grid gap-3">
             {active.pages?.map((page) => (

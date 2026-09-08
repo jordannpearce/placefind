@@ -186,7 +186,8 @@ export function AccountPage({ user, onUser, onLogout, onGo }: Props) {
           {listings.length === 0 ? (
             <p className="mt-3 text-sm text-muted">
               No listings yet. A PlaceFind listing is $150 per month. Create one, then write the public article, HTML,
-              and page title on the listing. Crawl Website can draft an article if you want a starting point.
+              and page title on the listing. A website crawl lists pages from the shop site. It does not write the
+              article.
             </p>
           ) : (
             <ul className="mt-4 grid gap-3">

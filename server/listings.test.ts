@@ -227,12 +227,18 @@ describe("directory listings", () => {
 
     const crawled = applyListingProfile(created.id, {
       profileContent: "Crawl draft that should stay off the public profile.",
+      profileSiteUrls: ["https://harbor.example/about", "https://harbor.example/logo.png"],
+      yearsInBusiness: "Since 1999",
+      licenseInfo: "Crawl license",
       crawlStatus: "ok",
       lastCrawledAt: "2026-09-07T14:00:00.000Z",
     })
     assert.equal(crawled.profileContent, "We roast on Harbor Street.")
     assert.equal(crawled.profileCustomized, true)
     assert.equal(crawled.crawlStatus, "ok")
+    assert.equal(crawled.yearsInBusiness, "")
+    assert.equal(crawled.licenseInfo, "")
+    assert.deepEqual(crawled.profileSiteUrls, ["https://harbor.example/about"])
 
     const phoneOnly = updateListing(created.id, { name: "Harbor Street Cafe", city: "Portland", state: "OR", phone: "(503) 555-0100" }, "user-1")
     assert.equal(phoneOnly.phone, "(503) 555-0100")
@@ -247,11 +253,90 @@ describe("directory listings", () => {
     assert.equal(headingOnly.name, "Harbor Street Cafe")
     assert.equal(headingOnly.profileH1, "A different H1")
 
-    const blank = createListing({ name: "Plain Oven", city: "Portland", state: "OR" }, "user-2")
+    const blank = createListing({ name: "Plain Oven", city: "Portland", state: "OR", website: "https://plainoven.example" }, "user-2")
     assert.equal(blank.profileCustomized, false)
-    const drafted = applyListingProfile(blank.id, { profileContent: "Draft from the shop website.", crawlStatus: "ok" })
-    assert.equal(drafted.profileContent, "Draft from the shop website.")
+    assert.equal(blank.profileContent, "")
+    const drafted = applyListingProfile(blank.id, {
+      profileContent: "Draft from the shop website.",
+      profileSiteUrls: ["https://plainoven.example/menu", "https://other.example/nope"],
+      yearsInBusiness: "2016",
+      crawlStatus: "ok",
+    })
+    assert.equal(drafted.profileContent, "")
     assert.equal(drafted.profileCustomized, false)
+    assert.equal(drafted.yearsInBusiness, "2016")
+    assert.deepEqual(drafted.profileSiteUrls, ["https://plainoven.example/menu"])
+  })
+
+  it("saves owner business facts and includes them on the public listing", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-listing-facts-")))
+    const created = createListing(
+      {
+        name: "Cedar Wheel House",
+        city: "Austin",
+        state: "TX",
+        website: "https://cedarwheel.example",
+        yearsInBusiness: "2018",
+        licenseInfo: "City license 8821",
+        insuranceInfo: "General liability on file",
+        priceOptions: "Wheel classes from $65",
+        serviceArea: "South Austin",
+        paymentMethods: "Cash and cards",
+      },
+      "user-1",
+    )
+    assert.equal(created.profileCustomized, true)
+    assert.equal(created.yearsInBusiness, "2018")
+    assert.equal(created.insuranceInfo, "General liability on file")
+    assert.equal(created.priceOptions, "Wheel classes from $65")
+    assert.equal(created.serviceArea, "South Austin")
+    assert.equal(created.paymentMethods, "Cash and cards")
+    const published = publicListing(created)
+    assert.equal(published.yearsInBusiness, "2018")
+    assert.equal(published.licenseInfo, "City license 8821")
+    assert.equal(published.insuranceInfo, "General liability on file")
+    assert.equal(published.priceOptions, "Wheel classes from $65")
+    assert.equal(published.serviceArea, "South Austin")
+    assert.equal(published.paymentMethods, "Cash and cards")
+    assert.deepEqual(published.profileSiteUrls, [])
+
+    const saved = updateListing(
+      created.id,
+      {
+        name: "Cedar Wheel House",
+        city: "Austin",
+        state: "TX",
+        yearsInBusiness: "2019",
+        insuranceInfo: "",
+      },
+      "user-1",
+    )
+    assert.equal(saved.yearsInBusiness, "2019")
+    assert.equal(saved.insuranceInfo, "")
+    assert.equal(saved.licenseInfo, "City license 8821")
+    assert.equal(getListing(created.id).yearsInBusiness, "2019")
+
+    const crawled = applyListingProfile(created.id, {
+      profileContent: "Should not land on the listing.",
+      yearsInBusiness: "1990",
+      licenseInfo: "Crawl license",
+      insuranceInfo: "Crawl insurance",
+      profileSiteUrls: [
+        "https://cedarwheel.example/classes",
+        "https://cedarwheel.example/classes#saturday",
+        "https://other.example/nope",
+      ],
+      crawlStatus: "ok",
+    })
+    assert.equal(crawled.profileContent, "")
+    assert.equal(crawled.yearsInBusiness, "2019")
+    assert.equal(crawled.licenseInfo, "City license 8821")
+    assert.equal(crawled.insuranceInfo, "")
+    assert.deepEqual(crawled.profileSiteUrls, ["https://cedarwheel.example/classes"])
+    const afterCrawl = publicListing(crawled)
+    assert.deepEqual(afterCrawl.profileSiteUrls, ["https://cedarwheel.example/classes"])
+    assert.equal(afterCrawl.yearsInBusiness, "2019")
+    assert.equal(afterCrawl.priceOptions, "Wheel classes from $65")
   })
 
   it("hides listings owned by a pending account from the public directory", () => {

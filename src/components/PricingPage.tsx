@@ -18,7 +18,7 @@ const NEIGHBOR = [
 const BUSINESS = [
   "A public listing by name, city, and keyword",
   "An enhanced profile you write: article, H1–H6 headings, HTML, page title, and schema",
-  "Crawl Website can draft an article from the shop site",
+  "A website crawl lists pages from the shop site — it does not write the article",
   "Reviews and quote requests on the listing",
   "Edit the listing anytime; cancel from the account",
 ]
@@ -104,8 +104,9 @@ export function PricingPage({ user, onGo }: Props) {
           <div>
             <dt className="text-sm font-semibold text-paper">What does {LISTING_PRICE_LABEL} include?</dt>
             <dd className="mt-2 text-sm leading-6 text-muted">
-              An active listing in the directory, the enhanced profile you publish, website crawl drafts, and the desk
-              where visitors leave reviews and request quotes. Each listing is billed on its own.
+              An active listing in the directory, the enhanced profile you publish, a website crawl that lists shop
+              page URLs, and the desk where visitors leave reviews and request quotes. Each listing is billed on its
+              own.
             </dd>
           </div>
           <div>

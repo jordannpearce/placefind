@@ -327,7 +327,7 @@ export function mailPresets(product = { name: "PlaceFind", price: "49" }): MailP
       type: "activation",
       label: "Confirm your listing",
       subject: `Confirm your ${product.name} listing`,
-      text: `Hi {{first}},\n\nYour ${product.name} account is ready.\n\n1. Sign in and open your account.\n2. Create a listing with your business name, city, and state.\n3. Open Crawl Website to write a public profile article.\n`,
+      text: `Hi {{first}},\n\nYour ${product.name} account is ready.\n\n1. Sign in and open your account.\n2. Create a listing with your business name, city, and state.\n3. Open Crawl Website to list pages from your shop site.\n`,
     },
     {
       type: "marketing",

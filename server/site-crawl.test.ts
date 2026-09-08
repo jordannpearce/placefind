@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { after, describe, it } from "node:test"
-import { applyListingProfile, createListing, getListing } from "./listings.ts"
+import { applyListingProfile, createListing, getListing, publicListing } from "./listings.ts"
 import {
   crawlWebsitePages,
   MAX_PAGES,
@@ -18,7 +18,7 @@ describe("website crawl writing", () => {
     reloadStoreFromDisk()
   })
 
-  it("extracts facts for the crawl job and writes a profile article without changing listing fields", () => {
+  it("collects site URLs and does not write a profile article", () => {
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-crawl-")))
     const listing = createListing(
       {
@@ -32,34 +32,36 @@ describe("website crawl writing", () => {
         phone: "(207) 555-0142",
         website: "https://harbor.example",
         hours: "Tue–Sun 7:00 AM–3:00 PM",
+        profileContent: "Owner-written morning pastry note.",
       },
       "user-1",
     )
     const before = getListing(listing.id)
-    const result = runCrawlFromPages(listing, [
-      "# Harbor & Oak\nEstablished in 2014. License #BAK-4418.\nWe specialize in naturally leavened bread.",
-    ], true)
+    const result = runCrawlFromPages(
+      listing,
+      [
+        "https://harbor.example/",
+        "https://harbor.example/about",
+        "https://harbor.example/about#hours",
+        "https://harbor.example/logo.png",
+        "https://other.example/nope",
+      ],
+      true,
+    )
     assert.equal(result.sitemapFound, true)
-    assert.equal(result.pagesCrawled, 1)
-    assert.equal(result.facts.licenseInfo, "License BAK-4418")
-    assert.equal(result.facts.yearsInBusiness, "Since 2014")
-    assert.match(result.facts.specialty, /naturally leavened bread/)
-    assert.match(result.article, /Harbor & Oak Bakery/)
-    assert.match(result.article, /pastry/)
-    assert.match(result.article, /coffee/)
-    assert.match(result.article, /sourdough/)
-    assert.match(result.article, /Portland/)
-    assert.match(result.article, /BAK-4418/)
-    assert.doesNotMatch(result.article, /Reviews from visitors/)
-    assert.doesNotMatch(result.article, /This article was written from the listing/)
-    assert.equal(/lorem ipsum/i.test(result.article), false)
+    assert.equal(result.pagesCrawled, 5)
+    assert.deepEqual(result.urls, ["https://harbor.example/", "https://harbor.example/about"])
+    assert.equal("article" in result, false)
+    assert.equal("facts" in result, false)
 
     const applied = applyListingProfile(listing.id, {
-      profileContent: result.article,
+      profileContent: "Crawl must not publish this article.",
+      profileSiteUrls: result.urls,
       crawlStatus: "ok",
       lastCrawledAt: "2026-09-06T14:00:00.000Z",
     })
-    assert.equal(applied.profileContent, result.article)
+    assert.equal(applied.profileContent, "Owner-written morning pastry note.")
+    assert.deepEqual(applied.profileSiteUrls, result.urls)
     assert.equal(applied.crawlStatus, "ok")
     assert.equal(applied.name, before.name)
     assert.equal(applied.street, before.street)
@@ -79,6 +81,8 @@ describe("website crawl writing", () => {
     assert.equal(applied.specialty, before.specialty)
     assert.equal(applied.brand, "")
     assert.equal(applied.licenseInfo, "")
+    assert.equal(publicListing(applied).profileContent, "Owner-written morning pastry note.")
+    assert.deepEqual(publicListing(applied).profileSiteUrls, result.urls)
   })
 
   it("prefers sitemap urls, then discovered same-origin links, and caps unique pages", () => {

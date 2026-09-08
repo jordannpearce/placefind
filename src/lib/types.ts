@@ -251,8 +251,13 @@ export type DirectoryListing = {
   brand?: string
   licenseInfo?: string
   yearsInBusiness?: string
+  insuranceInfo?: string
+  priceOptions?: string
+  serviceArea?: string
+  paymentMethods?: string
   specialty?: string
   profileContent?: string
+  profileSiteUrls?: string[]
   profilePageTitle?: string
   profileMetaDescription?: string
   profileHeadHtml?: string
@@ -315,6 +320,12 @@ export type ListingInput = {
   email?: string
   website?: string
   hours?: string
+  yearsInBusiness?: string
+  licenseInfo?: string
+  insuranceInfo?: string
+  priceOptions?: string
+  serviceArea?: string
+  paymentMethods?: string
   profilePageTitle?: string
   profileMetaDescription?: string
   profileHeadHtml?: string

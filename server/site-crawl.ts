@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto"
+import { MAX_SITE_URLS, normalizeSiteUrls } from "../src/lib/business-facts.ts"
 import { LISTING_MONTHLY_PRICE } from "../src/lib/pricing.ts"
 import {
   extractPageSnippet,
@@ -6,10 +7,7 @@ import {
   extractSameOriginLinks,
   extractSiteFacts,
   isSitemapDocument,
-  mergeSiteFacts,
   parseSitemapDocument,
-  writeProfileArticle,
-  type SiteFacts,
 } from "../src/lib/site-facts.ts"
 import { readHostedKeys } from "./hosted-keys.ts"
 import { applyListingProfile, getListing, ListingError, listingsForUser, type DirectoryListing } from "./listings.ts"
@@ -51,6 +49,8 @@ export type CrawlJob = {
 
 export const MAX_PAGES = 120
 export const MAX_SITEMAP_DOCS = 20
+/** Public listing stores at most this many unique same-host page URLs. */
+export { MAX_SITE_URLS }
 
 function newId() {
   return randomBytes(8).toString("hex")
@@ -323,13 +323,16 @@ export async function crawlWebsitePages(
   return { pages, sitemapFound: sitemap.sitemapFound }
 }
 
-function finishFacts(listing: DirectoryListing, facts: SiteFacts): SiteFacts {
-  return {
-    brand: facts.brand || listing.name,
-    licenseInfo: facts.licenseInfo,
-    yearsInBusiness: facts.yearsInBusiness,
-    specialty: facts.specialty,
-  }
+export function listingSiteUrlsFromPages(
+  pages: Array<{ url: string }>,
+  home: string,
+  limit = MAX_SITE_URLS,
+): string[] {
+  return normalizeSiteUrls(
+    pages.map((page) => page.url),
+    home,
+    limit,
+  )
 }
 
 export function publicCrawl(job: CrawlJob) {
@@ -394,43 +397,25 @@ async function runCrawlJob(id: string) {
     if (okPages.length === 0) {
       throw new Error("Could not read the website. Check the address and try again.")
     }
-    const merged = finishFacts(
-      listing,
-      mergeSiteFacts(
-        okPages.map((page) =>
-          [
-            page.title ? `title: ${page.title}` : "",
-            page.brand ? `# ${page.brand}` : "",
-            page.licenseInfo,
-            page.yearsInBusiness,
-            page.specialty ? `We specialize in ${page.specialty}` : "",
-            page.snippet,
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        ),
-        listing.name,
-      ),
-    )
-    const article = writeProfileArticle(merged, listing)
+    const urls = listingSiteUrlsFromPages(crawled.pages, running.websiteUrl || listing.website)
     const finished = saveJob({
       ...running,
       status: "ok",
       sitemapFound: crawled.sitemapFound,
       pagesCrawled: okPages.length,
       pages: crawled.pages,
-      brand: merged.brand,
-      licenseInfo: merged.licenseInfo,
-      yearsInBusiness: merged.yearsInBusiness,
-      specialty: merged.specialty,
-      article,
+      brand: "",
+      licenseInfo: "",
+      yearsInBusiness: "",
+      specialty: "",
+      article: "",
       error: "",
       finishedAt: nowIso(),
     })
     applyListingProfile(finished.listingId, {
-      profileContent: article,
       crawlStatus: "ok",
       lastCrawledAt: finished.finishedAt,
+      profileSiteUrls: urls,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "The website crawl could not finish."
@@ -486,11 +471,12 @@ export function runCrawlFromPages(
   listing: DirectoryListing,
   pages: string[],
   sitemapFound = false,
-): { facts: SiteFacts; article: string; sitemapFound: boolean; pagesCrawled: number } {
-  const facts = finishFacts(listing, mergeSiteFacts(pages, listing.name))
+): { urls: string[]; sitemapFound: boolean; pagesCrawled: number } {
   return {
-    facts,
-    article: writeProfileArticle(facts, listing),
+    urls: listingSiteUrlsFromPages(
+      pages.map((url) => ({ url })),
+      listing.website || pages[0] || "",
+    ),
     sitemapFound,
     pagesCrawled: pages.length,
   }

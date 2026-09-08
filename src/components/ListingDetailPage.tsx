@@ -14,6 +14,7 @@ import {
   sanitizeOwnerHtml,
   stripCrawlArticleFooter,
 } from "../lib/profile.ts"
+import { listingFactRows } from "../lib/business-facts.ts"
 import type { AuthUser, DirectoryListing, ListingReview, ReviewSummary } from "../lib/types.ts"
 import { CityStateFields } from "./CityStateFields.tsx"
 import { GoogleBusinessProfileCta } from "./GoogleBusinessProfileCta.tsx"
@@ -151,6 +152,8 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
   const profileHeadings = listingProfileHeadings(listing)
   const enhanced = listingHasEnhancedProfile(listing)
   const businessName = listingBusinessName(listing)
+  const factRows = listingFactRows(listing)
+  const siteUrls = listing.profileSiteUrls ?? []
 
   return (
     <article className="mx-auto grid w-full max-w-3xl gap-6">
@@ -227,11 +230,25 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
         ) : (
           <p className="mt-3 text-sm leading-6 text-muted">
             This listing is in the directory. The owner can write headings, the public article, custom HTML, and page
-            title from Edit listing. Crawl Website can draft an article from the shop site, but it will not replace a
-            profile the owner has already customized.
+            title from Edit listing. A website crawl lists pages from the shop site. It does not write the article.
           </p>
         )}
       </section>
+
+      {factRows.length > 0 && (
+        <section className="rounded-2xl border border-line bg-panel p-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Business details</p>
+          <h2 className="mt-2 font-display text-2xl text-paper">What this shop publishes</h2>
+          <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+            {factRows.map((row) => (
+              <div key={row.key}>
+                <dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">{row.label}</dt>
+                <dd className="mt-1 text-sm leading-6 text-paper">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-line bg-panel p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">PlaceFind profile</p>
@@ -257,6 +274,32 @@ export function ListingDetailPage({ listingId, user, onGo }: Props) {
           {listing.hours && <p className="text-muted">{listing.hours}</p>}
           {listing.keywords.length > 0 && <p className="text-paper/80">{listing.keywords.join(" · ")}</p>}
         </dl>
+      </section>
+
+      <section className="rounded-2xl border border-line bg-panel p-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Website pages</p>
+        <h2 className="mt-2 font-display text-2xl text-paper">Pages on this site</h2>
+        {siteUrls.length > 0 ? (
+          <ul className="mt-4 grid gap-2">
+            {siteUrls.map((url) => (
+              <li key={url}>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="break-all text-sm leading-6 text-brass hover:underline"
+                >
+                  {url}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm leading-6 text-muted">
+            No website pages listed yet. The owner can request a website crawl from the dashboard. The crawl lists
+            URLs only — it does not write the public article.
+          </p>
+        )}
       </section>
 
       <section className="rounded-2xl border border-line bg-panel p-6">

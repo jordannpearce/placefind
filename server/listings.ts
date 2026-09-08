@@ -2,6 +2,13 @@ import { randomBytes } from "node:crypto"
 import path from "node:path"
 import { formatStreetAddress, parseStreetAddress } from "../src/lib/address.ts"
 import { keywordCapMessage, MAX_KEYWORDS, normalizeKeywords } from "../src/lib/keywords.ts"
+import {
+  factsChanged,
+  hasOwnerFacts,
+  keepOwnerFact,
+  listingFactsFromInput,
+  normalizeSiteUrls,
+} from "../src/lib/business-facts.ts"
 import { listingSlugFromParts, mapsCategory } from "../src/lib/listings.ts"
 import { LISTING_MONTHLY_PRICE } from "../src/lib/pricing.ts"
 import {
@@ -48,8 +55,13 @@ export type DirectoryListing = {
   brand: string
   licenseInfo: string
   yearsInBusiness: string
+  insuranceInfo: string
+  priceOptions: string
+  serviceArea: string
+  paymentMethods: string
   specialty: string
   profileContent: string
+  profileSiteUrls: string[]
   profilePageTitle: string
   profileMetaDescription: string
   profileHeadHtml: string
@@ -81,6 +93,12 @@ export type ListingInput = {
   email?: string
   website?: string
   hours?: string
+  yearsInBusiness?: string
+  licenseInfo?: string
+  insuranceInfo?: string
+  priceOptions?: string
+  serviceArea?: string
+  paymentMethods?: string
   profilePageTitle?: string
   profileMetaDescription?: string
   profileHeadHtml?: string
@@ -152,6 +170,11 @@ type SeedListing = Omit<
   | "profileH5"
   | "profileH6"
   | "profileCustomized"
+  | "insuranceInfo"
+  | "priceOptions"
+  | "serviceArea"
+  | "paymentMethods"
+  | "profileSiteUrls"
 >
 
 const SEED_LISTINGS: SeedListing[] = [
@@ -377,8 +400,13 @@ function asListing(row: Partial<DirectoryListing> | null | undefined): Directory
     brand: String(row.brand ?? ""),
     licenseInfo: String(row.licenseInfo ?? ""),
     yearsInBusiness: String(row.yearsInBusiness ?? ""),
+    insuranceInfo: String(row.insuranceInfo ?? ""),
+    priceOptions: String(row.priceOptions ?? ""),
+    serviceArea: String(row.serviceArea ?? ""),
+    paymentMethods: String(row.paymentMethods ?? ""),
     specialty: String(row.specialty ?? ""),
     profileContent: stripCrawlArticleFooter(String(row.profileContent ?? "")),
+    profileSiteUrls: normalizeSiteUrls(row.profileSiteUrls, String(row.website ?? "")),
     profilePageTitle: String(row.profilePageTitle ?? ""),
     profileMetaDescription: String(row.profileMetaDescription ?? ""),
     profileHeadHtml: String(row.profileHeadHtml ?? ""),
@@ -479,6 +507,7 @@ export function validateListing(input: ListingInput): { value?: ListingInput; er
   }
   const schemaError = profileSchemaError(profile.profileSchema)
   if (schemaError) return { error: schemaError }
+  const facts = listingFactsFromInput(input)
   return {
     value: {
       name,
@@ -492,6 +521,7 @@ export function validateListing(input: ListingInput): { value?: ListingInput; er
       email: email.toLowerCase(),
       website,
       hours,
+      ...facts,
       ...profile,
     },
   }
@@ -530,8 +560,13 @@ export function publicListing(listing: DirectoryListing, includeOwner = false) {
     brand: listing.brand,
     licenseInfo: listing.licenseInfo,
     yearsInBusiness: listing.yearsInBusiness,
+    insuranceInfo: listing.insuranceInfo,
+    priceOptions: listing.priceOptions,
+    serviceArea: listing.serviceArea,
+    paymentMethods: listing.paymentMethods,
     specialty: listing.specialty,
     profileContent: listing.profileContent,
+    profileSiteUrls: listing.profileSiteUrls,
     profilePageTitle: listing.profilePageTitle,
     profileMetaDescription: listing.profileMetaDescription,
     profileHeadHtml: listing.profileHeadHtml,
@@ -696,10 +731,15 @@ export function createListing(
     mapsAddress: "",
     monthlyPrice: LISTING_MONTHLY_PRICE,
     brand: "",
-    licenseInfo: "",
-    yearsInBusiness: "",
+    licenseInfo: parsed.value.licenseInfo ?? "",
+    yearsInBusiness: parsed.value.yearsInBusiness ?? "",
+    insuranceInfo: parsed.value.insuranceInfo ?? "",
+    priceOptions: parsed.value.priceOptions ?? "",
+    serviceArea: parsed.value.serviceArea ?? "",
+    paymentMethods: parsed.value.paymentMethods ?? "",
     specialty: "",
     profileContent: parsed.value.profileContent ?? "",
+    profileSiteUrls: [],
     profilePageTitle: parsed.value.profilePageTitle ?? "",
     profileMetaDescription: parsed.value.profileMetaDescription ?? "",
     profileHeadHtml: parsed.value.profileHeadHtml ?? "",
@@ -711,7 +751,8 @@ export function createListing(
     profileH4: parsed.value.profileH4 ?? "",
     profileH5: parsed.value.profileH5 ?? "",
     profileH6: parsed.value.profileH6 ?? "",
-    profileCustomized: profileHasOwnerCopy(listingProfileFromInput(parsed.value)),
+    profileCustomized:
+      profileHasOwnerCopy(listingProfileFromInput(parsed.value)) || hasOwnerFacts(listingFactsFromInput(parsed.value)),
     crawlStatus: "idle",
     lastCrawledAt: "",
     slug: "",
@@ -747,6 +788,12 @@ export function updateListing(id: string, input: ListingInput, userId: string, a
     email: parsed.value.email ?? current.email,
     website: parsed.value.website ?? current.website,
     hours: parsed.value.hours ?? current.hours,
+    yearsInBusiness: parsed.value.yearsInBusiness ?? current.yearsInBusiness,
+    licenseInfo: parsed.value.licenseInfo ?? current.licenseInfo,
+    insuranceInfo: parsed.value.insuranceInfo ?? current.insuranceInfo,
+    priceOptions: parsed.value.priceOptions ?? current.priceOptions,
+    serviceArea: parsed.value.serviceArea ?? current.serviceArea,
+    paymentMethods: parsed.value.paymentMethods ?? current.paymentMethods,
     profilePageTitle: parsed.value.profilePageTitle ?? current.profilePageTitle,
     profileMetaDescription: parsed.value.profileMetaDescription ?? current.profileMetaDescription,
     profileHeadHtml: parsed.value.profileHeadHtml ?? current.profileHeadHtml,
@@ -760,7 +807,9 @@ export function updateListing(id: string, input: ListingInput, userId: string, a
     profileH5: parsed.value.profileH5 ?? current.profileH5,
     profileH6: parsed.value.profileH6 ?? current.profileH6,
     profileCustomized:
-      current.profileCustomized || profileFieldsChanged(current, listingProfileFromInput(parsed.value)),
+      current.profileCustomized ||
+      profileFieldsChanged(current, listingProfileFromInput(parsed.value)) ||
+      factsChanged(current, listingFactsFromInput(parsed.value)),
     updatedAt: nowIso(),
   }
   const rows = readListings()
@@ -856,13 +905,29 @@ export function applyListingProfile(
     profileContent?: string
     crawlStatus?: CrawlStatus
     lastCrawledAt?: string
+    profileSiteUrls?: string[]
+    licenseInfo?: string
+    yearsInBusiness?: string
+    insuranceInfo?: string
+    priceOptions?: string
+    serviceArea?: string
+    paymentMethods?: string
   },
 ): DirectoryListing {
   const current = getListing(id)
-  const crawled = input.profileContent != null ? stripCrawlArticleFooter(input.profileContent) : current.profileContent
+  const customized = current.profileCustomized
   const next: DirectoryListing = {
     ...current,
-    profileContent: current.profileCustomized ? current.profileContent : crawled,
+    yearsInBusiness: keepOwnerFact(current.yearsInBusiness, input.yearsInBusiness, customized),
+    licenseInfo: keepOwnerFact(current.licenseInfo, input.licenseInfo, customized),
+    insuranceInfo: keepOwnerFact(current.insuranceInfo, input.insuranceInfo, customized),
+    priceOptions: keepOwnerFact(current.priceOptions, input.priceOptions, customized),
+    serviceArea: keepOwnerFact(current.serviceArea, input.serviceArea, customized),
+    paymentMethods: keepOwnerFact(current.paymentMethods, input.paymentMethods, customized),
+    profileSiteUrls:
+      input.profileSiteUrls != null
+        ? normalizeSiteUrls(input.profileSiteUrls, current.website)
+        : current.profileSiteUrls,
     crawlStatus: input.crawlStatus ?? current.crawlStatus,
     lastCrawledAt: input.lastCrawledAt ?? current.lastCrawledAt,
     updatedAt: nowIso(),

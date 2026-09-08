@@ -7,6 +7,8 @@ import {
   listingFormFromPlace,
   listingLocation,
   listingMapsMatchFromPlace,
+  isPlaceFindListingUrl,
+  listingCanonicalUrl,
   listingPath,
   listingRedirectPath,
   listingSlugFromParts,
@@ -86,6 +88,19 @@ describe("listing copy", () => {
     assert.equal(filled.keywords, "sourdough")
     assert.equal(filled.profilePageTitle, "")
     assert.equal(filled.profileContent, "")
+    assert.equal(filled.yearsInBusiness, "")
+    assert.equal(filled.insuranceInfo, "")
+    const keptFacts = listingFormFromPlace(
+      {
+        title: "Maple Oven",
+        address: "10 Congress St, Portland, ME 04101",
+        categories: ["Bakery"],
+      },
+      { yearsInBusiness: "2014", serviceArea: "Portland", paymentMethods: "Cash" },
+    )
+    assert.equal(keptFacts.yearsInBusiness, "2014")
+    assert.equal(keptFacts.serviceArea, "Portland")
+    assert.equal(keptFacts.paymentMethods, "Cash")
 
     const noStreet = listingFormFromPlace(
       { title: "Downtown Cart", address: "Austin, TX 78702", categories: ["Food truck"] },
@@ -158,5 +173,15 @@ describe("listing copy", () => {
     assert.equal(listingPath("seed-1"), "/listings/seed-1")
     assert.equal(listingRedirectPath("seed-1", { id: "seed-1", slug: "harbor-oak-bakery" }), "/listings/harbor-oak-bakery")
     assert.equal(listingRedirectPath("harbor-oak-bakery", { id: "seed-1", slug: "harbor-oak-bakery" }), null)
+    assert.equal(
+      listingCanonicalUrl({ id: "listing-cedar", slug: "cedar-clay-studio-pottery-studio" }),
+      "https://placefind.to/listings/cedar-clay-studio-pottery-studio",
+    )
+    assert.equal(listingCanonicalUrl("listing-cedar"), "https://placefind.to/listings/listing-cedar")
+    assert.equal(isPlaceFindListingUrl("https://placefind.to/listings/cedar-clay-studio-pottery-studio"), true)
+    assert.equal(isPlaceFindListingUrl("https://www.placefind.to/listings/cedar-clay-studio-pottery-studio/"), true)
+    assert.equal(isPlaceFindListingUrl("https://shop.example"), false)
+    assert.equal(isPlaceFindListingUrl("https://placefind.to/directory"), false)
+    assert.equal(isPlaceFindListingUrl("https://placefind.to/listings/new"), false)
   })
 })

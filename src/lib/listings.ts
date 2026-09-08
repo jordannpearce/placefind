@@ -1,4 +1,5 @@
 import { parseStreetAddress, formatStreetAddress } from "./address.ts"
+import { canonicalUrl } from "./canonical.ts"
 import type { BusinessListing, DirectoryListing, ListingInput, MapsStatus } from "./types.ts"
 
 export type ListingMapsMatch = {
@@ -88,6 +89,12 @@ export function listingFormFromPlace(
     email: fallback.email ?? "",
     website: place.website?.trim() || fallback.website?.trim() || "",
     hours: hoursFromPlace(place) || fallback.hours?.trim() || "",
+    yearsInBusiness: fallback.yearsInBusiness ?? "",
+    licenseInfo: fallback.licenseInfo ?? "",
+    insuranceInfo: fallback.insuranceInfo ?? "",
+    priceOptions: fallback.priceOptions ?? "",
+    serviceArea: fallback.serviceArea ?? "",
+    paymentMethods: fallback.paymentMethods ?? "",
     profilePageTitle: fallback.profilePageTitle ?? "",
     profileMetaDescription: fallback.profileMetaDescription ?? "",
     profileHeadHtml: fallback.profileHeadHtml ?? "",
@@ -146,6 +153,21 @@ export function listingPath(listing: string | { id: string; slug?: string }): st
   if (typeof listing === "string") return `/listings/${listing}`
   const slug = listing.slug?.trim()
   return `/listings/${slug || listing.id}`
+}
+
+export function listingCanonicalUrl(listing: string | { id: string; slug?: string }): string {
+  return canonicalUrl(listingPath(listing))
+}
+
+export function isPlaceFindListingUrl(href: string): boolean {
+  try {
+    const url = new URL(href.trim())
+    if (!/^(www\.)?placefind\.to$/i.test(url.hostname)) return false
+    const match = url.pathname.match(/^\/listings\/([^/]+)\/?$/)
+    return Boolean(match && match[1] && match[1] !== "new")
+  } catch {
+    return false
+  }
 }
 
 export function listingRedirectPath(
