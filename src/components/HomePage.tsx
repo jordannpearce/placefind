@@ -6,6 +6,7 @@ import { listingLocation, listingPath } from "../lib/listings.ts"
 import { LISTING_PRICE_LABEL, listingPriceCopy } from "../lib/pricing.ts"
 import { CITY_PHOTOS } from "../lib/sample-listing.ts"
 import type { AuthUser, DirectoryListing } from "../lib/types.ts"
+import { PreferredSourceButton } from "./PreferredSourceButton.tsx"
 
 type Props = {
   user: AuthUser | null
@@ -74,6 +75,10 @@ export function HomePage({ user, onGo }: Props) {
                 Join to leave reviews
               </button>
             )}
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <p className="text-sm text-muted">Prefer PlaceFind in Google Search.</p>
+            <PreferredSourceButton />
           </div>
         </div>
         <figure className="overflow-hidden rounded-2xl border border-line">

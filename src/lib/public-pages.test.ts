@@ -179,6 +179,17 @@ describe("public website copy", () => {
     assert.equal((html.match(/gtag\('config', 'G-K9S9SHZMSF'\)/g) ?? []).length, 1)
     assert.equal((html.match(/googletagmanager\.com\/gtag\/js/g) ?? []).length, 1)
     assert.match(html, /id="placefind-canonical"[^>]*href="https:\/\/placefind\.to\/"/)
+    assert.equal((html.match(/news\.google\.com\/swg\/js\/v1\/publisher\.js/g) ?? []).length, 1)
+  })
+
+  it("embeds the Preferred Sources button on the homepage and site footer", () => {
+    const home = readFileSync(path.join(root, "components/HomePage.tsx"), "utf8")
+    const footer = readFileSync(path.join(root, "components/SiteFooter.tsx"), "utf8")
+    const button = readFileSync(path.join(root, "components/PreferredSourceButton.tsx"), "utf8")
+    assert.match(button, /google-add-preferred-source-btn/)
+    assert.match(button, /data-theme="dark"/)
+    assert.match(home, /PreferredSourceButton/)
+    assert.match(footer, /PreferredSourceButton/)
   })
 
   it("does not mention download, Windows, or license keys on the public site", () => {

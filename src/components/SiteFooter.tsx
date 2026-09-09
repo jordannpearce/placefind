@@ -1,5 +1,6 @@
 import { legalNavLinks } from "../lib/legal.ts"
 import type { AppPath } from "../lib/nav.ts"
+import { PreferredSourceButton } from "./PreferredSourceButton.tsx"
 
 type Props = {
   onGo: (path: AppPath | string) => void
@@ -77,7 +78,11 @@ export function SiteFooter({ onGo }: Props) {
           </nav>
         </div>
       </div>
-      <p className="mt-6 text-xs text-muted">© {new Date().getFullYear()} PlaceFind. All rights reserved.</p>
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <p className="text-xs text-muted">Add PlaceFind as a preferred source in Google Search.</p>
+        <PreferredSourceButton />
+      </div>
+      <p className="mt-4 text-xs text-muted">© {new Date().getFullYear()} PlaceFind. All rights reserved.</p>
     </footer>
   )
 }
