@@ -136,6 +136,7 @@ describe("listingClickActions", () => {
     assert.ok(actions.some((action) => /aria-label="Joe\\'s \\"Pizza\\""/.test(action.cssSelector || "") || /aria-label="Joe/.test(action.cssSelector || "")))
     assert.equal(actions.some((action) => action.cssSelector === 'a[href*="/maps/place/"]'), false)
     assert.equal(actions[0]?.ignoreErrors, true)
+    assert.ok(actions.filter((action) => action.type === "click").every((action) => action.timeout === 4_000))
   })
 })
 

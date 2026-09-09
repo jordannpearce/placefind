@@ -58,6 +58,7 @@ describe("profileVisitActions", () => {
     assert.ok(sequential.some((action) => action.cssSelector?.includes("authority") || action.cssSelector?.includes("Website")))
     assert.equal(sequential.some((action) => action.cssSelector?.includes("tel:")), false)
     assert.ok(sequential.every((action) => action.type === "wait" || action.ignoreErrors === true))
+    assert.ok(sequential.filter((action) => action.type === "click").every((action) => action.timeout === 4_000))
 
     const mobile = profileVisitActions(
       { dwellSeconds: 15, actionOrder: "sequential", actions: ["phone", "directions"], device: "mobile" },
@@ -84,8 +85,9 @@ describe("profileVisitActions", () => {
 describe("searchClickActions", () => {
   it("waits for Maps results before clicking the confirmed listing", () => {
     const actions = searchClickActions({ title: "Franklin Barbecue", mapsUrl: "", placeId: "ChIJ123" })
-    assert.equal(actions[0]?.type, "wait")
+    assert.equal(actions[0]?.type, "wait_for_selector")
     assert.ok(actions.some((action) => action.cssSelector === 'a[href*="ChIJ123"]'))
+    assert.ok(actions.filter((action) => action.type === "click").every((action) => action.timeout === 4_000))
   })
 })
 
@@ -173,18 +175,66 @@ describe("runMapsTrafficSession error mapping", () => {
         device: "desktop",
       })
       assert.equal(result.ok, true)
-      assert.equal(result.requestCount, 1)
+      assert.equal(result.requestCount, 2)
       assert.equal(result.dwellSeconds, 25)
       assert.deepEqual(result.actions, ["reviews", "website"])
       const created = cmds.find((body) => body.cmd === "sessions.create")
       assert.equal(created?.profileId, "pf-camp-123")
       assert.deepEqual(created?.device, ["desktop"])
       const pages = cmds.filter((body) => body.cmd === "request.get")
-      assert.equal(pages.length, 1)
+      assert.equal(pages.length, 2)
       assert.equal(pages[0]?.profileId, "pf-camp-123")
-      const visitActions = pages[0]?.browserActions as Array<{ type?: string; wait?: number }>
+      const searchActions = pages[0]?.browserActions as Array<{ type?: string; wait?: number }>
+      const visitActions = pages[1]?.browserActions as Array<{ type?: string; wait?: number }>
+      assert.equal(searchActions?.some((action) => action.type === "wait" && action.wait === 25), false)
       assert.ok(visitActions?.some((action) => action.type === "wait" && action.wait === 25))
-      assert.ok(visitActions?.some((action) => action.type === "wait" && action.wait === 3))
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("keeps the session successful when the listing opened and the visit timed out", async () => {
+    const originalFetch = globalThis.fetch
+    let gets = 0
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || "{}")) as { cmd?: string; url?: string }
+      if (body.cmd === "request.get") {
+        gets += 1
+        if (gets >= 2) throw timeoutError()
+        return new Response(
+          JSON.stringify({
+            solution: {
+              verified: true,
+              currentUrl: "https://www.google.com/maps/place/Franklin+Barbecue/@30.27,-97.74,17z/data=!3m1!4b1!4m6!3m5!1sChIJ123",
+              markdown: "# Franklin Barbecue\nChIJ123",
+            },
+            session: "pf-test-session",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        )
+      }
+      return new Response(JSON.stringify({ solution: { verified: true }, session: "pf-test-session" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }) as typeof fetch
+    try {
+      const result = await runMapsTrafficSession({
+        key: "scp_test_runner_key",
+        searchUrl: "https://www.google.com/maps/search/barbecue/@30.28,-97.75,17z",
+        listingUrl: "https://www.google.com/maps/search/?api=1&query=Franklin&query_place_id=ChIJ123",
+        listingTitle: "Franklin Barbecue",
+        listingPlaceId: "ChIJ123",
+        profileId: "pf-camp-123",
+        sessionId: "pf-test-session",
+        dwellSeconds: 25,
+        actions: ["reviews"],
+        device: "desktop",
+      })
+      assert.equal(result.ok, true)
+      assert.equal(result.openedTitle, "Franklin Barbecue")
+      assert.equal(result.error, null)
+      assert.match(result.visitError || "", /profile opened/)
     } finally {
       globalThis.fetch = originalFetch
     }

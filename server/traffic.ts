@@ -636,7 +636,14 @@ async function executeTrafficJob(input: {
         let next = snapshotFromSessions(job, sessionResults, pinResults)
         if (result.ok) {
           next = appendTrafficLog(next, `opened ${result.openedTitle || input.listing.title} · ${pinCoordLabel(pin)}`, pin.pinId, keyword)
-          next = appendTrafficLog(next, `${trafficVisitLogCopy(input.visit, device)} · ${pinCoordLabel(pin)}`, pin.pinId, keyword)
+          next = appendTrafficLog(
+            next,
+            result.visitError
+              ? `${result.visitError} · ${pinCoordLabel(pin)}`
+              : `${trafficVisitLogCopy(input.visit, device)} · ${pinCoordLabel(pin)}`,
+            pin.pinId,
+            keyword,
+          )
           next = appendTrafficLog(next, `${label} · Session finished.`, pin.pinId, keyword)
         } else {
           const fail = publicJobError(result.error) || listingNotFoundMessage()

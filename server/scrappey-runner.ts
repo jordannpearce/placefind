@@ -22,6 +22,7 @@ export type ScrappeyBrowserAction = {
   wait?: number
   waitForSelector?: string
   ignoreErrors?: boolean
+  timeout?: number
 }
 
 export type TrafficListingTarget = {
@@ -58,6 +59,7 @@ export type TrafficSessionResult = {
   openedTitle?: string | null
   dwellSeconds?: number
   actions?: TrafficProfileAction[]
+  visitError?: string | null
 }
 
 type ScrappeySolution = {
@@ -80,6 +82,14 @@ export function listingNotInAreaMessage() {
 export function listingNotFoundMessage() {
   return "could not find the listing"
 }
+
+export function listingVisitTimedOutMessage() {
+  return "listing visit timed out after the profile opened"
+}
+
+/** Missing Maps buttons must fail fast. The runner default is 60s per click. */
+export const CLICK_TIMEOUT_MS = 4_000
+export const MAX_DWELL_CHUNK_SECONDS = 25
 
 function runnerUrl(key: string): string {
   return `${SCRAPPEY_ENDPOINT}?key=${encodeURIComponent(key)}`
@@ -175,32 +185,22 @@ export function mapsUrlLooksLikeListing(url: string, listing: TrafficListingTarg
   return Boolean(slug && compact.includes(slug))
 }
 
+function clickAction(cssSelector: string, wait = 1): ScrappeyBrowserAction {
+  return { type: "click", cssSelector, ignoreErrors: true, wait, timeout: CLICK_TIMEOUT_MS }
+}
+
 /** Click only the confirmed listing — never the first /maps/place/ result. */
 export function listingClickActions(listing: TrafficListingTarget | string): ScrappeyBrowserAction[] {
   const target: TrafficListingTarget =
     typeof listing === "string" ? { title: listing, mapsUrl: "" } : listing
   const actions: ScrappeyBrowserAction[] = []
   const title = target.title.trim()
-  if (target.placeId) {
-    actions.push({ type: "click", cssSelector: `a[href*="${target.placeId}"]`, ignoreErrors: true, wait: 2 })
-    actions.push({ type: "click", cssSelector: `[data-place-id="${target.placeId}"]`, ignoreErrors: true, wait: 2 })
-  }
-  if (target.cid) {
-    actions.push({ type: "click", cssSelector: `a[href*="cid=${target.cid}"]`, ignoreErrors: true, wait: 2 })
-    actions.push({ type: "click", cssSelector: `a[href*="${target.cid}"]`, ignoreErrors: true, wait: 2 })
-  }
-  if (title) {
-    const quoted = cssStringLiteral(title)
-    actions.push({ type: "click", cssSelector: `a[aria-label=${quoted}]`, ignoreErrors: true, wait: 2 })
-    actions.push({ type: "click", cssSelector: `div[role="article"][aria-label=${quoted}]`, ignoreErrors: true, wait: 2 })
-  }
-  actions.push({ type: "scroll", cssSelector: '[role="feed"]', wait: 1, ignoreErrors: true })
-  if (target.placeId) {
-    actions.push({ type: "click", cssSelector: `a[href*="${target.placeId}"]`, ignoreErrors: true, wait: 2 })
-  }
-  if (title) {
-    actions.push({ type: "click", cssSelector: `a[aria-label=${cssStringLiteral(title)}]`, ignoreErrors: true, wait: 2 })
-  }
+  if (target.placeId) actions.push(clickAction(`a[href*="${target.placeId}"]`, 2))
+  if (target.cid) actions.push(clickAction(`a[href*="cid=${target.cid}"]`, 2))
+  if (title) actions.push(clickAction(`a[aria-label=${cssStringLiteral(title)}]`, 2))
+  actions.push({ type: "scroll", cssSelector: '[role="feed"]', wait: 1, ignoreErrors: true, timeout: CLICK_TIMEOUT_MS })
+  if (target.placeId) actions.push(clickAction(`a[href*="${target.placeId}"]`, 1))
+  else if (title) actions.push(clickAction(`a[aria-label=${cssStringLiteral(title)}]`, 1))
   return actions
 }
 
@@ -250,21 +250,12 @@ export function runnerVisitTimeoutMs(visit: TrafficVisitOptions, device: Traffic
   return Math.max(RUNNER_PAGE_TIMEOUT_MS, seconds * 1000)
 }
 
-export function runnerSearchVisitTimeoutMs(visit: TrafficVisitOptions, device: TrafficResolvedDevice): number {
-  return RUNNER_PAGE_TIMEOUT_MS + (visit.dwellSeconds + visitActionsForDevice(visit, device).length * 8) * 1000
-}
-
-export function mapsSearchVisitActions(
-  listing: TrafficListingTarget | string,
-  visit: TrafficVisitOptions,
-  device: TrafficResolvedDevice,
-  random: () => number = Math.random,
-): ScrappeyBrowserAction[] {
-  return [...searchClickActions(listing), ...profileVisitActions(visit, device, random)]
-}
-
 export function searchClickActions(listing: TrafficListingTarget | string): ScrappeyBrowserAction[] {
-  return [{ type: "wait", wait: 3 }, ...listingClickActions(listing)]
+  return [
+    { type: "wait_for_selector", cssSelector: '[role="feed"]', timeout: 15_000, ignoreErrors: true },
+    { type: "wait_for_selector", cssSelector: 'div[role="article"]', timeout: 8_000, ignoreErrors: true },
+    ...listingClickActions(listing),
+  ]
 }
 
 const LISTING_ACTION_SELECTORS: Record<TrafficProfileAction, string[]> = {
@@ -274,19 +265,27 @@ const LISTING_ACTION_SELECTORS: Record<TrafficProfileAction, string[]> = {
   website: ['a[data-item-id="authority"]', 'a[aria-label*="Website"]'],
 }
 
+export function firstDwellChunkSeconds(dwellSeconds: number): number {
+  return Math.min(MAX_DWELL_CHUNK_SECONDS, Math.max(0, dwellSeconds))
+}
+
+export function remainingDwellSeconds(dwellSeconds: number): number {
+  return Math.max(0, dwellSeconds - firstDwellChunkSeconds(dwellSeconds))
+}
+
 export function profileVisitActions(
   visit: TrafficVisitOptions,
   device: TrafficResolvedDevice,
   random: () => number = Math.random,
 ): ScrappeyBrowserAction[] {
-  const actions: ScrappeyBrowserAction[] = [{ type: "wait", wait: visit.dwellSeconds }]
+  const actions: ScrappeyBrowserAction[] = [{ type: "wait", wait: firstDwellChunkSeconds(visit.dwellSeconds) }]
   const selected = orderTrafficActions(visitActionsForDevice(visit, device), visit.actionOrder, random)
   for (const action of selected) {
     for (const cssSelector of LISTING_ACTION_SELECTORS[action]) {
-      actions.push({ type: "click", cssSelector, ignoreErrors: true, wait: 1 })
+      actions.push(clickAction(cssSelector, 1))
     }
     if (action === "reviews") {
-      actions.push({ type: "scroll", wait: 1, ignoreErrors: true })
+      actions.push({ type: "scroll", wait: 1, ignoreErrors: true, timeout: CLICK_TIMEOUT_MS })
     }
   }
   return actions
@@ -375,32 +374,77 @@ export async function runMapsTrafficSession(input: TrafficSessionInput): Promise
     const search = await runnerGet(input.key, input.searchUrl, {
       session,
       profileId: input.profileId,
-      browserActions: mapsSearchVisitActions(listing, visit, device),
-      timeoutMs: runnerSearchVisitTimeoutMs(visit, device),
+      browserActions: searchClickActions(listing),
+      timeoutMs: RUNNER_PAGE_TIMEOUT_MS,
       signal: input.signal,
     })
     if (search.error) return { ...base, ok: false, requestCount, error: search.error }
 
-    if (listingOpenedOnPage(search.currentUrl, search.text, listing)) {
-      return { ...base, ok: true, requestCount, error: null, openedTitle: listing.title }
-    }
-    if (!listingPresentInMapsPage(search.text, listing)) {
+    let opened = listingOpenedOnPage(search.currentUrl, search.text, listing)
+    let currentUrl = search.currentUrl || input.listingUrl
+    if (!opened && !listingPresentInMapsPage(search.text, listing)) {
       return { ...base, ok: false, requestCount, error: listingNotInAreaMessage() }
     }
 
+    if (!opened) {
+      requestCount += 1
+      const fallback = await runnerGet(input.key, input.listingUrl, {
+        session,
+        profileId: input.profileId,
+        timeoutMs: RUNNER_PAGE_TIMEOUT_MS,
+        signal: input.signal,
+      })
+      if (fallback.error) return { ...base, ok: false, requestCount, error: fallback.error }
+      opened = listingOpenedOnPage(fallback.currentUrl, fallback.text, listing) || !fallback.error
+      currentUrl = fallback.currentUrl || input.listingUrl
+    }
+
+    if (!opened) return { ...base, ok: false, requestCount, error: listingNotFoundMessage() }
+
     requestCount += 1
-    const visitPage = await runnerGet(input.key, input.listingUrl, {
+    const visitPage = await runnerGet(input.key, currentUrl, {
       session,
       profileId: input.profileId,
       browserActions: profileVisitActions(visit, device),
       timeoutMs: runnerVisitTimeoutMs(visit, device),
       signal: input.signal,
     })
-    if (visitPage.error) return { ...base, ok: false, requestCount, error: visitPage.error }
-    if (listingOpenedOnPage(visitPage.currentUrl, visitPage.text, listing) || !visitPage.error) {
-      return { ...base, ok: true, requestCount, error: null, openedTitle: listing.title }
+    if (visitPage.error) {
+      return {
+        ...base,
+        ok: true,
+        requestCount,
+        error: null,
+        openedTitle: listing.title,
+        visitError: listingVisitTimedOutMessage(),
+      }
     }
-    return { ...base, ok: false, requestCount, error: listingNotFoundMessage() }
+
+    let remaining = remainingDwellSeconds(visit.dwellSeconds)
+    while (remaining > 0) {
+      const chunk = Math.min(MAX_DWELL_CHUNK_SECONDS, remaining)
+      requestCount += 1
+      const extra = await runnerGet(input.key, currentUrl, {
+        session,
+        profileId: input.profileId,
+        browserActions: [{ type: "wait", wait: chunk }],
+        timeoutMs: 90_000,
+        signal: input.signal,
+      })
+      if (extra.error) {
+        return {
+          ...base,
+          ok: true,
+          requestCount,
+          error: null,
+          openedTitle: listing.title,
+          visitError: listingVisitTimedOutMessage(),
+        }
+      }
+      remaining -= chunk
+    }
+
+    return { ...base, ok: true, requestCount, error: null, openedTitle: listing.title }
   } finally {
     if (session) await destroyRunnerSession(input.key, session)
   }
