@@ -250,15 +250,28 @@ export function runnerVisitTimeoutMs(visit: TrafficVisitOptions, device: Traffic
   return Math.max(RUNNER_PAGE_TIMEOUT_MS, seconds * 1000)
 }
 
+export function runnerSearchVisitTimeoutMs(visit: TrafficVisitOptions, device: TrafficResolvedDevice): number {
+  return RUNNER_PAGE_TIMEOUT_MS + (visit.dwellSeconds + visitActionsForDevice(visit, device).length * 8) * 1000
+}
+
+export function mapsSearchVisitActions(
+  listing: TrafficListingTarget | string,
+  visit: TrafficVisitOptions,
+  device: TrafficResolvedDevice,
+  random: () => number = Math.random,
+): ScrappeyBrowserAction[] {
+  return [...searchClickActions(listing), ...profileVisitActions(visit, device, random)]
+}
+
 export function searchClickActions(listing: TrafficListingTarget | string): ScrappeyBrowserAction[] {
   return [{ type: "wait", wait: 3 }, ...listingClickActions(listing)]
 }
 
 const LISTING_ACTION_SELECTORS: Record<TrafficProfileAction, string[]> = {
-  reviews: ['button[aria-label*="Reviews"]', '[role="tab"][aria-label*="Reviews"]', 'button[jsaction*="review"]'],
-  directions: ['button[data-item-id="directions"]', 'button[aria-label="Directions"]', 'button[aria-label*="Directions"]'],
-  phone: ['button[data-item-id^="phone:"]', 'a[href^="tel:"]', 'button[aria-label*="Call"]'],
-  website: ['a[data-item-id="authority"]', 'a[aria-label*="Website"]', 'a[aria-label*="website"]'],
+  reviews: ['button[aria-label*="Reviews"]', '[role="tab"][aria-label*="Reviews"]'],
+  directions: ['button[data-item-id="directions"]', 'button[aria-label*="Directions"]'],
+  phone: ['button[data-item-id^="phone:"]', 'a[href^="tel:"]'],
+  website: ['a[data-item-id="authority"]', 'a[aria-label*="Website"]'],
 }
 
 export function profileVisitActions(
@@ -270,10 +283,10 @@ export function profileVisitActions(
   const selected = orderTrafficActions(visitActionsForDevice(visit, device), visit.actionOrder, random)
   for (const action of selected) {
     for (const cssSelector of LISTING_ACTION_SELECTORS[action]) {
-      actions.push({ type: "click", cssSelector, ignoreErrors: true, wait: 2 })
+      actions.push({ type: "click", cssSelector, ignoreErrors: true, wait: 1 })
     }
     if (action === "reviews") {
-      actions.push({ type: "scroll", wait: 2, ignoreErrors: true })
+      actions.push({ type: "scroll", wait: 1, ignoreErrors: true })
     }
   }
   return actions
@@ -362,19 +375,21 @@ export async function runMapsTrafficSession(input: TrafficSessionInput): Promise
     const search = await runnerGet(input.key, input.searchUrl, {
       session,
       profileId: input.profileId,
-      browserActions: searchClickActions(listing),
+      browserActions: mapsSearchVisitActions(listing, visit, device),
+      timeoutMs: runnerSearchVisitTimeoutMs(visit, device),
       signal: input.signal,
     })
     if (search.error) return { ...base, ok: false, requestCount, error: search.error }
 
-    const openedOnSearch = listingOpenedOnPage(search.currentUrl, search.text, listing)
-    if (!openedOnSearch && !listingPresentInMapsPage(search.text, listing)) {
+    if (listingOpenedOnPage(search.currentUrl, search.text, listing)) {
+      return { ...base, ok: true, requestCount, error: null, openedTitle: listing.title }
+    }
+    if (!listingPresentInMapsPage(search.text, listing)) {
       return { ...base, ok: false, requestCount, error: listingNotInAreaMessage() }
     }
 
     requestCount += 1
-    const visitUrl = openedOnSearch ? search.currentUrl || input.listingUrl : input.listingUrl
-    const visitPage = await runnerGet(input.key, visitUrl, {
+    const visitPage = await runnerGet(input.key, input.listingUrl, {
       session,
       profileId: input.profileId,
       browserActions: profileVisitActions(visit, device),
@@ -382,7 +397,7 @@ export async function runMapsTrafficSession(input: TrafficSessionInput): Promise
       signal: input.signal,
     })
     if (visitPage.error) return { ...base, ok: false, requestCount, error: visitPage.error }
-    if (openedOnSearch || listingOpenedOnPage(visitPage.currentUrl, visitPage.text, listing) || !visitPage.error) {
+    if (listingOpenedOnPage(visitPage.currentUrl, visitPage.text, listing) || !visitPage.error) {
       return { ...base, ok: true, requestCount, error: null, openedTitle: listing.title }
     }
     return { ...base, ok: false, requestCount, error: listingNotFoundMessage() }

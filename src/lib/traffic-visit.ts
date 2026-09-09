@@ -26,6 +26,14 @@ export function normalizeDwellSeconds(raw: unknown): number {
   return Math.min(MAX_DWELL_SECONDS, Math.max(MIN_DWELL_SECONDS, value))
 }
 
+/** Accept a partial number while typing. Clamp only when the field is committed. */
+export function parseDwellDraft(raw: unknown): string {
+  const text = String(raw ?? "").trim()
+  if (text === "") return ""
+  if (!/^\d{1,3}$/.test(text)) return String(raw ?? "")
+  return text
+}
+
 export function normalizeActionOrder(raw: unknown): TrafficActionOrder {
   return raw === "random" ? "random" : "sequential"
 }

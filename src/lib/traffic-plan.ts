@@ -35,7 +35,6 @@ export function trafficStartConfirmCopy(input: {
 }): string {
   const available = Math.max(0, input.pinCount) * Math.max(0, input.keywordCount)
   const planned = plannedTrafficSearchCount(available, input.searches)
-  const requests = planned * 2
   const pinLabel = `${input.pinCount} selected pin${input.pinCount === 1 ? "" : "s"}`
   const keywordLabel = `${input.keywordCount} keyword${input.keywordCount === 1 ? "" : "s"}`
   return [
@@ -44,6 +43,6 @@ export function trafficStartConfirmCopy(input: {
     `Maps will search ${input.keywordList} from each selected pin’s GPS, then open the confirmed listing when it appears.`,
     ...(input.visitSummary ? ["", input.visitSummary] : []),
     "",
-    `Estimated ${requests} Maps requests (2 per search). Stop cancels remaining searches.`,
+    `Usually ${planned} Maps request${planned === 1 ? "" : "s"} (1 per search, 2 if the listing has to be opened separately). Stop cancels remaining searches.`,
   ].join("\n")
 }

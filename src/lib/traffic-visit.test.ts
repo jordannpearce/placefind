@@ -4,6 +4,7 @@ import {
   campaignTrafficProfileId,
   defaultTrafficVisitOptions,
   normalizeDwellSeconds,
+  parseDwellDraft,
   orderTrafficActions,
   parseTrafficVisitOptions,
   resolveTrafficDevice,
@@ -20,6 +21,13 @@ describe("normalizeDwellSeconds", () => {
     assert.equal(normalizeDwellSeconds(120), 120)
     assert.equal(normalizeDwellSeconds(400), 120)
     assert.equal(normalizeDwellSeconds(12.5), 20)
+  })
+
+  it("does not clamp a 2 while the user is still typing 25", () => {
+    assert.equal(normalizeDwellSeconds(2), 5)
+    assert.equal(parseDwellDraft("2"), "2")
+    assert.equal(parseDwellDraft("25"), "25")
+    assert.equal(normalizeDwellSeconds(parseDwellDraft("25")), 25)
   })
 })
 

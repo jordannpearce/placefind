@@ -49,7 +49,7 @@ describe("trafficStartConfirmCopy", () => {
       visitSummary: "Stay on the listing for 25 seconds. Then run read reviews, website.",
     })
     assert.match(copy, /Start 4 of 6 searches/)
-    assert.match(copy, /Estimated 8 Maps requests/)
+    assert.match(copy, /Usually 4 Maps requests/)
     assert.match(copy, /Stay on the listing for 25 seconds/)
     assert.doesNotMatch(copy, /Estimated 12 /)
   })

@@ -84,6 +84,7 @@ import {
   trafficStartConfirmCopy,
 } from "../lib/traffic-plan.ts"
 import {
+  DEFAULT_DWELL_SECONDS,
   MAX_DWELL_SECONDS,
   MIN_DWELL_SECONDS,
   TRAFFIC_PROFILE_ACTIONS,
@@ -92,6 +93,7 @@ import {
   normalizeDeviceMode,
   normalizeDwellSeconds,
   normalizeTrafficActions,
+  parseDwellDraft,
   parseTrafficVisitOptions,
   trafficActionLabel,
   trafficScheduleVisitFields,
@@ -210,6 +212,7 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([])
   const [searchCount, setSearchCount] = useState(DEFAULT_TRAFFIC_SEARCHES)
   const [trafficVisit, setTrafficVisit] = useState<TrafficVisitOptions>(defaultTrafficVisitOptions)
+  const [dwellDraft, setDwellDraft] = useState(String(DEFAULT_DWELL_SECONDS))
   const [previewCenter, setPreviewCenter] = useState<GeoPoint | null>(null)
   const [scans, setScans] = useState<GridScanRun[]>([])
   const [compareFromId, setCompareFromId] = useState("")
@@ -302,6 +305,7 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
       setSelectedKeywords([])
       setSearchCount(DEFAULT_TRAFFIC_SEARCHES)
       setTrafficVisit(defaultTrafficVisitOptions())
+      setDwellDraft(String(DEFAULT_DWELL_SECONDS))
       setScanScheduleDraft(emptyScanSchedule())
       setTrafficScheduleDraft(emptyTrafficSchedule())
       return
@@ -321,14 +325,14 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
     const remembered = campaign.trafficSchedule?.lastSelectedKeywords ?? []
     setSelectedKeywords(remembered.length ? selectedKeywordsInListedOrder(listed, remembered) : listed)
     setSearchCount(normalizeTrafficSearches(campaign.trafficSchedule?.lastSearchCount))
-    setTrafficVisit(
-      parseTrafficVisitOptions({
-        dwellSeconds: campaign.trafficSchedule?.lastDwellSeconds,
-        actionOrder: campaign.trafficSchedule?.lastActionOrder,
-        actions: campaign.trafficSchedule?.lastActions,
-        device: campaign.trafficSchedule?.lastDevice,
-      }),
-    )
+    const visit = parseTrafficVisitOptions({
+      dwellSeconds: campaign.trafficSchedule?.lastDwellSeconds,
+      actionOrder: campaign.trafficSchedule?.lastActionOrder,
+      actions: campaign.trafficSchedule?.lastActions,
+      device: campaign.trafficSchedule?.lastDevice,
+    })
+    setTrafficVisit(visit)
+    setDwellDraft(String(visit.dwellSeconds))
     setScanScheduleDraft(campaign.scanSchedule ?? emptyScanSchedule())
     setTrafficScheduleDraft(campaign.trafficSchedule ?? emptyTrafficSchedule())
   }
@@ -756,6 +760,7 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
   async function persistTrafficVisit(next: TrafficVisitOptions) {
     const visit = parseTrafficVisitOptions(next)
     setTrafficVisit(visit)
+    setDwellDraft(String(visit.dwellSeconds))
     setTrafficScheduleDraft((current) => ({ ...current, ...trafficScheduleVisitFields(visit) }))
     if (!selected || creating) return
     void updateCampaign(selected.id, { trafficSchedule: trafficSchedulePayload(visit, searchCount) })
@@ -1561,16 +1566,9 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
                       min={MIN_DWELL_SECONDS}
                       max={MAX_DWELL_SECONDS}
                       step={1}
-                      value={trafficVisit.dwellSeconds}
-                      onChange={(event) => {
-                        const next = Number(event.target.value)
-                        if (!Number.isInteger(next)) return
-                        setTrafficVisit((current) => ({
-                          ...current,
-                          dwellSeconds: normalizeDwellSeconds(next),
-                        }))
-                      }}
-                      onBlur={() => void persistTrafficVisit(trafficVisit)}
+                      value={dwellDraft}
+                      onChange={(event) => setDwellDraft(parseDwellDraft(event.target.value))}
+                      onBlur={() => void persistTrafficVisit({ ...trafficVisit, dwellSeconds: normalizeDwellSeconds(dwellDraft) })}
                       disabled={busy}
                       className="h-11 w-full rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
                     />

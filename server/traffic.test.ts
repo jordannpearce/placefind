@@ -399,7 +399,7 @@ describe("runCampaignTraffic", () => {
       assert.equal(result.traffic.sessionsRequested, 2)
       assert.equal(result.traffic.sessionsOk, 2)
       assert.equal(result.traffic.sessionsFailed, 0)
-      assert.ok(result.traffic.requestCount >= 4)
+      assert.ok(result.traffic.requestCount >= 2)
       assert.equal(result.campaign.lastTrafficJob?.status, "ok")
       assert.ok((result.traffic.log?.length ?? 0) >= 4)
       assert.ok(result.traffic.log?.some((line) => /Started pin/.test(line.message)))

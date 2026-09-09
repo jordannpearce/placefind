@@ -173,19 +173,18 @@ describe("runMapsTrafficSession error mapping", () => {
         device: "desktop",
       })
       assert.equal(result.ok, true)
-      assert.equal(result.requestCount, 2)
+      assert.equal(result.requestCount, 1)
       assert.equal(result.dwellSeconds, 25)
       assert.deepEqual(result.actions, ["reviews", "website"])
       const created = cmds.find((body) => body.cmd === "sessions.create")
       assert.equal(created?.profileId, "pf-camp-123")
       assert.deepEqual(created?.device, ["desktop"])
       const pages = cmds.filter((body) => body.cmd === "request.get")
-      assert.equal(pages.length, 2)
+      assert.equal(pages.length, 1)
       assert.equal(pages[0]?.profileId, "pf-camp-123")
-      assert.equal(pages[1]?.profileId, "pf-camp-123")
-      const visitActions = pages[1]?.browserActions as Array<{ type?: string; wait?: number }>
-      assert.equal(visitActions?.[0]?.type, "wait")
-      assert.equal(visitActions?.[0]?.wait, 25)
+      const visitActions = pages[0]?.browserActions as Array<{ type?: string; wait?: number }>
+      assert.ok(visitActions?.some((action) => action.type === "wait" && action.wait === 25))
+      assert.ok(visitActions?.some((action) => action.type === "wait" && action.wait === 3))
     } finally {
       globalThis.fetch = originalFetch
     }
