@@ -78,8 +78,7 @@ export function SiteFooter({ onGo }: Props) {
           </nav>
         </div>
       </div>
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <p className="text-xs text-muted">Add PlaceFind as a preferred source in Google Search.</p>
+      <div className="mt-6">
         <PreferredSourceButton />
       </div>
       <p className="mt-4 text-xs text-muted">© {new Date().getFullYear()} PlaceFind. All rights reserved.</p>

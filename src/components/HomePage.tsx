@@ -76,8 +76,7 @@ export function HomePage({ user, onGo }: Props) {
               </button>
             )}
           </div>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <p className="text-sm text-muted">Prefer PlaceFind in Google Search.</p>
+          <div className="mt-5">
             <PreferredSourceButton />
           </div>
         </div>
