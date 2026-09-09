@@ -170,6 +170,22 @@ describe("directory listings", () => {
     assert.throws(() => getListing(bakery.id), /not in the directory/)
   })
 
+  it("finalizes the listing name as the Google Maps title when a place is confirmed", () => {
+    resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-listing-maps-name-")))
+    const created = createListing({ name: "joes pizza", city: "New York", state: "NY" }, "user-1")
+    const confirmed = confirmListingMatch(created.id, "user-1", false, {
+      placeId: "sample-joes-exact",
+      title: "Joe's Pizza",
+      address: "7 Carmine St, New York, NY 10014",
+    })
+    assert.equal(confirmed.name, "Joe's Pizza")
+    assert.equal(confirmed.mapsTitle, "Joe's Pizza")
+    const manual = createListing({ name: "Harbor Street Cafe", city: "Portland", state: "OR" }, "user-2")
+    const notFound = confirmListingMatch(manual.id, "user-2", false, { mapsStatus: "not_found" })
+    assert.equal(notFound.name, "Harbor Street Cafe")
+    assert.equal(notFound.mapsStatus, "not_found")
+  })
+
   it("parses a pasted Maps address into street, city, state, and zip", () => {
     resetStoreForTests(mkdtempSync(path.join(tmpdir(), "placefind-listing-address-")))
     const created = createListing(

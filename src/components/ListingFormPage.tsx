@@ -248,7 +248,7 @@ export function ListingFormPage({ listingId, user, onGo, onUser }: Props) {
     const filled = listingFormFromPlace(candidate, form)
     setForm({
       ...filled,
-      name: form.name.trim() || filled.name,
+      name: filled.name || form.name.trim(),
       email: form.email,
       keywords: form.keywords,
     })
@@ -257,8 +257,8 @@ export function ListingFormPage({ listingId, user, onGo, onUser }: Props) {
     setDetailsVisible(true)
     setNotice(
       filled.street
-        ? "Review the details from Google Maps, then save the listing."
-        : "Google Maps did not include a street address. Enter the street, city, state, and ZIP, then save.",
+        ? "The listing name is the Google Maps name. Review the details, then save."
+        : "The listing name is the Google Maps name. Google Maps did not include a street address. Enter the street, city, state, and ZIP, then save.",
     )
   }
 

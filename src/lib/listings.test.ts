@@ -76,6 +76,16 @@ describe("listing copy", () => {
       },
       { name: "Maple Oven", city: "Portland", state: "ME", email: "hello@mapleoven.example", keywords: "sourdough" },
     )
+    const renamed = listingFormFromPlace(
+      {
+        title: "Joe's Pizza",
+        address: "7 Carmine St, New York, NY 10014",
+        categories: ["Pizza restaurant"],
+      },
+      { name: "joes pizza", city: "New York", state: "NY" },
+    )
+    assert.equal(renamed.name, "Joe's Pizza")
+    assert.equal(filled.name, "Maple Oven")
     assert.equal(filled.street, "10 Congress St")
     assert.equal(filled.city, "Portland")
     assert.equal(filled.state, "ME")

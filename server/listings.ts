@@ -842,13 +842,15 @@ export function applyMapsMatch(
   const parsed = parseStreetAddress(address, { city: listing.city, state: listing.state })
   const lat = parseCoord(match?.lat)
   const lng = parseCoord(match?.lng)
+  const mapsName = match?.title?.trim() ?? ""
   const next: DirectoryListing = {
     ...listing,
+    name: status === "found" && mapsName ? mapsName : listing.name,
     placeId: match?.placeId?.trim() ?? "",
     cid: match?.cid?.trim() ?? "",
     lat: lat ?? (status === "not_found" ? null : listing.lat ?? null),
     lng: lng ?? (status === "not_found" ? null : listing.lng ?? null),
-    mapsTitle: match?.title?.trim() ?? "",
+    mapsTitle: mapsName,
     mapsAddress: address,
     street: parsed.street || listing.street,
     city: parsed.city || listing.city,

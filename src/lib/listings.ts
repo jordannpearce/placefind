@@ -78,7 +78,7 @@ export function listingFormFromPlace(
     state: fallback.state || place.state || "",
   })
   return {
-    name: fallback.name?.trim() || place.title?.trim() || "",
+    name: place.title?.trim() || fallback.name?.trim() || "",
     street: parsed.street,
     city: parsed.city || fallback.city?.trim() || place.city?.trim() || "",
     state: parsed.state || fallback.state?.trim() || place.state?.trim() || "",
