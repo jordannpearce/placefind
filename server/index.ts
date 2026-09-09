@@ -753,6 +753,10 @@ async function start() {
       keywords?: string[]
       searches?: number
       sessions?: number
+      dwellSeconds?: number
+      actionOrder?: string
+      actions?: string[]
+      device?: string
     }
     const keys = isSellerMode() ? body : {}
     try {
@@ -770,6 +774,10 @@ async function start() {
           keywordIds: body.keywordIds,
           keywords: body.keywords,
           searches: body.searches ?? body.sessions,
+          dwellSeconds: body.dwellSeconds,
+          actionOrder: body.actionOrder,
+          actions: body.actions,
+          device: body.device,
         },
         user.id,
       )

@@ -598,7 +598,17 @@ export async function startCampaignTraffic(
   id: string,
   keys: ApiKeys,
   hideClientKeys = false,
-  input?: { pinIds?: string[]; keywordIds?: string[]; keywords?: string[]; searches?: number; sessions?: number } | string[],
+  input?: {
+    pinIds?: string[]
+    keywordIds?: string[]
+    keywords?: string[]
+    searches?: number
+    sessions?: number
+    dwellSeconds?: number
+    actionOrder?: TrafficSchedule["lastActionOrder"]
+    actions?: TrafficSchedule["lastActions"]
+    device?: TrafficSchedule["lastDevice"]
+  } | string[],
 ): Promise<{ campaign: Campaign; traffic: TrafficJob }> {
   const selection = Array.isArray(input) ? { pinIds: input } : input ?? {}
   return request(`/api/campaigns/${id}/traffic`, {

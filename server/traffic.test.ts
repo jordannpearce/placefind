@@ -414,7 +414,8 @@ describe("runCampaignTraffic", () => {
       assert.ok(urls.some((url) => url.includes("/maps/search/barbecue/@30.26,-97.73,17z")))
       assert.equal(urls.some((url) => /Austin|city/i.test(url) && url.includes("maps/search")), false)
       assert.ok(urls.some((url) => url.includes("query_place_id=ChIJ123")))
-      assert.ok(profiles.size >= 2)
+      assert.equal(profiles.size, 1)
+      assert.ok([...profiles][0]?.startsWith("pf-"))
     } finally {
       globalThis.fetch = originalFetch
     }
@@ -621,6 +622,9 @@ describe("runCampaignTraffic", () => {
       assert.equal(result.traffic.sessionsRequested, 3)
       assert.equal(result.traffic.sessionsOk, 3)
       assert.equal(result.campaign.trafficSchedule.lastSearchCount, 3)
+      assert.equal(result.campaign.trafficSchedule.lastDwellSeconds, 20)
+      assert.equal(result.traffic.dwellSeconds, 20)
+      assert.ok(result.traffic.log?.some((line) => /stayed 20s on the listing/.test(line.message)))
       const searchUrls = urls.filter((url) => /\/maps\/search\/[^?]+\/@/.test(url))
       assert.equal(searchUrls.length, 3)
       assert.ok(result.traffic.log?.some((line) => /3 of 4 searches/.test(line.message)))

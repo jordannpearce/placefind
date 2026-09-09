@@ -122,6 +122,10 @@ function runDueTraffic(campaign: Campaign, now: Date) {
           ? campaign.trafficSchedule.lastSelectedKeywords
           : undefined,
         searches: campaign.trafficSchedule?.lastSearchCount,
+        dwellSeconds: campaign.trafficSchedule?.lastDwellSeconds,
+        actionOrder: campaign.trafficSchedule?.lastActionOrder,
+        actions: campaign.trafficSchedule?.lastActions,
+        device: campaign.trafficSchedule?.lastDevice,
       },
       campaign.userId,
     )

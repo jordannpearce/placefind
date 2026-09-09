@@ -1,4 +1,11 @@
 import { normalizeTrafficSearches } from "../src/lib/traffic-plan.ts"
+import {
+  defaultTrafficVisitOptions,
+  parseTrafficVisitOptions,
+  type TrafficActionOrder,
+  type TrafficDeviceMode,
+  type TrafficProfileAction,
+} from "../src/lib/traffic-visit.ts"
 
 export type ScheduleCadence = "daily" | "weekly"
 export type ScheduleTimeZone = "local" | "utc"
@@ -23,6 +30,10 @@ export type TrafficSchedule = ScheduleLike & {
   lastSelectedPinIds: string[]
   lastSelectedKeywords: string[]
   lastSearchCount?: number
+  lastDwellSeconds?: number
+  lastActionOrder?: TrafficActionOrder
+  lastActions?: TrafficProfileAction[]
+  lastDevice?: TrafficDeviceMode
 }
 
 export function defaultScanSchedule(): ScanSchedule {
@@ -38,12 +49,17 @@ export function defaultScanSchedule(): ScanSchedule {
 }
 
 export function defaultTrafficSchedule(): TrafficSchedule {
+  const visit = defaultTrafficVisitOptions()
   return {
     ...defaultScanSchedule(),
     pinMode: "selected",
     lastSelectedPinIds: [],
     lastSelectedKeywords: [],
     lastSearchCount: normalizeTrafficSearches(undefined),
+    lastDwellSeconds: visit.dwellSeconds,
+    lastActionOrder: visit.actionOrder,
+    lastActions: visit.actions,
+    lastDevice: visit.device,
   }
 }
 
@@ -225,6 +241,12 @@ export function normalizeTrafficSchedule(raw: unknown): { value?: TrafficSchedul
     ? [...new Set(input.lastSelectedKeywords.map((keyword) => String(keyword ?? "").trim()).filter(Boolean))]
     : []
   const searches = Number(input.lastSearchCount)
+  const visit = parseTrafficVisitOptions({
+    dwellSeconds: input.lastDwellSeconds,
+    actionOrder: input.lastActionOrder,
+    actions: input.lastActions,
+    device: input.lastDevice,
+  })
   return {
     value: {
       ...base.value,
@@ -232,6 +254,10 @@ export function normalizeTrafficSchedule(raw: unknown): { value?: TrafficSchedul
       lastSelectedPinIds: pinIds,
       lastSelectedKeywords: keywords,
       lastSearchCount: normalizeTrafficSearches(Number.isInteger(searches) ? searches : undefined),
+      lastDwellSeconds: visit.dwellSeconds,
+      lastActionOrder: visit.actionOrder,
+      lastActions: visit.actions,
+      lastDevice: visit.device,
     },
   }
 }

@@ -31,6 +31,7 @@ export function trafficStartConfirmCopy(input: {
   searches?: unknown
   businessName: string
   keywordList: string
+  visitSummary?: string
 }): string {
   const available = Math.max(0, input.pinCount) * Math.max(0, input.keywordCount)
   const planned = plannedTrafficSearchCount(available, input.searches)
@@ -41,6 +42,7 @@ export function trafficStartConfirmCopy(input: {
     `Start ${planned} of ${available} searches (${pinLabel} × ${keywordLabel}, first pairs in listed order) for ${input.businessName}?`,
     "",
     `Maps will search ${input.keywordList} from each selected pin’s GPS, then open the confirmed listing when it appears.`,
+    ...(input.visitSummary ? ["", input.visitSummary] : []),
     "",
     `Estimated ${requests} Maps requests (2 per search). Stop cancels remaining searches.`,
   ].join("\n")

@@ -25,6 +25,7 @@ import {
   type ScanSchedule,
   type TrafficSchedule,
 } from "./schedule.ts"
+import type { TrafficActionOrder, TrafficDeviceMode, TrafficProfileAction } from "../src/lib/traffic-visit.ts"
 import { normalizePinSource, resolveScanPoints, uniqueCityNamesWithinMiles, type PinSource } from "./geo-points.ts"
 import { readCollection, writeCollection } from "./store.ts"
 import { consumeMonthlyUsage, QuotaError } from "./usage.ts"
@@ -223,6 +224,10 @@ export type TrafficJob = {
   keywordIds?: string[]
   log?: TrafficLogLine[]
   results?: TrafficPinResult[]
+  dwellSeconds?: number
+  actionOrder?: TrafficActionOrder
+  actions?: TrafficProfileAction[]
+  device?: TrafficDeviceMode
 }
 
 export class CampaignError extends Error {
@@ -693,6 +698,10 @@ function normalizeStoredTrafficJob(job: Campaign["lastTrafficJob"] | undefined):
             finishedAt: row.finishedAt ?? null,
           }))
       : [],
+    ...(job.dwellSeconds != null ? { dwellSeconds: Number(job.dwellSeconds) } : {}),
+    ...(job.actionOrder ? { actionOrder: job.actionOrder } : {}),
+    ...(Array.isArray(job.actions) ? { actions: job.actions } : {}),
+    ...(job.device ? { device: job.device } : {}),
   }
 }
 

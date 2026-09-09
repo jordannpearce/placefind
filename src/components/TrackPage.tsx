@@ -84,6 +84,22 @@ import {
   trafficStartConfirmCopy,
 } from "../lib/traffic-plan.ts"
 import {
+  MAX_DWELL_SECONDS,
+  MIN_DWELL_SECONDS,
+  TRAFFIC_PROFILE_ACTIONS,
+  defaultTrafficVisitOptions,
+  normalizeActionOrder,
+  normalizeDeviceMode,
+  normalizeDwellSeconds,
+  normalizeTrafficActions,
+  parseTrafficVisitOptions,
+  trafficActionLabel,
+  trafficScheduleVisitFields,
+  trafficVisitConfirmCopy,
+  trafficVisitHelpCopy,
+  type TrafficVisitOptions,
+} from "../lib/traffic-visit.ts"
+import {
   MAX_KEYWORDS,
   acceptKeywordText,
   formatKeywordText,
@@ -155,6 +171,7 @@ function emptyTrafficSchedule(): TrafficSchedule {
     lastSelectedPinIds: [],
     lastSelectedKeywords: [],
     lastSearchCount: DEFAULT_TRAFFIC_SEARCHES,
+    ...trafficScheduleVisitFields(defaultTrafficVisitOptions()),
   }
 }
 
@@ -192,6 +209,7 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
   const [selectedPinIds, setSelectedPinIds] = useState<string[]>([])
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([])
   const [searchCount, setSearchCount] = useState(DEFAULT_TRAFFIC_SEARCHES)
+  const [trafficVisit, setTrafficVisit] = useState<TrafficVisitOptions>(defaultTrafficVisitOptions)
   const [previewCenter, setPreviewCenter] = useState<GeoPoint | null>(null)
   const [scans, setScans] = useState<GridScanRun[]>([])
   const [compareFromId, setCompareFromId] = useState("")
@@ -283,6 +301,7 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
       setSelectedPinIds([])
       setSelectedKeywords([])
       setSearchCount(DEFAULT_TRAFFIC_SEARCHES)
+      setTrafficVisit(defaultTrafficVisitOptions())
       setScanScheduleDraft(emptyScanSchedule())
       setTrafficScheduleDraft(emptyTrafficSchedule())
       return
@@ -302,6 +321,14 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
     const remembered = campaign.trafficSchedule?.lastSelectedKeywords ?? []
     setSelectedKeywords(remembered.length ? selectedKeywordsInListedOrder(listed, remembered) : listed)
     setSearchCount(normalizeTrafficSearches(campaign.trafficSchedule?.lastSearchCount))
+    setTrafficVisit(
+      parseTrafficVisitOptions({
+        dwellSeconds: campaign.trafficSchedule?.lastDwellSeconds,
+        actionOrder: campaign.trafficSchedule?.lastActionOrder,
+        actions: campaign.trafficSchedule?.lastActions,
+        device: campaign.trafficSchedule?.lastDevice,
+      }),
+    )
     setScanScheduleDraft(campaign.scanSchedule ?? emptyScanSchedule())
     setTrafficScheduleDraft(campaign.trafficSchedule ?? emptyTrafficSchedule())
   }
@@ -701,24 +728,39 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
       .catch((err) => setError(err instanceof Error ? err.message : "Could not save the grid."))
   }
 
+  function trafficSchedulePayload(visit = trafficVisit, searches = searchCount): TrafficSchedule {
+    return {
+      ...trafficScheduleDraft,
+      lastSelectedPinIds: selectedPinIds,
+      lastSelectedKeywords: selected
+        ? selectedKeywordsInListedOrder(
+            listedTrafficKeywords(selected),
+            mergeKeywordLists(selectedKeywords, parseKeywordText(trafficKeywordDraft)),
+          )
+        : selectedKeywords,
+      lastSearchCount: searches,
+      ...trafficScheduleVisitFields(visit),
+    }
+  }
+
   async function persistSearchCount(raw: number) {
     const value = normalizeTrafficSearches(raw)
     setSearchCount(value)
     setTrafficScheduleDraft((current) => ({ ...current, lastSearchCount: value }))
     if (!selected || creating) return
-    void updateCampaign(selected.id, {
-      trafficSchedule: {
-        ...trafficScheduleDraft,
-        lastSelectedPinIds: selectedPinIds,
-        lastSelectedKeywords: selectedKeywordsInListedOrder(
-          listedTrafficKeywords(selected),
-          mergeKeywordLists(selectedKeywords, parseKeywordText(trafficKeywordDraft)),
-        ),
-        lastSearchCount: value,
-      },
-    })
+    void updateCampaign(selected.id, { trafficSchedule: trafficSchedulePayload(trafficVisit, value) })
       .then(replaceCampaign)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not save the search count."))
+  }
+
+  async function persistTrafficVisit(next: TrafficVisitOptions) {
+    const visit = parseTrafficVisitOptions(next)
+    setTrafficVisit(visit)
+    setTrafficScheduleDraft((current) => ({ ...current, ...trafficScheduleVisitFields(visit) }))
+    if (!selected || creating) return
+    void updateCampaign(selected.id, { trafficSchedule: trafficSchedulePayload(visit, searchCount) })
+      .then(replaceCampaign)
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not save the listing visit."))
   }
 
   function parsedCampaignKeywords() {
@@ -1040,6 +1082,7 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
         searches: searchCount,
         businessName: confirmed?.title || selected.businessName,
         keywordList,
+        visitSummary: trafficVisitConfirmCopy(trafficVisit),
       }),
     )
     if (!ok) return
@@ -1054,6 +1097,10 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
         keywords,
         keywordIds: keywords,
         searches: searchCount,
+        dwellSeconds: trafficVisit.dwellSeconds,
+        actionOrder: trafficVisit.actionOrder,
+        actions: trafficVisit.actions,
+        device: trafficVisit.device,
       })
       replaceCampaign(payload.campaign)
       setNotice(
@@ -1155,13 +1202,8 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
           utcOffsetMinutes: scanScheduleDraft.timeZone === "local" ? utcOffsetMinutes : undefined,
         },
         trafficSchedule: {
-          ...trafficScheduleDraft,
+          ...trafficSchedulePayload(),
           utcOffsetMinutes: trafficScheduleDraft.timeZone === "local" ? utcOffsetMinutes : undefined,
-          lastSelectedPinIds: selectedPinIds,
-          lastSelectedKeywords: selectedKeywordsInListedOrder(
-            listedTrafficKeywords(selected),
-            mergeKeywordLists(selectedKeywords, parseKeywordText(trafficKeywordDraft)),
-          ),
         },
       })
       replaceCampaign(next)
@@ -1504,6 +1546,102 @@ export function TrackPage({ keys, hosted, seller, desktop, user }: Props) {
                   ? `This run will do ${plannedTrafficSearchCount(selectedPinIds.length * trafficKeywordSelection.length, searchCount)} of ${selectedPinIds.length * trafficKeywordSelection.length} pin/keyword pairs.`
                   : "Select pins and keywords first."}
               </p>
+            )}
+
+            {showStartTraffic && (
+              <div className="mt-4 rounded-xl border border-brass/25 bg-brass/5 px-4 py-4" data-testid="traffic-visit-panel">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Listing visit</p>
+                <p className="mt-2 text-sm text-paper/80">{trafficVisitHelpCopy()}</p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                  <label className="grid gap-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Dwell seconds</span>
+                    <input
+                      type="number"
+                      data-testid="traffic-dwell"
+                      min={MIN_DWELL_SECONDS}
+                      max={MAX_DWELL_SECONDS}
+                      step={1}
+                      value={trafficVisit.dwellSeconds}
+                      onChange={(event) => {
+                        const next = Number(event.target.value)
+                        if (!Number.isInteger(next)) return
+                        setTrafficVisit((current) => ({
+                          ...current,
+                          dwellSeconds: normalizeDwellSeconds(next),
+                        }))
+                      }}
+                      onBlur={() => void persistTrafficVisit(trafficVisit)}
+                      disabled={busy}
+                      className="h-11 w-full rounded-lg border border-line bg-ink px-3 text-paper outline-none focus:border-brass"
+                    />
+                  </label>
+                  <fieldset className="grid gap-1">
+                    <legend className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Action order</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {(["sequential", "random"] as const).map((order) => (
+                        <label key={order} className="inline-flex h-11 items-center gap-2 rounded-lg border border-line bg-ink px-3 text-sm text-paper">
+                          <input
+                            type="radio"
+                            name="traffic-action-order"
+                            data-testid={`traffic-order-${order}`}
+                            checked={trafficVisit.actionOrder === order}
+                            onChange={() => void persistTrafficVisit({ ...trafficVisit, actionOrder: normalizeActionOrder(order) })}
+                            disabled={busy}
+                          />
+                          {order === "sequential" ? "Sequential" : "Random"}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <fieldset className="grid gap-1">
+                    <legend className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Visitor profile</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {(["auto", "desktop", "mobile"] as const).map((device) => (
+                        <label key={device} className="inline-flex h-11 items-center gap-2 rounded-lg border border-line bg-ink px-3 text-sm text-paper">
+                          <input
+                            type="radio"
+                            name="traffic-device"
+                            data-testid={`traffic-device-${device}`}
+                            checked={trafficVisit.device === device}
+                            onChange={() => void persistTrafficVisit({ ...trafficVisit, device: normalizeDeviceMode(device) })}
+                            disabled={busy}
+                          />
+                          {device === "auto" ? "Auto" : device === "desktop" ? "Desktop" : "Mobile"}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                </div>
+                <fieldset className="mt-4 grid gap-2">
+                  <legend className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Actions on the listing</legend>
+                  <div className="flex flex-wrap gap-2">
+                    {TRAFFIC_PROFILE_ACTIONS.map((action) => {
+                      const checked = trafficVisit.actions.includes(action)
+                      return (
+                        <label
+                          key={action}
+                          className="inline-flex h-11 items-center gap-2 rounded-lg border border-line bg-ink px-3 text-sm text-paper"
+                        >
+                          <input
+                            type="checkbox"
+                            data-testid={`traffic-action-${action}`}
+                            checked={checked}
+                            onChange={() => {
+                              const next = checked
+                                ? trafficVisit.actions.filter((row) => row !== action)
+                                : normalizeTrafficActions([...trafficVisit.actions, action])
+                              void persistTrafficVisit({ ...trafficVisit, actions: next })
+                            }}
+                            disabled={busy}
+                          />
+                          {trafficActionLabel(action)}
+                          {action === "phone" ? " (mobile)" : ""}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </fieldset>
+              </div>
             )}
             {!mapsReady && (
               <p className="mt-4 rounded-xl border border-clay/40 px-4 py-3 text-sm text-clay">

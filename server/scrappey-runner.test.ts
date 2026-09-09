@@ -2,9 +2,12 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
   classifyRunnerFetchError,
+  profileVisitActions,
   RUNNER_PAGE_TIMEOUT_MS,
+  runnerVisitTimeoutMs,
   runMapsTrafficSession,
   sanitizeRunnerError,
+  searchClickActions,
 } from "./scrappey-runner.ts"
 
 function timeoutError() {
@@ -40,6 +43,49 @@ describe("sanitizeRunnerError", () => {
       sanitizeRunnerError("POST https://publisher.scrappey.com/api/v1?key=scp_secret timed out"),
       "Traffic runner timed out.",
     )
+  })
+})
+
+describe("profileVisitActions", () => {
+  it("dwells first, then clicks selected listing actions in listed or shuffled order", () => {
+    const sequential = profileVisitActions(
+      { dwellSeconds: 25, actionOrder: "sequential", actions: ["reviews", "website"], device: "desktop" },
+      "desktop",
+    )
+    assert.equal(sequential[0]?.type, "wait")
+    assert.equal(sequential[0]?.wait, 25)
+    assert.ok(sequential.some((action) => action.cssSelector?.includes("Reviews")))
+    assert.ok(sequential.some((action) => action.cssSelector?.includes("authority") || action.cssSelector?.includes("Website")))
+    assert.equal(sequential.some((action) => action.cssSelector?.includes("tel:")), false)
+    assert.ok(sequential.every((action) => action.type === "wait" || action.ignoreErrors === true))
+
+    const mobile = profileVisitActions(
+      { dwellSeconds: 15, actionOrder: "sequential", actions: ["phone", "directions"], device: "mobile" },
+      "mobile",
+    )
+    assert.ok(mobile.some((action) => action.cssSelector?.includes("phone:") || action.cssSelector?.includes("tel:")))
+    assert.ok(mobile.some((action) => action.cssSelector?.includes("directions") || action.cssSelector?.includes("Directions")))
+  })
+
+  it("skips call clicks on a desktop profile and sizes the visit timeout from dwell", () => {
+    const desktop = profileVisitActions(
+      { dwellSeconds: 40, actionOrder: "sequential", actions: ["reviews", "phone", "website"], device: "desktop" },
+      "desktop",
+    )
+    assert.equal(desktop.some((action) => /phone:|tel:|Call/.test(action.cssSelector || "")), false)
+    assert.ok(runnerVisitTimeoutMs({ dwellSeconds: 40, actionOrder: "sequential", actions: ["reviews"], device: "auto" }, "desktop") >= 180_000)
+    assert.ok(
+      runnerVisitTimeoutMs({ dwellSeconds: 120, actionOrder: "sequential", actions: ["reviews", "website"], device: "auto" }, "desktop") >
+        RUNNER_PAGE_TIMEOUT_MS,
+    )
+  })
+})
+
+describe("searchClickActions", () => {
+  it("waits for Maps results before clicking the confirmed listing", () => {
+    const actions = searchClickActions({ title: "Franklin Barbecue", mapsUrl: "", placeId: "ChIJ123" })
+    assert.equal(actions[0]?.type, "wait")
+    assert.ok(actions.some((action) => action.cssSelector === 'a[href*="ChIJ123"]'))
   })
 })
 
@@ -89,6 +135,57 @@ describe("runMapsTrafficSession error mapping", () => {
       })
       assert.equal(result.ok, false)
       assert.equal(result.error, "Traffic runner timed out.")
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("reuses the supplied profile, then dwells on the opened listing", async () => {
+    const originalFetch = globalThis.fetch
+    const cmds: Array<Record<string, unknown>> = []
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>
+      cmds.push(body)
+      return new Response(
+        JSON.stringify({
+          solution: {
+            verified: true,
+            currentUrl: "https://www.google.com/maps/place/Franklin+Barbecue/@30.27,-97.74,17z/data=!3m1!4b1!4m6!3m5!1sChIJ123",
+            markdown: "# Franklin Barbecue\nChIJ123",
+          },
+          session: "pf-test-session",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      )
+    }) as typeof fetch
+    try {
+      const result = await runMapsTrafficSession({
+        key: "scp_test_runner_key",
+        searchUrl: "https://www.google.com/maps/search/barbecue/@30.28,-97.75,17z",
+        listingUrl: "https://www.google.com/maps/search/?api=1&query=Franklin&query_place_id=ChIJ123",
+        listingTitle: "Franklin Barbecue",
+        listingPlaceId: "ChIJ123",
+        profileId: "pf-camp-123",
+        sessionId: "pf-test-session",
+        dwellSeconds: 25,
+        actionOrder: "sequential",
+        actions: ["reviews", "website"],
+        device: "desktop",
+      })
+      assert.equal(result.ok, true)
+      assert.equal(result.requestCount, 2)
+      assert.equal(result.dwellSeconds, 25)
+      assert.deepEqual(result.actions, ["reviews", "website"])
+      const created = cmds.find((body) => body.cmd === "sessions.create")
+      assert.equal(created?.profileId, "pf-camp-123")
+      assert.deepEqual(created?.device, ["desktop"])
+      const pages = cmds.filter((body) => body.cmd === "request.get")
+      assert.equal(pages.length, 2)
+      assert.equal(pages[0]?.profileId, "pf-camp-123")
+      assert.equal(pages[1]?.profileId, "pf-camp-123")
+      const visitActions = pages[1]?.browserActions as Array<{ type?: string; wait?: number }>
+      assert.equal(visitActions?.[0]?.type, "wait")
+      assert.equal(visitActions?.[0]?.wait, 25)
     } finally {
       globalThis.fetch = originalFetch
     }

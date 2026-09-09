@@ -1,3 +1,15 @@
+import {
+  orderTrafficActions,
+  parseTrafficVisitOptions,
+  resolveTrafficDevice,
+  visitActionsForDevice,
+  type TrafficActionOrder,
+  type TrafficDeviceMode,
+  type TrafficProfileAction,
+  type TrafficResolvedDevice,
+  type TrafficVisitOptions,
+} from "../src/lib/traffic-visit.ts"
+
 const SCRAPPEY_ENDPOINT = "https://publisher.scrappey.com/api/v1"
 
 /** Maps + listing clicks routinely take more than 60s. Do not treat that wait as unreachable. */
@@ -28,6 +40,10 @@ export type TrafficSessionInput = {
   listingCid?: string | null
   profileId: string
   sessionId: string
+  dwellSeconds?: number
+  actionOrder?: TrafficActionOrder
+  actions?: TrafficProfileAction[]
+  device?: TrafficDeviceMode
   signal?: AbortSignal
 }
 
@@ -40,6 +56,8 @@ export type TrafficSessionResult = {
   requestCount: number
   error: string | null
   openedTitle?: string | null
+  dwellSeconds?: number
+  actions?: TrafficProfileAction[]
 }
 
 type ScrappeySolution = {
@@ -226,10 +244,51 @@ async function scrappeyRequest(
   }
 }
 
+export function runnerVisitTimeoutMs(visit: TrafficVisitOptions, device: TrafficResolvedDevice): number {
+  const actionCount = visitActionsForDevice(visit, device).length
+  const seconds = visit.dwellSeconds + actionCount * 8 + 90
+  return Math.max(RUNNER_PAGE_TIMEOUT_MS, seconds * 1000)
+}
+
+export function searchClickActions(listing: TrafficListingTarget | string): ScrappeyBrowserAction[] {
+  return [{ type: "wait", wait: 3 }, ...listingClickActions(listing)]
+}
+
+const LISTING_ACTION_SELECTORS: Record<TrafficProfileAction, string[]> = {
+  reviews: ['button[aria-label*="Reviews"]', '[role="tab"][aria-label*="Reviews"]', 'button[jsaction*="review"]'],
+  directions: ['button[data-item-id="directions"]', 'button[aria-label="Directions"]', 'button[aria-label*="Directions"]'],
+  phone: ['button[data-item-id^="phone:"]', 'a[href^="tel:"]', 'button[aria-label*="Call"]'],
+  website: ['a[data-item-id="authority"]', 'a[aria-label*="Website"]', 'a[aria-label*="website"]'],
+}
+
+export function profileVisitActions(
+  visit: TrafficVisitOptions,
+  device: TrafficResolvedDevice,
+  random: () => number = Math.random,
+): ScrappeyBrowserAction[] {
+  const actions: ScrappeyBrowserAction[] = [{ type: "wait", wait: visit.dwellSeconds }]
+  const selected = orderTrafficActions(visitActionsForDevice(visit, device), visit.actionOrder, random)
+  for (const action of selected) {
+    for (const cssSelector of LISTING_ACTION_SELECTORS[action]) {
+      actions.push({ type: "click", cssSelector, ignoreErrors: true, wait: 2 })
+    }
+    if (action === "reviews") {
+      actions.push({ type: "scroll", wait: 2, ignoreErrors: true })
+    }
+  }
+  return actions
+}
+
 async function runnerGet(
   key: string,
   url: string,
-  options: { session?: string; profileId?: string; browserActions?: ScrappeyBrowserAction[]; signal?: AbortSignal } = {},
+  options: {
+    session?: string
+    profileId?: string
+    browserActions?: ScrappeyBrowserAction[]
+    signal?: AbortSignal
+    timeoutMs?: number
+  } = {},
 ): Promise<{ currentUrl: string; text: string; error: string | null }> {
   const body: Record<string, unknown> = {
     cmd: "request.get",
@@ -241,7 +300,7 @@ async function runnerGet(
   if (options.session) body.session = options.session
   if (options.profileId) body.profileId = options.profileId
   if (options.browserActions?.length) body.browserActions = options.browserActions
-  const page = await scrappeyRequest(key, body, RUNNER_PAGE_TIMEOUT_MS, options.signal)
+  const page = await scrappeyRequest(key, body, options.timeoutMs ?? RUNNER_PAGE_TIMEOUT_MS, options.signal)
   if (page.error) return { currentUrl: url, text: "", error: sanitizeRunnerError(page.error) }
   const text = page.payload.solution?.markdown || page.payload.solution?.innerText || ""
   return { currentUrl: page.payload.solution?.currentUrl || url, text, error: null }
@@ -250,17 +309,21 @@ async function runnerGet(
 async function createRunnerSession(
   key: string,
   sessionId: string,
-  signal?: AbortSignal,
+  options: { profileId?: string; device?: TrafficResolvedDevice; signal?: AbortSignal } = {},
 ): Promise<{ sessionId: string; error: string | null }> {
+  const device = options.device ?? "desktop"
   const result = await scrappeyRequest(
     key,
     {
       cmd: "sessions.create",
       session: sessionId,
+      profileId: options.profileId,
       proxyCountry: "UnitedStates",
+      device: [device],
+      operatingSystem: device === "mobile" ? ["android"] : ["windows"],
     },
     RUNNER_SESSION_TIMEOUT_MS,
-    signal,
+    options.signal,
   )
   return { sessionId: result.payload.session || sessionId, error: result.error }
 }
@@ -277,41 +340,49 @@ export function listingOpenedOnPage(url: string, text: string, listing: TrafficL
 
 export async function runMapsTrafficSession(input: TrafficSessionInput): Promise<TrafficSessionResult> {
   const listing = listingTargetFromSession(input)
+  const visit = parseTrafficVisitOptions(input)
+  const device = resolveTrafficDevice(visit)
   const base = {
     profileId: input.profileId,
     sessionId: input.sessionId,
     searchUrl: input.searchUrl,
     listingUrl: input.listingUrl,
+    dwellSeconds: visit.dwellSeconds,
+    actions: visitActionsForDevice(visit, device),
   }
   let requestCount = 0
-  const created = await createRunnerSession(input.key, input.sessionId, input.signal)
+  const created = await createRunnerSession(input.key, input.sessionId, {
+    profileId: input.profileId,
+    device,
+    signal: input.signal,
+  })
   const session = created.error ? undefined : created.sessionId
   try {
     requestCount += 1
     const search = await runnerGet(input.key, input.searchUrl, {
       session,
       profileId: input.profileId,
-      browserActions: listingClickActions(listing),
+      browserActions: searchClickActions(listing),
       signal: input.signal,
     })
     if (search.error) return { ...base, ok: false, requestCount, error: search.error }
 
-    if (listingOpenedOnPage(search.currentUrl, search.text, listing)) {
-      return { ...base, ok: true, requestCount, error: null, openedTitle: listing.title }
-    }
-
-    const inResults = listingPresentInMapsPage(search.text, listing)
-    if (!inResults) {
+    const openedOnSearch = listingOpenedOnPage(search.currentUrl, search.text, listing)
+    if (!openedOnSearch && !listingPresentInMapsPage(search.text, listing)) {
       return { ...base, ok: false, requestCount, error: listingNotInAreaMessage() }
     }
 
     requestCount += 1
-    const fallback = await runnerGet(input.key, input.listingUrl, {
+    const visitUrl = openedOnSearch ? search.currentUrl || input.listingUrl : input.listingUrl
+    const visitPage = await runnerGet(input.key, visitUrl, {
       session,
       profileId: input.profileId,
+      browserActions: profileVisitActions(visit, device),
+      timeoutMs: runnerVisitTimeoutMs(visit, device),
       signal: input.signal,
     })
-    if (!fallback.error && (listingOpenedOnPage(fallback.currentUrl, fallback.text, listing) || !fallback.error)) {
+    if (visitPage.error) return { ...base, ok: false, requestCount, error: visitPage.error }
+    if (openedOnSearch || listingOpenedOnPage(visitPage.currentUrl, visitPage.text, listing) || !visitPage.error) {
       return { ...base, ok: true, requestCount, error: null, openedTitle: listing.title }
     }
     return { ...base, ok: false, requestCount, error: listingNotFoundMessage() }

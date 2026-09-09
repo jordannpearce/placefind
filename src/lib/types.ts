@@ -501,11 +501,19 @@ export type ScanSchedule = {
   nextRunAt?: string | null
 }
 
+export type TrafficProfileAction = "reviews" | "directions" | "phone" | "website"
+export type TrafficActionOrder = "sequential" | "random"
+export type TrafficDeviceMode = "desktop" | "mobile" | "auto"
+
 export type TrafficSchedule = ScanSchedule & {
   pinMode: TrafficPinMode
   lastSelectedPinIds: string[]
   lastSelectedKeywords?: string[]
   lastSearchCount?: number
+  lastDwellSeconds?: number
+  lastActionOrder?: TrafficActionOrder
+  lastActions?: TrafficProfileAction[]
+  lastDevice?: TrafficDeviceMode
 }
 
 export type Campaign = {
@@ -572,6 +580,10 @@ export type TrafficJob = {
   keywordIds?: string[]
   log?: TrafficLogLine[]
   results?: TrafficPinResult[]
+  dwellSeconds?: number
+  actionOrder?: TrafficActionOrder
+  actions?: TrafficProfileAction[]
+  device?: TrafficDeviceMode
 }
 
 export type CampaignInput = {

@@ -33,6 +33,14 @@ import {
   type TrafficSessionResult,
 } from "./scrappey-runner.ts"
 import type { ApiKeys } from "./types.ts"
+import {
+  campaignTrafficProfileId,
+  parseTrafficVisitOptions,
+  resolveTrafficDevice,
+  trafficScheduleVisitFields,
+  trafficVisitLogCopy,
+  type TrafficVisitOptions,
+} from "../src/lib/traffic-visit.ts"
 
 export const DEFAULT_TRAFFIC_SESSIONS = DEFAULT_TRAFFIC_SEARCHES
 export const MAX_TRAFFIC_SESSIONS = MAX_TRAFFIC_SEARCHES
@@ -122,6 +130,10 @@ export type TrafficStartInput = {
   keywordIds?: unknown
   searches?: unknown
   sessions?: unknown
+  dwellSeconds?: unknown
+  actionOrder?: unknown
+  actions?: unknown
+  device?: unknown
 }
 
 export function parseTrafficStartInput(raw: unknown): TrafficStartInput {
@@ -134,7 +146,20 @@ export function parseTrafficStartInput(raw: unknown): TrafficStartInput {
     keywordIds: body.keywordIds,
     searches: body.searches,
     sessions: body.sessions,
+    dwellSeconds: body.dwellSeconds,
+    actionOrder: body.actionOrder,
+    actions: body.actions,
+    device: body.device,
   }
+}
+
+export function visitOptionsFromStart(input: TrafficStartInput, fallback?: Partial<TrafficVisitOptions> | null): TrafficVisitOptions {
+  return parseTrafficVisitOptions({
+    dwellSeconds: input.dwellSeconds ?? fallback?.dwellSeconds,
+    actionOrder: input.actionOrder ?? fallback?.actionOrder,
+    actions: input.actions ?? fallback?.actions,
+    device: input.device ?? fallback?.device,
+  })
 }
 
 export function requestedTrafficSearches(input: TrafficStartInput, fallback?: unknown): number {
@@ -523,6 +548,7 @@ async function executeTrafficJob(input: {
   keywords: string[]
   pairs: TrafficPair[]
   availablePairCount: number
+  visit: TrafficVisitOptions
   signal: AbortSignal
 }) {
   const pairs = input.pairs
@@ -582,6 +608,7 @@ async function executeTrafficJob(input: {
         ),
       )
 
+      const device = resolveTrafficDevice(input.visit)
       const result = await runMapsTrafficSession({
         key: input.key,
         searchUrl: mapsKeywordAtPinUrl(keyword, pin),
@@ -589,8 +616,12 @@ async function executeTrafficJob(input: {
         listingTitle: input.listing.title,
         listingPlaceId: input.listing.placeId,
         listingCid: input.listing.cid,
-        profileId: `pf-maps-${input.campaignId.slice(0, 8)}-${index}-${newId().slice(0, 6)}`,
+        profileId: campaignTrafficProfileId(input.campaignId, device),
         sessionId: `pf-traffic-${input.campaignId.slice(0, 8)}-${index}-${newId().slice(0, 6)}`,
+        dwellSeconds: input.visit.dwellSeconds,
+        actionOrder: input.visit.actionOrder,
+        actions: input.visit.actions,
+        device: input.visit.device,
         signal: input.signal,
       })
       sessionResults[index] = result
@@ -605,6 +636,7 @@ async function executeTrafficJob(input: {
         let next = snapshotFromSessions(job, sessionResults, pinResults)
         if (result.ok) {
           next = appendTrafficLog(next, `opened ${result.openedTitle || input.listing.title} · ${pinCoordLabel(pin)}`, pin.pinId, keyword)
+          next = appendTrafficLog(next, `${trafficVisitLogCopy(input.visit, device)} · ${pinCoordLabel(pin)}`, pin.pinId, keyword)
           next = appendTrafficLog(next, `${label} · Session finished.`, pin.pinId, keyword)
         } else {
           const fail = publicJobError(result.error) || listingNotFoundMessage()
@@ -668,6 +700,12 @@ export function startCampaignTraffic(
   }
 
   const searches = requestedTrafficSearches(startInput, campaign.trafficSchedule?.lastSearchCount)
+  const visit = visitOptionsFromStart(startInput, {
+    dwellSeconds: campaign.trafficSchedule?.lastDwellSeconds,
+    actionOrder: campaign.trafficSchedule?.lastActionOrder,
+    actions: campaign.trafficSchedule?.lastActions,
+    device: campaign.trafficSchedule?.lastDevice,
+  })
   const availablePairs = pairsForTraffic(pins, keywords)
   const pairs = planTrafficPairs(availablePairs, searches)
   try {
@@ -693,12 +731,17 @@ export function startCampaignTraffic(
     keywordIds: keywords.map((keyword, index) => campaignKeywordId(keyword, index)),
     log: [],
     results: createPendingResults(pairs),
+    dwellSeconds: visit.dwellSeconds,
+    actionOrder: visit.actionOrder,
+    actions: visit.actions,
+    device: visit.device,
   }
   const trafficSchedule = {
     ...(campaign.trafficSchedule ?? defaultTrafficSchedule()),
     lastSelectedPinIds: pins.map((pin) => pin.pinId),
     lastSelectedKeywords: keywords,
     lastSearchCount: searches,
+    ...trafficScheduleVisitFields(visit),
   }
   const next = saveCampaign({
     ...campaign,
@@ -724,6 +767,7 @@ export function startCampaignTraffic(
     keywords,
     pairs,
     availablePairCount: availablePairs.length,
+    visit,
     signal: abort.signal,
   }).catch((error) => {
     persistJob(next.id, job.id, (currentJob) =>

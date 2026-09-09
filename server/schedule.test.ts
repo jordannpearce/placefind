@@ -86,6 +86,17 @@ describe("normalizeTrafficSchedule", () => {
     )
     assert.equal(normalizeTrafficSchedule(null).value?.lastSearchCount, 3)
     assert.equal(normalizeTrafficSchedule({ lastSearchCount: 8 }).value?.lastSearchCount, 8)
+    assert.equal(normalizeTrafficSchedule(null).value?.lastDwellSeconds, 20)
+    const visit = normalizeTrafficSchedule({
+      lastDwellSeconds: 45,
+      lastActionOrder: "random",
+      lastActions: ["reviews"],
+      lastDevice: "mobile",
+    }).value
+    assert.equal(visit?.lastDwellSeconds, 45)
+    assert.equal(visit?.lastActionOrder, "random")
+    assert.deepEqual(visit?.lastActions, ["reviews"])
+    assert.equal(visit?.lastDevice, "mobile")
   })
 })
 
