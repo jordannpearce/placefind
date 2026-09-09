@@ -188,6 +188,7 @@ describe("public website copy", () => {
     const button = readFileSync(path.join(root, "components/PreferredSourceButton.tsx"), "utf8")
     assert.match(button, /google-add-preferred-source-btn/)
     assert.match(button, /data-theme="dark"/)
+    assert.match(button, /preferences\/source\?q=placefind\.to/)
     assert.match(home, /PreferredSourceButton/)
     assert.match(footer, /PreferredSourceButton/)
   })
